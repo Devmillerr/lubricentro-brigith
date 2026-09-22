@@ -95,6 +95,7 @@ model User {
   createdVehicles          Vehicle[]
   confirmedCompatibilities ProductCompatibility[]
   voidedMaintenances       Maintenance[]
+  reminderContacts         ReminderContact[]
 
   @@map("users")
 }
@@ -492,5 +493,29 @@ model Reminder {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  contacts ReminderContact[]
+
   @@map("reminders")
+}
+
+enum ReminderContactChannel {
+  WHATSAPP_LINK
+}
+
+/// Historial de avisos abiertos (BR-W6). No prueba que se haya enviado, solo
+/// que se abrió el enlace (BR-W2). Sin `businessId` propio: siempre se
+/// llega a través de `Reminder`, que sí está aislado por negocio.
+model ReminderContact {
+  id         String   @id @default(uuid())
+  reminderId String
+  reminder   Reminder @relation(fields: [reminderId], references: [id])
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+
+  channel         ReminderContactChannel @default(WHATSAPP_LINK)
+  openedAt        DateTime               @default(now())
+  /// Texto tal como se generó al abrir el enlace (BR-W3, BR-W4).
+  messageSnapshot String
+
+  @@map("reminder_contacts")
 }

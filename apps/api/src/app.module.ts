@@ -11,6 +11,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { MaintenancesModule } from './maintenances/maintenances.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductsModule } from './products/products.module';
+import { RemindersModule } from './reminders/reminders.module';
 import { VehiclesModule } from './vehicles/vehicles.module';
 
 @Module({
@@ -31,6 +32,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
     ProductsModule,
     InventoryModule,
     MaintenancesModule,
+    RemindersModule,
   ],
   providers: [
     {
