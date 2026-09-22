@@ -1,3 +1,5 @@
+import { plainToInstance } from 'class-transformer';
+import { UpdateMaintenanceDto } from '../src/maintenances/dto/update-maintenance.dto';
 import { MaintenancesService } from '../src/maintenances/maintenances.service';
 import { buildFakeScopedPrisma } from './support/fake-scoped-prisma';
 
@@ -394,6 +396,245 @@ describe('MaintenancesService.update', () => {
         nextDueDate: '2026-06-01T00:00:00.000Z',
       }),
     ).rejects.toMatchObject({ code: 'DUE_RULE_REQUIRED' });
+  });
+
+  it('corregir solo notas con el DTO tal como lo instancia el ValidationPipe no borra fecha ni regla', async () => {
+    const { service, reminders } = setup();
+    const created = await service.create('biz-a', 'user-a', {
+      ...base,
+      nextDueKm: 15000,
+      nextDueDate: '2026-07-15T00:00:00.000Z',
+      dueRule: 'ANY',
+    });
+    // `transform: true` crea la instancia con todas las claves declaradas
+    // (en undefined): el caso que antes rompía `'campo' in dto`.
+    const dto = plainToInstance(UpdateMaintenanceDto, { notes: 'Solo notas' });
+
+    const updated = await service.update('biz-a', created.maintenance.id, dto);
+
+    expect(updated.notes).toBe('Solo notas');
+    expect(updated.nextDueKm).toBe(15000);
+    expect(updated.nextDueDate).toEqual(new Date('2026-07-15T00:00:00.000Z'));
+    expect(updated.dueRule).toBe('ANY');
+    expect(reminders.get(created.reminder!.id)).toMatchObject({
+      status: 'PENDING',
+      dueRule: 'ANY',
+    });
+  });
+
+  it('rechaza corregir un mantenimiento anulado con MAINTENANCE_VOIDED y no toca su recordatorio', async () => {
+    const { service, reminders } = setup();
+    const created = await service.create('biz-a', 'user-a', { ...base, nextDueKm: 15000 });
+    await service.void('biz-a', 'user-a', created.maintenance.id, {});
+
+    await expect(
+      service.update('biz-a', created.maintenance.id, { nextDueKm: 20000, notes: 'x' }),
+    ).rejects.toMatchObject({ code: 'MAINTENANCE_VOIDED' });
+
+    expect(reminders.get(created.reminder!.id)).toMatchObject({
+      status: 'DISMISSED',
+      dueKm: 15000,
+    });
+  });
+});
+
+describe('MaintenancesService.update — sincroniza el recordatorio', () => {
+  function remindersOf(reminders: Map<string, Record<string, unknown>>, maintenanceId: string) {
+    return [...reminders.values()].filter((r) => r.sourceMaintenanceId === maintenanceId);
+  }
+
+  it('cambiar nextDueDate actualiza el mismo recordatorio (mismo id y estado)', async () => {
+    const { service, reminders } = setup();
+    const created = await service.create('biz-a', 'user-a', {
+      ...base,
+      nextDueDate: '2026-06-01T00:00:00.000Z',
+    });
+    const reminderId = created.reminder!.id;
+    reminders.get(reminderId)!.status = 'CONTACTED';
+
+    await service.update('biz-a', created.maintenance.id, {
+      nextDueDate: '2026-08-01T00:00:00.000Z',
+    });
+
+    expect(remindersOf(reminders, created.maintenance.id)).toHaveLength(1);
+    expect(reminders.get(reminderId)).toMatchObject({
+      dueDate: new Date('2026-08-01T00:00:00.000Z'),
+      dueKm: null,
+      dueRule: 'DATE',
+      status: 'CONTACTED',
+    });
+  });
+
+  it('cambiar nextDueKm actualiza el dueKm del recordatorio', async () => {
+    const { service, reminders } = setup();
+    const created = await service.create('biz-a', 'user-a', { ...base, nextDueKm: 15000 });
+
+    await service.update('biz-a', created.maintenance.id, { nextDueKm: 18000 });
+
+    expect(reminders.get(created.reminder!.id)).toMatchObject({
+      dueKm: 18000,
+      dueRule: 'KM',
+      status: 'PENDING',
+    });
+  });
+
+  it('cambiar la regla (ANY → ALL) actualiza el dueRule del recordatorio', async () => {
+    const { service, reminders } = setup();
+    const created = await service.create('biz-a', 'user-a', {
+      ...base,
+      nextDueKm: 15000,
+      nextDueDate: '2026-06-01T00:00:00.000Z',
+      dueRule: 'ANY',
+    });
+
+    const updated = await service.update('biz-a', created.maintenance.id, { dueRule: 'ALL' });
+
+    expect(updated.dueRule).toBe('ALL');
+    expect(reminders.get(created.reminder!.id)).toMatchObject({ dueRule: 'ALL', dueKm: 15000 });
+  });
+
+  it('agregar fecha a uno solo por km recalcula la regla y la copia (KM → ALL)', async () => {
+    const { service, reminders } = setup();
+    const created = await service.create('biz-a', 'user-a', { ...base, nextDueKm: 15000 });
+
+    await service.update('biz-a', created.maintenance.id, {
+      nextDueDate: '2026-06-01T00:00:00.000Z',
+      dueRule: 'ALL',
+    });
+
+    expect(reminders.get(created.reminder!.id)).toMatchObject({
+      dueKm: 15000,
+      dueDate: new Date('2026-06-01T00:00:00.000Z'),
+      dueRule: 'ALL',
+    });
+  });
+
+  it('quitar próximo km y fecha descarta el recordatorio abierto, sin borrarlo (BR-M6)', async () => {
+    const { service, reminders } = setup();
+    const created = await service.create('biz-a', 'user-a', {
+      ...base,
+      nextDueKm: 15000,
+      nextDueDate: '2026-06-01T00:00:00.000Z',
+      dueRule: 'ANY',
+    });
+
+    const updated = await service.update('biz-a', created.maintenance.id, {
+      nextDueKm: null,
+      nextDueDate: null,
+    });
+
+    expect(updated.dueRule).toBeNull();
+    expect(reminders.get(created.reminder!.id)).toMatchObject({
+      status: 'DISMISSED',
+      closeReason: 'mantenimiento corregido sin próximo km ni fecha',
+    });
+  });
+
+  it('volver a poner km tras quitarlo reabre el mismo recordatorio, no crea otro', async () => {
+    const { service, reminders } = setup();
+    const created = await service.create('biz-a', 'user-a', { ...base, nextDueKm: 15000 });
+    await service.update('biz-a', created.maintenance.id, { nextDueKm: null });
+
+    await service.update('biz-a', created.maintenance.id, { nextDueKm: 16000 });
+
+    expect(remindersOf(reminders, created.maintenance.id)).toHaveLength(1);
+    expect(reminders.get(created.reminder!.id)).toMatchObject({
+      status: 'PENDING',
+      dueKm: 16000,
+      closedAt: null,
+      closeReason: null,
+    });
+  });
+
+  it('agregar km a un mantenimiento que no tenía recordatorio crea uno solo (BR-R1)', async () => {
+    const { service, reminders } = setup();
+    const created = await service.create('biz-a', 'user-a', { ...base });
+
+    await service.update('biz-a', created.maintenance.id, { nextDueKm: 15000 });
+    await service.update('biz-a', created.maintenance.id, { nextDueKm: 16000 });
+
+    const own = remindersOf(reminders, created.maintenance.id);
+    expect(own).toHaveLength(1);
+    expect(own[0]).toMatchObject({
+      status: 'PENDING',
+      dueKm: 16000,
+      dueRule: 'KM',
+      businessId: 'biz-a',
+    });
+  });
+
+  it('no duplica: si ya hay otro recordatorio abierto del mismo vehículo y tipo, no crea uno (BR-R2)', async () => {
+    const { service, reminders } = setup();
+    const older = await service.create('biz-a', 'user-a', {
+      ...base,
+      performedAt: '2025-06-01T00:00:00.000Z',
+    });
+    const newer = await service.create('biz-a', 'user-a', {
+      ...base,
+      performedAt: '2026-01-15T00:00:00.000Z',
+      nextDueKm: 20000,
+    });
+
+    await service.update('biz-a', older.maintenance.id, { nextDueKm: 10000 });
+
+    const open = [...reminders.values()].filter(
+      (r) => r.status === 'PENDING' || r.status === 'CONTACTED',
+    );
+    expect(open).toHaveLength(1);
+    expect(open[0]?.id).toBe(newer.reminder!.id);
+    expect(remindersOf(reminders, older.maintenance.id)).toHaveLength(0);
+  });
+
+  it('no crea recordatorio para un mantenimiento con otro posterior del mismo tipo', async () => {
+    const { service, reminders } = setup();
+    const older = await service.create('biz-a', 'user-a', {
+      ...base,
+      performedAt: '2025-06-01T00:00:00.000Z',
+    });
+    await service.create('biz-a', 'user-a', { ...base, performedAt: '2026-01-15T00:00:00.000Z' });
+
+    await service.update('biz-a', older.maintenance.id, { nextDueKm: 10000 });
+
+    expect(reminders.size).toBe(0);
+  });
+
+  it('un recordatorio ya cumplido (DONE) no se modifica ni se reemplaza', async () => {
+    const { service, reminders } = setup();
+    const first = await service.create('biz-a', 'user-a', { ...base, nextDueKm: 15000 });
+    await service.create('biz-a', 'user-a', { ...base, performedAt: '2026-03-01T00:00:00.000Z' });
+
+    await service.update('biz-a', first.maintenance.id, { nextDueKm: 17000 });
+
+    expect(reminders.get(first.reminder!.id)).toMatchObject({ status: 'DONE', dueKm: 15000 });
+    expect(reminders.size).toBe(1);
+  });
+
+  it('un recordatorio descartado por el usuario (BR-R9) no se reabre al corregir', async () => {
+    const { service, reminders } = setup();
+    const created = await service.create('biz-a', 'user-a', { ...base, nextDueKm: 15000 });
+    Object.assign(reminders.get(created.reminder!.id)!, {
+      status: 'DISMISSED',
+      closeReason: 'descartado',
+    });
+
+    await service.update('biz-a', created.maintenance.id, { nextDueKm: 17000 });
+
+    expect(reminders.get(created.reminder!.id)).toMatchObject({
+      status: 'DISMISSED',
+      dueKm: 15000,
+    });
+    expect(reminders.size).toBe(1);
+  });
+
+  it('aislamiento: corregir desde otro negocio es MAINTENANCE_NOT_FOUND y no toca el recordatorio', async () => {
+    const { service, reminders } = setup();
+    const created = await service.create('biz-a', 'user-a', { ...base, nextDueKm: 15000 });
+
+    await expect(
+      service.update('biz-b', created.maintenance.id, { nextDueKm: 99999 }),
+    ).rejects.toMatchObject({ code: 'MAINTENANCE_NOT_FOUND' });
+
+    expect(reminders.get(created.reminder!.id)).toMatchObject({ dueKm: 15000 });
   });
 });
 

@@ -30,6 +30,18 @@ export interface MaintenanceWarning {
   requestedQuantity?: number;
 }
 
+/**
+ * `closeReason` del recordatorio que una corrección dejó sin próximo km ni
+ * fecha. Distinto de "descartado" (BR-R9, acción del usuario): solo este se
+ * reabre si una corrección posterior vuelve a poner km o fecha.
+ */
+const CLOSE_REASON_CORRECTED_WITHOUT_DUE = 'mantenimiento corregido sin próximo km ni fecha';
+
+/** Cliente de la transacción interactiva de `forBusiness(...).$transaction`. */
+type ScopedTransaction = Parameters<
+  Parameters<ReturnType<typeof forBusiness>['$transaction']>[0]
+>[0];
+
 export type MaintenanceWithItems = Maintenance & { items: MaintenanceItem[] };
 
 export interface CreateMaintenanceResult {
@@ -325,16 +337,16 @@ export class MaintenancesService {
     return { ...maintenance, items };
   }
 
-  /** Corrige solo campos que no afectan el stock (BR-M11). */
   /**
-   * GAP CONOCIDO: si esta corrección cambia `nextDueKm`/`nextDueDate`/
-   * `dueRule`, el `Reminder` ya creado por este mantenimiento (si sigue
-   * abierto) no se resincroniza — queda con los datos del momento en que se
-   * generó (05-DATABASE.md dice que `Reminder.dueDate/dueKm/dueRule` son
-   * "copiados del mantenimiento", pero ni BR-M11 ni 06-API.md especifican
-   * qué debe pasar con esa copia ante una corrección posterior). No se
-   * implementa a propósito para no inventar una regla no documentada;
-   * queda pendiente de una decisión explícita.
+   * Corrige solo campos que no afectan el stock (BR-M11) y, en la misma
+   * transacción, sincroniza el recordatorio que originó (ver
+   * `syncOwnReminder`).
+   *
+   * "No enviado" se detecta con `!== undefined`, no con `'campo' in dto`: el
+   * `ValidationPipe` (`transform: true`) instancia el DTO y, con target
+   * ES2022, la clase declara todos sus campos, así que `in` siempre da true
+   * y una corrección de solo `notes` borraba `nextDueDate`/`dueRule`. `null`
+   * explícito sí significa "quitar el valor".
    */
   async update(businessId: string, id: string, dto: UpdateMaintenanceDto): Promise<Maintenance> {
     const scoped = forBusiness(this.prisma, businessId);
@@ -342,26 +354,36 @@ export class MaintenancesService {
     if (!existing) {
       throw this.notFound();
     }
+    if (existing.status === MaintenanceStatus.VOIDED) {
+      throw new ProblemException({
+        status: HttpStatus.CONFLICT,
+        code: 'MAINTENANCE_VOIDED',
+        title: 'Un mantenimiento anulado no se puede corregir',
+      });
+    }
 
-    const nextDueKm = 'nextDueKm' in dto ? dto.nextDueKm : existing.nextDueKm;
+    const nextDueKm = dto.nextDueKm !== undefined ? dto.nextDueKm : existing.nextDueKm;
     const nextDueDate =
-      'nextDueDate' in dto
+      dto.nextDueDate !== undefined
         ? dto.nextDueDate
           ? new Date(dto.nextDueDate)
           : null
         : existing.nextDueDate;
-    // Ojo: NO se hereda `existing.dueRule` cuando el cliente no lo manda.
-    // Era válido para la combinación km/fecha anterior; si esta corrección
-    // cambia esa combinación, hay que volver a resolverla desde cero
-    // (BR-M4, BR-M5), no arrastrar una regla que puede haber dejado de ser
-    // coherente.
-    const explicitDueRule = 'dueRule' in dto ? (dto.dueRule ?? null) : null;
+    // `existing.dueRule` solo se hereda si la combinación km/fecha (qué hay,
+    // no sus valores) no cambió: si cambió, la regla anterior puede haber
+    // dejado de ser coherente y se vuelve a resolver desde cero (BR-M4,
+    // BR-M5).
+    const sameCombination =
+      (nextDueKm != null) === (existing.nextDueKm != null) &&
+      (nextDueDate != null) === (existing.nextDueDate != null);
+    const requestedDueRule =
+      dto.dueRule !== undefined ? dto.dueRule : sameCombination ? existing.dueRule : null;
 
     const business = await this.prisma.business.findUniqueOrThrow({ where: { id: businessId } });
     const resolution = resolveDueRule({
       nextDueKm,
       nextDueDate,
-      dueRule: explicitDueRule,
+      dueRule: requestedDueRule,
       businessDefaultDueRuleWhenBoth: business.defaultDueRuleWhenBoth,
     });
     if (!resolution.ok) {
@@ -380,14 +402,137 @@ export class MaintenancesService {
           });
     }
 
-    return scoped.maintenance.update({
-      where: { id },
+    return scoped.$transaction(async (tx) => {
+      const maintenance = await tx.maintenance.update({
+        where: { id },
+        data: {
+          // `undefined` = no se toca; `null` = se quita.
+          odometerKm: dto.odometerKm,
+          nextDueKm: dto.nextDueKm,
+          nextDueDate: dto.nextDueDate !== undefined ? nextDueDate : undefined,
+          dueRule: resolution.dueRule,
+          notes: dto.notes,
+        },
+      });
+      await this.syncOwnReminder(tx, businessId, maintenance);
+      return maintenance;
+    });
+  }
+
+  /**
+   * Mantiene el recordatorio originado por un mantenimiento corregido como
+   * copia de sus datos (05-DATABASE.md: `Reminder.dueDate/dueKm/dueRule`
+   * "copiados del mantenimiento"), sin romper BR-R2 ni el historial:
+   *
+   * - Abierto (PENDING/CONTACTED) y sigue habiendo regla: se actualiza en el
+   *   lugar (mismo id, mismo estado, mismos contactos).
+   * - Abierto y ya no hay próximo km ni fecha (BR-M6: no corresponde
+   *   recordatorio): se descarta, sin borrado físico (mismo criterio que la
+   *   anulación, BR-M12).
+   * - Cerrado como cumplido (DONE, BR-R2), descartado por el usuario (BR-R9)
+   *   o por anulación: no se toca ni se reemplaza.
+   * - Sin recordatorio abierto y ahora hay regla (BR-R1): se reabre el que
+   *   esta misma corrección había descartado, o se crea uno, solo si no hay
+   *   otro abierto para el vehículo y tipo (BR-R2) y no hay un mantenimiento
+   *   activo posterior del mismo tipo (que ya lo habría dejado cumplido).
+   */
+  private async syncOwnReminder(
+    tx: ScopedTransaction,
+    businessId: string,
+    maintenance: Maintenance,
+  ): Promise<void> {
+    const own = await tx.reminder.findMany({
+      where: { businessId, sourceMaintenanceId: maintenance.id },
+    });
+    const openOwn = own.find(
+      (reminder) =>
+        reminder.status === ReminderStatus.PENDING || reminder.status === ReminderStatus.CONTACTED,
+    );
+    const dueData = {
+      dueDate: maintenance.nextDueDate ?? null,
+      dueKm: maintenance.nextDueKm ?? null,
+    };
+
+    if (openOwn) {
+      await tx.reminder.update({
+        where: { id: openOwn.id },
+        data: maintenance.dueRule
+          ? { ...dueData, dueRule: maintenance.dueRule }
+          : {
+              status: ReminderStatus.DISMISSED,
+              closedAt: new Date(),
+              closeReason: CLOSE_REASON_CORRECTED_WITHOUT_DUE,
+            },
+      });
+      return;
+    }
+
+    if (!maintenance.dueRule) {
+      return;
+    }
+
+    const reopenable = own.find(
+      (reminder) =>
+        reminder.status === ReminderStatus.DISMISSED &&
+        reminder.closeReason === CLOSE_REASON_CORRECTED_WITHOUT_DUE,
+    );
+    if (own.length > 0 && !reopenable) {
+      return;
+    }
+
+    const otherOpen = await tx.reminder.findFirst({
+      where: {
+        businessId,
+        vehicleId: maintenance.vehicleId,
+        maintenanceTypeId: maintenance.maintenanceTypeId,
+        status: { in: [ReminderStatus.PENDING, ReminderStatus.CONTACTED] },
+      },
+    });
+    if (otherOpen) {
+      return;
+    }
+
+    const sameType = await tx.maintenance.findMany({
+      where: {
+        businessId,
+        vehicleId: maintenance.vehicleId,
+        maintenanceTypeId: maintenance.maintenanceTypeId,
+        status: MaintenanceStatus.ACTIVE,
+      },
+    });
+    const hasLaterMaintenance = sameType.some(
+      (other) =>
+        other.id !== maintenance.id &&
+        other.performedAt.getTime() > maintenance.performedAt.getTime(),
+    );
+    if (hasLaterMaintenance) {
+      return;
+    }
+
+    if (reopenable) {
+      await tx.reminder.update({
+        where: { id: reopenable.id },
+        data: {
+          ...dueData,
+          dueRule: maintenance.dueRule,
+          status: ReminderStatus.PENDING,
+          closedByMaintenanceId: null,
+          closedAt: null,
+          closeReason: null,
+        },
+      });
+      return;
+    }
+
+    await tx.reminder.create({
       data: {
-        odometerKm: 'odometerKm' in dto ? dto.odometerKm : undefined,
-        nextDueKm: 'nextDueKm' in dto ? dto.nextDueKm : undefined,
-        nextDueDate: 'nextDueDate' in dto ? nextDueDate : undefined,
-        dueRule: resolution.dueRule,
-        notes: 'notes' in dto ? dto.notes : undefined,
+        businessId,
+        vehicleId: maintenance.vehicleId,
+        maintenanceTypeId: maintenance.maintenanceTypeId,
+        sourceMaintenanceId: maintenance.id,
+        ...dueData,
+        dueRule: maintenance.dueRule,
+        status: ReminderStatus.PENDING,
       },
     });
   }

@@ -178,7 +178,10 @@ function runOp(
     case 'update': {
       const record = [...store.values()].find((r) => matchesWhere(r, args.where));
       if (!record) throw new Error('registro no encontrado para update');
-      Object.assign(record, args.data);
+      // Como Prisma: un campo en `undefined` no se toca (`null` sí lo borra).
+      for (const [field, value] of Object.entries(args.data ?? {})) {
+        if (value !== undefined) record[field] = value;
+      }
       return record;
     }
     case 'delete': {

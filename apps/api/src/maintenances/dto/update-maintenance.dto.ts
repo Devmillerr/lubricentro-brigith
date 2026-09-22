@@ -5,6 +5,8 @@ import { IsEnum, IsISO8601, IsInt, IsOptional, IsString, Min, MaxLength } from '
 /**
  * Corrige solo campos que no afectan el stock (BR-M11). Cambiar productos o
  * cantidades se hace anulando y registrando uno nuevo, no con este endpoint.
+ * Un campo omitido no se toca; `nextDueKm`/`nextDueDate`/`dueRule` en `null`
+ * lo quitan (sin próximo km ni fecha no corresponde recordatorio, BR-M6).
  */
 export class UpdateMaintenanceDto {
   @ApiPropertyOptional()
@@ -13,21 +15,21 @@ export class UpdateMaintenanceDto {
   @Min(0)
   odometerKm?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ nullable: true })
   @IsOptional()
   @IsInt()
   @Min(0)
-  nextDueKm?: number;
+  nextDueKm?: number | null;
 
-  @ApiPropertyOptional({ description: 'ISO 8601.' })
+  @ApiPropertyOptional({ nullable: true, description: 'ISO 8601.' })
   @IsOptional()
   @IsISO8601()
-  nextDueDate?: string;
+  nextDueDate?: string | null;
 
-  @ApiPropertyOptional({ enum: DueRule })
+  @ApiPropertyOptional({ enum: DueRule, nullable: true })
   @IsOptional()
   @IsEnum(DueRule)
-  dueRule?: DueRule;
+  dueRule?: DueRule | null;
 
   @ApiPropertyOptional()
   @IsOptional()
