@@ -10,9 +10,10 @@ const prisma = new PrismaClient({
 
 /**
  * Semilla de C0 (negocio Brigith con su usuario dueño, y un negocio "demo"
- * separado para pruebas, BR-G7) y C2 (categorías Lubricante y Filtro,
- * BR-P18). No siembra productos, mantenimientos ni plantillas: dependen de
- * datos reales que aún no existen (05-DATABASE.md §6).
+ * separado para pruebas, BR-G7), C2 (categorías Lubricante y Filtro,
+ * BR-P18) y C4 (tipo "Cambio de aceite", BR-M13). No siembra productos,
+ * mantenimientos reales ni plantillas: dependen de datos reales que aún no
+ * existen (05-DATABASE.md §6).
  */
 async function main() {
   const ownerPassword = process.env.SEED_OWNER_PASSWORD;
@@ -64,7 +65,15 @@ async function main() {
     });
   }
 
-  console.log('Seed completa: negocios "brigith" y "demo"; categorías Lubricante y Filtro.');
+  await prisma.maintenanceType.upsert({
+    where: { businessId_name: { businessId: brigith.id, name: 'Cambio de aceite' } },
+    update: {},
+    create: { businessId: brigith.id, name: 'Cambio de aceite' },
+  });
+
+  console.log(
+    'Seed completa: negocios "brigith" y "demo"; categorías Lubricante y Filtro; tipo "Cambio de aceite".',
+  );
 }
 
 main()

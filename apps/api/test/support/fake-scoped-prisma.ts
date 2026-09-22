@@ -8,11 +8,17 @@ import type { PrismaService } from '../../src/prisma/prisma.service';
  * Map en memoria y las operaciones pasan por `forBusiness` de verdad, así que
  * el filtro por `businessId` que se prueba es el mismo que corre en producción.
  *
- * Soporta lo que necesitan los servicios de C1 y C2 (customers, vehicles,
- * products): findMany (where con igualdad, OR y `contains`/`mode:
- * insensitive`, cursor + skip + take, orderBy de un campo), findFirst,
- * create, update, delete e `include` de un nivel por convención de nombre
- * (relación `foo` resuelta desde el campo `fooId` contra el store `foo`).
+ * Soporta lo que necesitan los servicios de C1 a C4 (customers, vehicles,
+ * products, inventory, maintenances): findMany (where con igualdad, OR y
+ * `contains`/`mode: insensitive`, cursor + skip + take, orderBy de un
+ * campo), findFirst, create, update, delete e `include` de un nivel por
+ * convención de nombre (relación `foo` resuelta desde el campo `fooId`
+ * contra el store `foo`). `$transaction` corre el callback contra el mismo
+ * cliente (sin aislamiento real: los servicios validan todo antes de
+ * escribir, así que nunca queda nada a medias que probar). `$queryRaw` es
+ * un no-op: en el fake no hace falta bloquear filas (04-ARCHITECTURE.md
+ * §7.2 solo importa contra Postgres real). `business` vive fuera de
+ * `stores`: no es un modelo de negocio, es el propio tenant.
  */
 
 export type Store = Map<string, Record<string, unknown>>;
@@ -28,13 +34,22 @@ function toComparable(value: unknown): string {
 }
 
 function fieldMatches(value: unknown, condition: unknown): boolean {
-  if (condition !== null && typeof condition === 'object' && 'contains' in condition) {
-    const needle = toComparable(condition.contains).toLowerCase();
-    const mode = (condition as { mode?: string }).mode;
-    const haystack = toComparable(value);
-    return mode === 'insensitive'
-      ? haystack.toLowerCase().includes(needle)
-      : haystack.includes(toComparable(condition.contains));
+  if (condition !== null && typeof condition === 'object') {
+    if ('contains' in condition) {
+      const needle = toComparable(condition.contains).toLowerCase();
+      const mode = (condition as { mode?: string }).mode;
+      const haystack = toComparable(value);
+      return mode === 'insensitive'
+        ? haystack.toLowerCase().includes(needle)
+        : haystack.includes(toComparable(condition.contains));
+    }
+    if ('in' in condition) {
+      const list = (condition as { in: unknown[] }).in;
+      return list.includes(value);
+    }
+    if ('not' in condition) {
+      return value !== condition.not;
+    }
   }
   return value === condition;
 }
@@ -70,6 +85,23 @@ function resolveIncludes(
   return resolved;
 }
 
+/** Compartida por `findMany` y `findFirst`: Prisma también ordena antes de tomar la primera fila. */
+function applyOrderBy(
+  rows: Record<string, unknown>[],
+  orderBy?: Record<string, 'asc' | 'desc'>,
+): Record<string, unknown>[] {
+  const orderByEntry = orderBy && Object.entries(orderBy)[0];
+  if (!orderByEntry) return rows;
+
+  const [field, direction] = orderByEntry;
+  return [...rows].sort((a, b) => {
+    const av = toComparable(a[field]);
+    const bv = toComparable(b[field]);
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+    return direction === 'desc' ? -cmp : cmp;
+  });
+}
+
 function runFindMany(
   store: Store,
   args: {
@@ -83,17 +115,7 @@ function runFindMany(
   stores: Map<string, Store>,
 ) {
   let rows = [...store.values()].filter((record) => matchesWhere(record, args.where));
-
-  const orderByEntry = args.orderBy && Object.entries(args.orderBy)[0];
-  if (orderByEntry) {
-    const [field, direction] = orderByEntry;
-    rows = rows.sort((a, b) => {
-      const av = toComparable(a[field]);
-      const bv = toComparable(b[field]);
-      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-      return direction === 'desc' ? -cmp : cmp;
-    });
-  }
+  rows = applyOrderBy(rows, args.orderBy);
 
   if (args.cursor) {
     const index = rows.findIndex((r) => r.id === args.cursor?.id);
@@ -125,7 +147,8 @@ function runOp(
 ) {
   switch (operation) {
     case 'findFirst': {
-      const record = [...store.values()].find((r) => matchesWhere(r, args.where));
+      const matches = [...store.values()].filter((r) => matchesWhere(r, args.where));
+      const [record] = applyOrderBy(matches, args.orderBy as never);
       return record ? resolveIncludes(record, args.include as never, stores) : null;
     }
     case 'findMany':
@@ -182,13 +205,28 @@ export function buildFakeScopedPrisma(
   uniqueFieldSets: Record<string, string[][]> = {},
 ) {
   const stores = new Map<string, Store>(modelNames.map((name) => [name, new Map()]));
+  const businesses: Store = new Map();
 
   const prisma = {
+    business: {
+      findUnique: ({ where }: { where: WhereClause }) => {
+        const record = [...businesses.values()].find((r) => matchesWhere(r, where));
+        return Promise.resolve(record ?? null);
+      },
+      findUniqueOrThrow: ({ where }: { where: WhereClause }) => {
+        const record = [...businesses.values()].find((r) => matchesWhere(r, where));
+        if (!record) throw new Error('business no encontrado en el fake');
+        return Promise.resolve(record);
+      },
+    },
     $extends(config: {
       query: { $allModels: { $allOperations: (ctx: unknown) => Promise<unknown> } };
     }) {
       const operations = config.query.$allModels.$allOperations;
-      const client: Record<string, unknown> = {};
+      const client: Record<string, unknown> = {
+        $transaction: (callback: (tx: unknown) => Promise<unknown>) => callback(client),
+        $queryRaw: () => Promise.resolve([]),
+      };
 
       for (const name of modelNames) {
         const model = name.charAt(0).toUpperCase() + name.slice(1);
@@ -237,5 +275,5 @@ export function buildFakeScopedPrisma(
     },
   } as unknown as PrismaService;
 
-  return { prisma, stores };
+  return { prisma, stores, businesses };
 }

@@ -6,6 +6,9 @@ import { PrismaService } from './prisma.service';
  * datos aplica el filtro por negocio; ningún servicio escribe el filtro a mano".
  *
  * Al agregar un modelo de negocio nuevo (Customer, Vehicle, ...) agrégalo aquí.
+ *
+ * Excepción: `MaintenanceItem` no tiene `businessId` propio (05-DATABASE.md
+ * §3) — siempre se llega a través de `Maintenance`, que sí está aquí.
  */
 const BUSINESS_SCOPED_MODELS = new Set([
   'User',
@@ -18,6 +21,9 @@ const BUSINESS_SCOPED_MODELS = new Set([
   'Product',
   'ProductCompatibility',
   'InventoryMovement',
+  'MaintenanceType',
+  'Maintenance',
+  'Reminder',
 ]);
 
 const BLOCKED_OPERATIONS = new Set(['findUnique', 'findUniqueOrThrow', 'upsert']);

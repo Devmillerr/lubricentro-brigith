@@ -1,7 +1,9 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { Prisma, type Product, type Vehicle } from '@prisma/client';
+import { Prisma, type Maintenance, type Product, type Vehicle } from '@prisma/client';
 import { ProblemException } from '../common/exceptions/problem.exception';
+import type { MaintenanceWithItems } from '../maintenances/maintenances.service';
+import { MaintenancesService } from '../maintenances/maintenances.service';
 import { forBusiness } from '../prisma/business-scope';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateVehicleDto } from './dto/create-vehicle.dto';
@@ -12,19 +14,51 @@ type VehicleWithRelations = Prisma.VehicleGetPayload<{
   include: { customer: true; vehicleModel: true };
 }>;
 
+export type VehicleLookupResult = VehicleWithRelations & {
+  lastMaintenance: Maintenance | null;
+  lastKnownKm: number | null;
+};
+
 @Injectable()
 export class VehiclesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly maintenancesService: MaintenancesService,
+  ) {}
 
-  /** Búsqueda rápida por placa, normalizada y parcial (BR-C1, B-013). */
-  async lookup(businessId: string, rawPlate: string): Promise<VehicleWithRelations[]> {
+  /**
+   * Búsqueda rápida por placa, normalizada y parcial (BR-C1, B-013).
+   * Devuelve vehículo, cliente, último mantenimiento y último km conocido
+   * (06-API.md): quedó pendiente en C1 porque Maintenance no existía
+   * todavía (STATUS.md); ya no depende de nada más.
+   */
+  async lookup(businessId: string, rawPlate: string): Promise<VehicleLookupResult[]> {
     const normalized = normalizePlate(rawPlate);
-    return forBusiness(this.prisma, businessId).vehicle.findMany({
+    const vehicles = await forBusiness(this.prisma, businessId).vehicle.findMany({
       where: { plateNormalized: { contains: normalized } },
       include: { customer: true, vehicleModel: true },
       orderBy: { plateNormalized: 'asc' },
       take: 20,
     });
+
+    return Promise.all(
+      vehicles.map(async (vehicle) => ({
+        ...vehicle,
+        lastMaintenance: await this.maintenancesService.getLastMaintenance(businessId, vehicle.id),
+        lastKnownKm: await this.maintenancesService.getLastKnownKm(businessId, vehicle.id),
+      })),
+    );
+  }
+
+  /** Historial de mantenimientos del vehículo (06-API.md), pendiente desde C1. */
+  async listMaintenances(businessId: string, id: string): Promise<MaintenanceWithItems[]> {
+    const vehicle = await forBusiness(this.prisma, businessId).vehicle.findFirst({
+      where: { id },
+    });
+    if (!vehicle) {
+      throw this.notFound();
+    }
+    return this.maintenancesService.listByVehicle(businessId, id);
   }
 
   async create(businessId: string, userId: string, dto: CreateVehicleDto): Promise<Vehicle> {

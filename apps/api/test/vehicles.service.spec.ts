@@ -1,12 +1,21 @@
+import { MaintenancesService } from '../src/maintenances/maintenances.service';
 import { VehiclesService } from '../src/vehicles/vehicles.service';
 import { buildFakeScopedPrisma } from './support/fake-scoped-prisma';
 
 function setup() {
   const { prisma, stores } = buildFakeScopedPrisma(
-    ['vehicle', 'customer', 'vehicleModel', 'product', 'productCompatibility'],
+    [
+      'vehicle',
+      'customer',
+      'vehicleModel',
+      'product',
+      'productCompatibility',
+      'maintenance',
+      'maintenanceItem',
+    ],
     { vehicle: [['businessId', 'plateNormalized']] },
   );
-  const service = new VehiclesService(prisma);
+  const service = new VehiclesService(prisma, new MaintenancesService(prisma));
   return {
     service,
     vehicles: stores.get('vehicle')!,
@@ -14,6 +23,7 @@ function setup() {
     vehicleModels: stores.get('vehicleModel')!,
     products: stores.get('product')!,
     compatibilities: stores.get('productCompatibility')!,
+    maintenances: stores.get('maintenance')!,
   };
 }
 
@@ -79,6 +89,34 @@ describe('VehiclesService', () => {
 
     expect(found).toHaveLength(1);
     expect(found[0]?.plate).toBe('ABC-123');
+  });
+
+  it('lookup incluye el último mantenimiento y el último km conocido (06-API.md)', async () => {
+    const { service, maintenances } = setup();
+    const vehicle = await service.create('biz-a', 'user-a', { plate: 'ABC-123' });
+    maintenances.set('mnt-1', {
+      id: 'mnt-1',
+      businessId: 'biz-a',
+      vehicleId: vehicle.id,
+      maintenanceTypeId: 'type-1',
+      status: 'ACTIVE',
+      performedAt: new Date('2026-01-01'),
+      odometerKm: 10000,
+    });
+    maintenances.set('mnt-2', {
+      id: 'mnt-2',
+      businessId: 'biz-a',
+      vehicleId: vehicle.id,
+      maintenanceTypeId: 'type-1',
+      status: 'ACTIVE',
+      performedAt: new Date('2026-03-01'),
+      odometerKm: 15000,
+    });
+
+    const [found] = await service.lookup('biz-a', 'ABC-123');
+
+    expect(found?.lastMaintenance?.id).toBe('mnt-2');
+    expect(found?.lastKnownKm).toBe(15000);
   });
 
   it('lookup no cruza negocios', async () => {
@@ -177,6 +215,41 @@ describe('VehiclesService', () => {
     });
 
     await expect(service.compatibleProducts('biz-b', vehicle.id)).rejects.toMatchObject({
+      code: 'VEHICLE_NOT_FOUND',
+    });
+  });
+
+  it('listMaintenances devuelve el historial del vehículo, más reciente primero (06-API.md)', async () => {
+    const { service, maintenances } = setup();
+    const vehicle = await service.create('biz-a', 'user-a', { plate: 'ABC-123' });
+    maintenances.set('mnt-1', {
+      id: 'mnt-1',
+      businessId: 'biz-a',
+      vehicleId: vehicle.id,
+      maintenanceTypeId: 'type-1',
+      status: 'ACTIVE',
+      performedAt: new Date('2026-01-01'),
+    });
+    maintenances.set('mnt-2', {
+      id: 'mnt-2',
+      businessId: 'biz-a',
+      vehicleId: vehicle.id,
+      maintenanceTypeId: 'type-1',
+      status: 'ACTIVE',
+      performedAt: new Date('2026-03-01'),
+    });
+
+    const list = await service.listMaintenances('biz-a', vehicle.id);
+
+    expect(list).toHaveLength(2);
+    expect(list[0]?.id).toBe('mnt-2');
+  });
+
+  it('listMaintenances rechaza con VEHICLE_NOT_FOUND para un vehículo de otro negocio', async () => {
+    const { service } = setup();
+    const vehicle = await service.create('biz-b', 'user-b', { plate: 'ABC-123' });
+
+    await expect(service.listMaintenances('biz-a', vehicle.id)).rejects.toMatchObject({
       code: 'VEHICLE_NOT_FOUND',
     });
   });

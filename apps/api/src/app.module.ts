@@ -8,6 +8,7 @@ import { CustomersModule } from './customers/customers.module';
 import { HealthModule } from './health/health.module';
 import { IdempotencyModule } from './idempotency/idempotency.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { MaintenancesModule } from './maintenances/maintenances.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductsModule } from './products/products.module';
 import { VehiclesModule } from './vehicles/vehicles.module';
@@ -29,6 +30,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
     VehiclesModule,
     ProductsModule,
     InventoryModule,
+    MaintenancesModule,
   ],
   providers: [
     {

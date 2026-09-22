@@ -49,6 +49,14 @@ export class VehiclesController {
     return this.vehiclesService.compatibleProducts(user.businessId, id);
   }
 
+  @Get(':id/maintenances')
+  listMaintenances(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.vehiclesService.listMaintenances(user.businessId, id);
+  }
+
   @Patch(':id')
   update(
     @CurrentUser() user: AccessTokenPayload,
