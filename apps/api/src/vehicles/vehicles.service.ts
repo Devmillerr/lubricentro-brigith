@@ -1,6 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { Prisma, type Vehicle } from '@prisma/client';
+import { Prisma, type Product, type Vehicle } from '@prisma/client';
 import { ProblemException } from '../common/exceptions/problem.exception';
 import { forBusiness } from '../prisma/business-scope';
 import { PrismaService } from '../prisma/prisma.service';
@@ -93,6 +93,30 @@ export class VehiclesService {
     } catch (error) {
       this.translateWriteError(error);
     }
+  }
+
+  /**
+   * Productos con compatibilidad confirmada para el modelo del vehículo
+   * (06-API.md). Quedó pendiente en C1 porque `Product` no existía todavía
+   * (STATUS.md); ya no depende de nada más.
+   */
+  async compatibleProducts(businessId: string, id: string): Promise<Product[]> {
+    const vehicle = await forBusiness(this.prisma, businessId).vehicle.findFirst({
+      where: { id },
+    });
+    if (!vehicle) {
+      throw this.notFound();
+    }
+    if (!vehicle.vehicleModelId) {
+      return [];
+    }
+
+    const rows = await forBusiness(this.prisma, businessId).productCompatibility.findMany({
+      where: { vehicleModelId: vehicle.vehicleModelId },
+      include: { product: true },
+      orderBy: { confirmedAt: 'desc' },
+    });
+    return rows.map((row) => row.product);
   }
 
   private async ensureRelatedExists(

@@ -8,9 +8,11 @@ import type { PrismaService } from '../../src/prisma/prisma.service';
  * Map en memoria y las operaciones pasan por `forBusiness` de verdad, así que
  * el filtro por `businessId` que se prueba es el mismo que corre en producción.
  *
- * Soporta lo que necesitan los servicios de C1 (customers, vehicles):
- * findMany (where con igualdad, OR y `contains`/`mode: insensitive`, cursor +
- * skip + take, orderBy de un campo), findFirst, create y update.
+ * Soporta lo que necesitan los servicios de C1 y C2 (customers, vehicles,
+ * products): findMany (where con igualdad, OR y `contains`/`mode:
+ * insensitive`, cursor + skip + take, orderBy de un campo), findFirst,
+ * create, update, delete e `include` de un nivel por convención de nombre
+ * (relación `foo` resuelta desde el campo `fooId` contra el store `foo`).
  */
 
 export type Store = Map<string, Record<string, unknown>>;
@@ -48,6 +50,26 @@ function matchesWhere(record: Record<string, unknown>, where?: WhereClause): boo
   });
 }
 
+/** Resuelve `include: { relationName: true }` por convención `relationName` + "Id". */
+function resolveIncludes(
+  record: Record<string, unknown>,
+  include: Record<string, boolean> | undefined,
+  stores: Map<string, Store>,
+): Record<string, unknown> {
+  if (!include) return record;
+
+  const resolved = { ...record };
+  for (const [relation, wanted] of Object.entries(include)) {
+    if (!wanted) continue;
+    const fkField = `${relation}Id`;
+    if (!(fkField in record)) continue;
+    const targetStore = stores.get(relation);
+    const fkValue = record[fkField] as string | null | undefined;
+    resolved[relation] = fkValue && targetStore ? (targetStore.get(fkValue) ?? null) : null;
+  }
+  return resolved;
+}
+
 function runFindMany(
   store: Store,
   args: {
@@ -56,7 +78,9 @@ function runFindMany(
     skip?: number;
     take?: number;
     orderBy?: Record<string, 'asc' | 'desc'>;
+    include?: Record<string, boolean>;
   },
+  stores: Map<string, Store>,
 ) {
   let rows = [...store.values()].filter((record) => matchesWhere(record, args.where));
 
@@ -82,7 +106,7 @@ function runFindMany(
     rows = rows.slice(0, args.take);
   }
 
-  return rows;
+  return rows.map((row) => resolveIncludes(row, args.include, stores));
 }
 
 function throwUniqueViolation(): never {
@@ -97,17 +121,28 @@ function runOp(
   operation: string,
   args: { where?: WhereClause; data?: Record<string, unknown> } & Record<string, unknown>,
   uniqueFieldSets: string[][] = [],
+  stores: Map<string, Store> = new Map(),
 ) {
   switch (operation) {
-    case 'findFirst':
-      return [...store.values()].find((record) => matchesWhere(record, args.where)) ?? null;
+    case 'findFirst': {
+      const record = [...store.values()].find((r) => matchesWhere(r, args.where));
+      return record ? resolveIncludes(record, args.include as never, stores) : null;
+    }
     case 'findMany':
-      return runFindMany(store, args);
+      return runFindMany(store, args, stores);
     case 'create': {
       const id = (args.data?.id as string) ?? `id-${store.size + 1}`;
       const record: Record<string, unknown> = { isActive: true, ...args.data, id };
 
       for (const fields of uniqueFieldSets) {
+        // Como en Postgres: si algún campo del set es NULL, esta fila no
+        // cuenta como duplicado de ninguna otra (NULL nunca es igual a NULL
+        // para una restricción única compuesta).
+        const hasNullField = fields.some(
+          (field) => record[field] === null || record[field] === undefined,
+        );
+        if (hasNullField) continue;
+
         const conflict = [...store.values()].some((existing) =>
           fields.every((field) => existing[field] === record[field]),
         );
@@ -121,6 +156,12 @@ function runOp(
       const record = [...store.values()].find((r) => matchesWhere(r, args.where));
       if (!record) throw new Error('registro no encontrado para update');
       Object.assign(record, args.data);
+      return record;
+    }
+    case 'delete': {
+      const record = [...store.values()].find((r) => matchesWhere(r, args.where));
+      if (!record) throw new Error('registro no encontrado para delete');
+      store.delete(record.id as string);
       return record;
     }
     default:
@@ -158,14 +199,14 @@ export function buildFakeScopedPrisma(
               model,
               operation: 'findFirst',
               args,
-              query: (a: unknown) => runOp(store, 'findFirst', a as never),
+              query: (a: unknown) => runOp(store, 'findFirst', a as never, [], stores),
             }),
           findMany: (args: Record<string, unknown>) =>
             operations({
               model,
               operation: 'findMany',
               args,
-              query: (a: unknown) => runOp(store, 'findMany', a as never),
+              query: (a: unknown) => runOp(store, 'findMany', a as never, [], stores),
             }),
           create: (args: Record<string, unknown>) =>
             operations({
@@ -173,14 +214,21 @@ export function buildFakeScopedPrisma(
               operation: 'create',
               args,
               query: (a: unknown) =>
-                runOp(store, 'create', a as never, uniqueFieldSets[name] ?? []),
+                runOp(store, 'create', a as never, uniqueFieldSets[name] ?? [], stores),
             }),
           update: (args: Record<string, unknown>) =>
             operations({
               model,
               operation: 'update',
               args,
-              query: (a: unknown) => runOp(store, 'update', a as never),
+              query: (a: unknown) => runOp(store, 'update', a as never, [], stores),
+            }),
+          delete: (args: Record<string, unknown>) =>
+            operations({
+              model,
+              operation: 'delete',
+              args,
+              query: (a: unknown) => runOp(store, 'delete', a as never, [], stores),
             }),
         };
       }

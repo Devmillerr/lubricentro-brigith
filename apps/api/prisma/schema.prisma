@@ -53,12 +53,15 @@ model Business {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users              User[]
-  refreshTokens      RefreshToken[]
-  idempotencyRecords IdempotencyRecord[]
-  customers          Customer[]
-  vehicleModels      VehicleModel[]
-  vehicles           Vehicle[]
+  users                  User[]
+  refreshTokens          RefreshToken[]
+  idempotencyRecords     IdempotencyRecord[]
+  customers              Customer[]
+  vehicleModels          VehicleModel[]
+  vehicles               Vehicle[]
+  productCategories      ProductCategory[]
+  products               Product[]
+  productCompatibilities ProductCompatibility[]
 
   @@map("businesses")
 }
@@ -82,10 +85,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  refreshTokens        RefreshToken[]
-  createdCustomers     Customer[]
-  createdVehicleModels VehicleModel[]
-  createdVehicles      Vehicle[]
+  refreshTokens            RefreshToken[]
+  createdCustomers         Customer[]
+  createdVehicleModels     VehicleModel[]
+  createdVehicles          Vehicle[]
+  confirmedCompatibilities ProductCompatibility[]
 
   @@map("users")
 }
@@ -172,7 +176,8 @@ model VehicleModel {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  vehicles Vehicle[]
+  vehicles        Vehicle[]
+  compatibilities ProductCompatibility[]
 
   @@map("vehicle_models")
 }
@@ -211,4 +216,84 @@ model Vehicle {
 
   @@unique([businessId, plateNormalized])
   @@map("vehicles")
+}
+
+/// Categoría de producto. Semilla: Lubricante y Filtro (BR-P18). Sin
+/// `createdById`: no está en el campo documentado (05-DATABASE.md §3).
+model ProductCategory {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  name String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+
+  @@unique([businessId, name])
+  @@map("product_categories")
+}
+
+/// Cada fila es una unidad de stock en la que se cuenta y descuenta (BR-P15).
+/// Cómo se representan presentaciones y granel queda para DEC-22; con esta
+/// estructura, ambas opciones son solo datos (05-DATABASE.md §3): `unit` es
+/// texto libre a propósito, para no cerrar ninguna opción.
+model Product {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  categoryId String?
+  category   ProductCategory? @relation(fields: [categoryId], references: [id])
+
+  /// Texto libre. Marcas confirmadas: Repsol, Vistony, Valvoline (C-10).
+  brand String?
+  /// Único por negocio si existe; los filtros se manejan por código (C-05).
+  code  String?
+  name  String
+
+  /// Unidad en la que se cuenta y descuenta (BR-P15). Vocabulario pendiente
+  /// de DEC-22/P-07: hoy es texto libre para no cerrar ninguna opción.
+  unit String
+
+  /// Opcional; ningún precio se asume (BR-P17). Se usa recién en la Fase 2.
+  salePrice Decimal? @db.Decimal(10, 2)
+
+  /// Por defecto controla stock (BR-P16); puede marcarse sin control.
+  tracksStock Boolean @default(true)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  compatibilities ProductCompatibility[]
+
+  @@unique([businessId, code])
+  @@map("products")
+}
+
+/// Compatibilidad explícita producto <-> modelo de vehículo (BR-F1, BR-F3).
+/// Nunca la crea un mantenimiento ni una venta (BR-F2): solo esta acción.
+model ProductCompatibility {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  vehicleModelId String
+  vehicleModel   VehicleModel @relation(fields: [vehicleModelId], references: [id])
+
+  confirmedById String
+  confirmedBy   User     @relation(fields: [confirmedById], references: [id])
+  confirmedAt   DateTime @default(now())
+
+  note String?
+
+  @@unique([productId, vehicleModelId])
+  @@map("product_compatibilities")
 }

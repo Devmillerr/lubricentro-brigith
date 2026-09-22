@@ -14,6 +14,9 @@ const BUSINESS_SCOPED_MODELS = new Set([
   'Customer',
   'VehicleModel',
   'Vehicle',
+  'ProductCategory',
+  'Product',
+  'ProductCompatibility',
 ]);
 
 const BLOCKED_OPERATIONS = new Set(['findUnique', 'findUniqueOrThrow', 'upsert']);

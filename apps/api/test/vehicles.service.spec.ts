@@ -2,11 +2,19 @@ import { VehiclesService } from '../src/vehicles/vehicles.service';
 import { buildFakeScopedPrisma } from './support/fake-scoped-prisma';
 
 function setup() {
-  const { prisma, stores } = buildFakeScopedPrisma(['vehicle', 'customer', 'vehicleModel'], {
-    vehicle: [['businessId', 'plateNormalized']],
-  });
+  const { prisma, stores } = buildFakeScopedPrisma(
+    ['vehicle', 'customer', 'vehicleModel', 'product', 'productCompatibility'],
+    { vehicle: [['businessId', 'plateNormalized']] },
+  );
   const service = new VehiclesService(prisma);
-  return { service, vehicles: stores.get('vehicle')!, customers: stores.get('customer')! };
+  return {
+    service,
+    vehicles: stores.get('vehicle')!,
+    customers: stores.get('customer')!,
+    vehicleModels: stores.get('vehicleModel')!,
+    products: stores.get('product')!,
+    compatibilities: stores.get('productCompatibility')!,
+  };
 }
 
 describe('VehiclesService', () => {
@@ -109,5 +117,67 @@ describe('VehiclesService', () => {
     const updated = await service.update('biz-a', vehicle.id, { customerId: 'cust-1' });
 
     expect(updated.customerId).toBe('cust-1');
+  });
+
+  it('compatibleProducts devuelve [] si el vehículo no tiene modelo asignado', async () => {
+    const { service } = setup();
+    const vehicle = await service.create('biz-a', 'user-a', { plate: 'ABC-123' });
+
+    await expect(service.compatibleProducts('biz-a', vehicle.id)).resolves.toEqual([]);
+  });
+
+  it('compatibleProducts devuelve los productos compatibles con el modelo del vehículo', async () => {
+    const { service, vehicleModels, products, compatibilities } = setup();
+    vehicleModels.set('model-1', {
+      id: 'model-1',
+      businessId: 'biz-a',
+      make: 'Toyota',
+      model: 'Yaris',
+    });
+    products.set('prod-1', { id: 'prod-1', businessId: 'biz-a', name: 'Filtro X', unit: 'unidad' });
+    compatibilities.set('compat-1', {
+      id: 'compat-1',
+      businessId: 'biz-a',
+      productId: 'prod-1',
+      vehicleModelId: 'model-1',
+      confirmedById: 'user-a',
+      confirmedAt: new Date(),
+    });
+    const vehicle = await service.create('biz-a', 'user-a', {
+      plate: 'ABC-123',
+      vehicleModelId: 'model-1',
+    });
+
+    const found = await service.compatibleProducts('biz-a', vehicle.id);
+
+    expect(found).toHaveLength(1);
+    expect(found[0]?.id).toBe('prod-1');
+  });
+
+  it('compatibleProducts no cruza negocios', async () => {
+    const { service, vehicleModels, products, compatibilities } = setup();
+    vehicleModels.set('model-1', {
+      id: 'model-1',
+      businessId: 'biz-a',
+      make: 'Toyota',
+      model: 'Yaris',
+    });
+    products.set('prod-1', { id: 'prod-1', businessId: 'biz-a', name: 'Filtro X', unit: 'unidad' });
+    compatibilities.set('compat-1', {
+      id: 'compat-1',
+      businessId: 'biz-a',
+      productId: 'prod-1',
+      vehicleModelId: 'model-1',
+      confirmedById: 'user-a',
+      confirmedAt: new Date(),
+    });
+    const vehicle = await service.create('biz-a', 'user-a', {
+      plate: 'ABC-123',
+      vehicleModelId: 'model-1',
+    });
+
+    await expect(service.compatibleProducts('biz-b', vehicle.id)).rejects.toMatchObject({
+      code: 'VEHICLE_NOT_FOUND',
+    });
   });
 });

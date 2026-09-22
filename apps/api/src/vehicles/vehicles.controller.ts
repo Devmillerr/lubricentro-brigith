@@ -41,6 +41,14 @@ export class VehiclesController {
     return this.vehiclesService.findOne(user.businessId, id);
   }
 
+  @Get(':id/compatible-products')
+  compatibleProducts(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.vehiclesService.compatibleProducts(user.businessId, id);
+  }
+
   @Patch(':id')
   update(
     @CurrentUser() user: AccessTokenPayload,
