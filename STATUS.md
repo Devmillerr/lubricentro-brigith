@@ -4,11 +4,11 @@
 
 ## Corte actual
 
-**Backend C0–C6 implementado y commiteado** (último commit de corte: `b92beb8`, C6). Esta sesión trabajó sobre **correcciones de auditoría + B-010**, verificadas pero **sin commit** (ver "Último commit").
+**Backend C0–C6 implementado y commiteado** (último commit de corte: `b92beb8`, C6). Las **correcciones de auditoría A-1/A-2 y la configuración del negocio (B-010)** están verificadas y **commiteadas** en `9d80f09`.
 
 La base real ya existe: **Supabase** (proyecto `brigith-os`), `apps/api/.env` configurado, migraciones aplicadas. El bloqueo operativo de sesiones anteriores ("sin base de datos") está resuelto.
 
-## Completado en esta sesión (sin commit)
+## Completado después de C6 (commit `9d80f09`)
 
 | Ítem | Qué | Dónde |
 |---|---|---|
@@ -17,7 +17,7 @@ La base real ya existe: **Supabase** (proyecto `brigith-os`), `apps/api/.env` co
 | B-010 | `GET /business` y `PATCH /business/settings` con los 6 campos de `06-API.md`: `whatsappTemplate`, `reminderLeadDays`, `defaultDueRuleWhenBoth` (solo `ANY`/`ALL`), `insufficientStockPolicy`, `defaultCountryCode`, `currency`. Campo omitido = no se toca; `null` = vuelve a sin definir. `businessId` siempre del token | `apps/api/src/business/**` |
 | Tests | `idempotency.service.spec.ts` reescrito sobre el fake compartido (endpoints distintos, aislamiento entre negocios, liberación tras fallo); nuevo `business.service.spec.ts`; `fake-scoped-prisma.ts` soporta `business.update` | `apps/api/test/**` |
 
-Verificación de esta sesión:
+Verificación hecha antes del commit:
 - `typecheck` limpio, `lint` limpio, **176/176 tests unitarios** (21 suites).
 - `prisma migrate status`: al día (6 migraciones).
 - Smoke test contra Supabase con la API levantada: `GET /business`, `PATCH /business/settings` (valida `ANY`/`ALL`, rechaza campos extra como `name`, 401 sin token; se probó `currency` y se revirtió a `null`).
@@ -25,13 +25,12 @@ Verificación de esta sesión:
 
 ## Pendiente
 
-- **Commit** de lo anterior (esperando pedido explícito del usuario).
-- **`test:e2e` roto** (preexistente, no causado por esta sesión): Jest no puede cargar `@nestjs/throttler`/`@nestjs/common` como ESM (`Must use import to load ES Module`). Hay que ajustar `test/jest-e2e.json` (transform / `transformIgnorePatterns`) o el modo ESM. Los unitarios no se ven afectados.
+- **`test:e2e` roto** (preexistente, no causado por A-1/A-2/B-010): Jest no puede cargar `@nestjs/throttler`/`@nestjs/common` como ESM (`Must use import to load ES Module`). Hay que ajustar `test/jest-e2e.json` (transform / `transformIgnorePatterns`) o el modo ESM. Los unitarios no se ven afectados.
 - **`PATCH /maintenances/:id`** no resincroniza el `Reminder` ya creado si cambian `nextDueKm`/`nextDueDate`/`dueRule` (gap documentado en el commit de C6).
 - **Cliente OpenAPI del frontend** (`apps/web/src/lib/api/generated/`): no se ha regenerado desde C0; no incluye C1–C6 ni `/business`.
 - **Pantallas en `apps/web`** para C1–C6: no hechas (`apps/web` no se toca desde `fe6959e`).
 - Ítems del backlog que dependen de datos o decisiones de Brigith (no de código): B-021/B-030/B-042 (DEC-22), B-023 (P-07, P-08), B-046 (P-02, P-03), B-053 / BR-W5 (P-01), B-061 (P-01), B-063 / BR-I4 (umbrales). Los valores de DEC-01, DEC-03, DEC-05, P-13 ya se pueden **cargar** vía `PATCH /business/settings` cuando se decidan.
-- `docs/09-BACKLOG.md` sigue marcando B-010 como "Config abierta"; actualizarlo a "Listo" al commitear.
+- `docs/09-BACKLOG.md` marca B-010 como "Config abierta" (implementable; el valor lo decide el negocio). El endpoint ya existe; los valores siguen pendientes de decisión. Cambiar ese estado queda a criterio del usuario.
 
 ## Bloqueos
 
@@ -40,11 +39,10 @@ Verificación de esta sesión:
 
 ## Último commit
 
-`b92beb8` — "feat(api): implement C6 pilot indicators". **Lo hecho en esta sesión NO está commiteado**: `schema.prisma`, `app.module.ts`, `idempotency.service.ts`, la nueva migración, `src/business/**` y los tests. Ojo: la migración ya está **aplicada en Supabase** aunque el archivo no esté commiteado — no borrarla ni renombrarla.
+`9d80f09` — "fix(api): close audit findings and add business settings" (A-1, A-2, B-010 y la migración `20260922200000_idempotency_key_per_endpoint`, ya aplicada en Supabase; no borrarla ni renombrarla). Sobre `b92beb8` (C6).
 
 ## Próximo paso
 
-1. Commitear las correcciones A-1/A-2 + B-010 (y marcar B-010 como Listo en `09-BACKLOG.md`), cuando el usuario lo pida.
-2. Arreglar la configuración de `test:e2e` (ESM en Jest).
-3. Resincronizar el `Reminder` en `PATCH /maintenances/:id`.
-4. Regenerar OpenAPI + cliente tipado de `apps/web` y decidir el orden de las pantallas del MVP.
+1. Arreglar la configuración de `test:e2e` (ESM en Jest).
+2. Resincronizar el `Reminder` en `PATCH /maintenances/:id`.
+3. Regenerar OpenAPI + cliente tipado de `apps/web` y decidir el orden de las pantallas del MVP.
