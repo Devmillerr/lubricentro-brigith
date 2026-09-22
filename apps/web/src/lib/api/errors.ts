@@ -1,13 +1,7 @@
-/** Formato "problem details" que devuelve la API (06-API.md §1). */
-export interface ProblemDetails {
-  type: string;
-  title: string;
-  status: number;
-  detail: string;
-  code: string;
-  instance: string;
-  errors?: { field: string; message: string }[];
-}
+import type { Schemas } from './client';
+
+/** Formato "problem details" que devuelve la API (06-API.md §1), tomado del contrato. */
+export type ProblemDetails = Schemas['ProblemDetailsDto'];
 
 export type ClassifiedError =
   | { kind: 'network' }
@@ -22,7 +16,10 @@ export type ClassifiedError =
  * marcar el campo, renovar sesión sin perder el formulario, o mostrar un
  * mensaje simple con reintento.
  */
-export function classifyError(problem: ProblemDetails | undefined, networkError: boolean): ClassifiedError {
+export function classifyError(
+  problem: ProblemDetails | undefined,
+  networkError: boolean,
+): ClassifiedError {
   if (networkError || !problem) {
     return { kind: 'network' };
   }

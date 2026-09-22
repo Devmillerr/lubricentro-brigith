@@ -1,5 +1,11 @@
 import { Body, Controller, Get, Headers, HttpStatus, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiHeader,
+  ApiOkResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AccessTokenPayload } from '../auth/types/jwt-payload';
@@ -11,10 +17,22 @@ import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { ListMovementsQueryDto } from './dto/list-movements-query.dto';
 import { StockQueryDto } from './dto/stock-query.dto';
 import { InventoryService } from './inventory.service';
+import {
+  AUTH_ERRORS,
+  ApiErrors,
+  IDEMPOTENCY_ERRORS,
+  VALIDATION_ERRORS,
+} from '../common/openapi/api-errors.decorator';
+import {
+  InventoryMovementPageResponse,
+  InventoryMovementResponse,
+  StockViewResponse,
+} from './dto/inventory.response';
 
 @ApiTags('inventory')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
+@ApiErrors({ 401: AUTH_ERRORS })
 @Controller('inventory')
 export class InventoryController {
   constructor(
@@ -22,16 +40,26 @@ export class InventoryController {
     private readonly idempotency: IdempotencyService,
   ) {}
 
+  @ApiOkResponse({ type: StockViewResponse })
+  @ApiErrors({ 400: VALIDATION_ERRORS, 404: ['PRODUCT_NOT_FOUND'] })
   @Get('stock')
   getStock(@CurrentUser() user: AccessTokenPayload, @Query() query: StockQueryDto) {
     return this.inventoryService.getStock(user.businessId, query.productId);
   }
 
+  @ApiOkResponse({ type: InventoryMovementPageResponse })
+  @ApiErrors({ 400: VALIDATION_ERRORS })
   @Get('movements')
   listMovements(@CurrentUser() user: AccessTokenPayload, @Query() query: ListMovementsQueryDto) {
     return this.inventoryService.listMovements(user.businessId, query);
   }
 
+  @ApiCreatedResponse({ type: InventoryMovementResponse })
+  @ApiErrors({
+    400: [...VALIDATION_ERRORS, ...IDEMPOTENCY_ERRORS[400]],
+    404: ['PRODUCT_NOT_FOUND'],
+    409: [...IDEMPOTENCY_ERRORS[409]],
+  })
   @Post('counts')
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   async count(
@@ -52,6 +80,12 @@ export class InventoryController {
     return result.body;
   }
 
+  @ApiCreatedResponse({ type: InventoryMovementResponse })
+  @ApiErrors({
+    400: [...VALIDATION_ERRORS, ...IDEMPOTENCY_ERRORS[400]],
+    404: ['PRODUCT_NOT_FOUND'],
+    409: [...IDEMPOTENCY_ERRORS[409]],
+  })
   @Post('receipts')
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   async receipt(
@@ -72,6 +106,12 @@ export class InventoryController {
     return result.body;
   }
 
+  @ApiCreatedResponse({ type: InventoryMovementResponse })
+  @ApiErrors({
+    400: [...VALIDATION_ERRORS, ...IDEMPOTENCY_ERRORS[400]],
+    404: ['PRODUCT_NOT_FOUND'],
+    409: [...IDEMPOTENCY_ERRORS[409]],
+  })
   @Post('adjustments')
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   async adjustment(

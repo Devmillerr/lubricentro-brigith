@@ -19,6 +19,7 @@ import {
  */
 export class UpdateBusinessSettingsDto {
   @ApiPropertyOptional({
+    type: String,
     nullable: true,
     description:
       'Nulo hasta P-13 (BR-W4): mientras esté vacía, el enlace abre el chat sin mensaje.',
@@ -30,6 +31,7 @@ export class UpdateBusinessSettingsDto {
   whatsappTemplate?: string | null;
 
   @ApiPropertyOptional({
+    type: Number,
     nullable: true,
     minimum: 0,
     description:
@@ -61,6 +63,7 @@ export class UpdateBusinessSettingsDto {
   insufficientStockPolicy?: InsufficientStockPolicy;
 
   @ApiPropertyOptional({
+    type: String,
     nullable: true,
     description: 'Para el enlace de WhatsApp (BR-W5). A confirmar tras P-01.',
   })
@@ -71,6 +74,7 @@ export class UpdateBusinessSettingsDto {
   defaultCountryCode?: string | null;
 
   @ApiPropertyOptional({
+    type: String,
     nullable: true,
     description: 'Moneda del negocio. Valor a confirmar en el seed (05-DATABASE.md).',
   })

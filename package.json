@@ -10,6 +10,7 @@
   "scripts": {
     "dev:api": "pnpm --filter @brigith/api start:dev",
     "dev:web": "pnpm --filter @brigith/web dev",
+    "api:generate": "pnpm --filter @brigith/api openapi:generate && pnpm --filter @brigith/web generate:api-client",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",

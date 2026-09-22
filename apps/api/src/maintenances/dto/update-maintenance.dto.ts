@@ -15,13 +15,13 @@ export class UpdateMaintenanceDto {
   @Min(0)
   odometerKm?: number;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: Number, nullable: true })
   @IsOptional()
   @IsInt()
   @Min(0)
   nextDueKm?: number | null;
 
-  @ApiPropertyOptional({ nullable: true, description: 'ISO 8601.' })
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'ISO 8601.' })
   @IsOptional()
   @IsISO8601()
   nextDueDate?: string | null;
