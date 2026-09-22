@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <ConnectivityProvider>
           <RegisterServiceWorker />
           <OfflineBanner />
-          <main className="mx-auto flex min-h-dvh max-w-md flex-col px-4 py-6">{children}</main>
+          {children}
         </ConnectivityProvider>
       </body>
     </html>

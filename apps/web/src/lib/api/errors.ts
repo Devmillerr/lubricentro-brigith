@@ -34,3 +34,19 @@ export function classifyError(
   }
   return { kind: 'client', code: problem.code, detail: problem.detail };
 }
+
+/** Mensaje simple para mostrar al usuario según el tipo de error (07-UI-UX.md §5). */
+export function describeError(error: ClassifiedError): string {
+  switch (error.kind) {
+    case 'network':
+      return 'No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.';
+    case 'session-expired':
+      return 'Tu sesión venció. Vuelve a iniciar sesión.';
+    case 'validation':
+      return 'Revisa los datos ingresados.';
+    case 'server':
+      return 'Ocurrió un problema en el servidor. Inténtalo de nuevo.';
+    case 'client':
+      return error.detail;
+  }
+}
