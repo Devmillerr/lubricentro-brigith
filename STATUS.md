@@ -4,7 +4,7 @@
 
 ## Corte actual
 
-**C0 — Base del proyecto.** Implementado y verificado localmente. **Aún sin commitear** (el repositorio no tiene ningún commit; los 125 archivos de C0 están en el working tree, actualmente en staging).
+**C0 — Base del proyecto.** Implementado, verificado localmente y commiteado.
 
 ## Completado (C0)
 
@@ -25,7 +25,6 @@ Verificado en esta sesión: `apps/api` typecheck limpio (`tsc --noEmit`), 16/16 
 ## Pendiente
 
 - **B-010** (config abierta): configuración del negocio como valores editables. No implementado aún; no bloquea el resto de C0.
-- **Commit inicial**: nada está commiteado todavía. Ver "Próximo paso".
 - **C1 — Clientes y vehículos** (B-011 a B-014): CRUD de clientes, vehículos con normalización/unicidad de placa, búsqueda por placa, modelos de vehículo. No iniciado. No depende de ningún dato pendiente de Brigith.
 - **C2 en adelante**: ver `docs/08-ROADMAP.md` y `docs/09-BACKLOG.md` §3 para el detalle completo por corte.
 
@@ -38,9 +37,10 @@ Ninguno bloquea C0 ni C1 (confirmado en `docs/09-BACKLOG.md` §1).
 
 ## Último commit
 
-Ninguno. `git log` reporta "your current branch 'master' does not have any commits yet".
+`fe6959e` — "feat(c0): bootstrap Brigith OS foundation" (87 archivos, commit raíz en `master`).
+
+Nota: `apps/web/tsconfig.tsbuildinfo` (artefacto de build de TypeScript) quedó incluido en este commit porque no está en `.gitignore`. No es un problema funcional, pero conviene añadirlo a `.gitignore` y quitarlo del tracking en el próximo commit.
 
 ## Próximo paso
 
-1. Crear el commit inicial con todo el trabajo de C0 (repo, docs, `apps/api`, `apps/web`).
-2. Empezar **C1 — Clientes y vehículos**: CRUD de clientes (nombre y teléfono opcionales), vehículos con placa (normalización y unicidad por negocio), modelos de vehículo (año y motor opcionales), búsqueda rápida por placa parcial.
+Empezar **C1 — Clientes y vehículos**: CRUD de clientes (nombre y teléfono opcionales), vehículos con placa (normalización y unicidad por negocio), modelos de vehículo (año y motor opcionales), búsqueda rápida por placa parcial.
