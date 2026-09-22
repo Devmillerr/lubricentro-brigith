@@ -5,7 +5,12 @@
   "rootDir": ".",
   "testRegex": ".e2e-spec.ts$",
   "transform": {
-    "^.+\\.tsx?$": ["ts-jest", { "useESM": true, "tsconfig": { "module": "esnext" } }]
+    "^.+\\.tsx?$": ["ts-jest", { "useESM": true, "tsconfig": { "module": "esnext" } }],
+    "[\\\\/]@nestjs[\\\\/]throttler[\\\\/]dist[\\\\/].+\\.js$": "<rootDir>/support/nestjs-esm-bridge.cjs"
   },
+  "transformIgnorePatterns": [
+    "/node_modules/(?!(\\.pnpm/@nestjs\\+throttler@[^/]+/node_modules/)?@nestjs/throttler/)"
+  ],
+  "setupFilesAfterEnv": ["<rootDir>/support/nestjs-esm-bridge.setup.ts"],
   "testEnvironment": "node"
 }
