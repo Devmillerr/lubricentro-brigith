@@ -218,6 +218,14 @@ export function buildFakeScopedPrisma(
         if (!record) throw new Error('business no encontrado en el fake');
         return Promise.resolve(record);
       },
+      update: ({ where, data }: { where: WhereClause; data: Record<string, unknown> }) => {
+        const record = [...businesses.values()].find((r) => matchesWhere(r, where));
+        if (!record) throw new Error('business no encontrado en el fake');
+        for (const [field, value] of Object.entries(data)) {
+          if (value !== undefined) record[field] = value;
+        }
+        return Promise.resolve(record);
+      },
     },
     $extends(config: {
       query: { $allModels: { $allOperations: (ctx: unknown) => Promise<unknown> } };

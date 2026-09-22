@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
+import { BusinessModule } from './business/business.module';
 import { validateEnv } from './config/env.validation';
 import { CustomersModule } from './customers/customers.module';
 import { HealthModule } from './health/health.module';
@@ -28,6 +29,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
     HealthModule,
     IdempotencyModule,
     AuthModule,
+    BusinessModule,
     CustomersModule,
     VehiclesModule,
     ProductsModule,

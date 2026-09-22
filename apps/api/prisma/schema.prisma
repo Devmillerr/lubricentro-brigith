@@ -122,6 +122,15 @@ model RefreshToken {
 
 /// Registro de idempotencia para escrituras críticas (mantenimientos, inventario).
 /// Ver 04-ARCHITECTURE.md §7.3 y 05-DATABASE.md §3 (IdempotencyRecord).
+/// Único por (businessId, key, endpoint): la misma clave puede reusarse en
+/// endpoints distintos sin chocar entre sí (antes solo era businessId+key,
+/// lo que hacía fallar la segunda escritura con un 500 en vez de un
+/// resultado correcto — auditoría, hallazgo A-2).
+/// `responseStatus`/`responseBody` nulos mientras el handler todavía está
+/// corriendo: la fila se inserta ANTES de ejecutar el handler, para que el
+/// unique constraint sea quien de verdad impide que dos peticiones
+/// concurrentes con la misma clave ejecuten el efecto dos veces (hallazgo
+/// A-1). Se completan al terminar; si el handler falla, la fila se borra.
 model IdempotencyRecord {
   id         String   @id @default(uuid())
   businessId String
@@ -130,12 +139,12 @@ model IdempotencyRecord {
   key            String
   endpoint       String
   requestHash    String
-  responseStatus Int
-  responseBody   Json
+  responseStatus Int?
+  responseBody   Json?
 
   createdAt DateTime @default(now())
 
-  @@unique([businessId, key])
+  @@unique([businessId, key, endpoint])
   @@map("idempotency_records")
 }
 
