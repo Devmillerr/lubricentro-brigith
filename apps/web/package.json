@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "echo \"sin pruebas todavía en apps/web\"",
-    "generate:api-client": "openapi-typescript ../../openapi.json -o src/lib/api/generated/schema.d.ts"
+    "generate:api-client": "openapi-typescript ../../openapi.json -o src/lib/api/generated/schema.d.ts --default-non-nullable false"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
