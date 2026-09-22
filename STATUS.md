@@ -35,8 +35,9 @@ Además, de base para lo anterior:
 
 Reales, no hipotéticos — cada uno depende de algo concreto que falta:
 
-- **Migraciones de Prisma** (depende de PostgreSQL local): `apps/api/prisma/migrations/` **no existe todavía** — esto ya era cierto antes de C1 (C0 nunca llegó a generar una migración real). Generarla requiere una base PostgreSQL local accesible; este entorno de trabajo no tiene Postgres, Docker ni `psql` disponibles, así que no se pudo ejecutar `prisma migrate dev` ni verificar que el esquema aplica limpio contra una base real.
-- **`.env` de `apps/api`** (depende de PostgreSQL local): tampoco existe en este entorno (solo `.env.example`). Sin él no se puede levantar la API, generar el OpenAPI (`openapi:generate` instancia `AppModule`, que conecta a Postgres en `onModuleInit`) ni correr los tests e2e (`test:e2e`, distinto de los 50 unitarios que sí corrieron).
+- **Base de datos real** (decisión tomada 2026-09-21): el proyecto usará **Supabase** (PostgreSQL administrado) en vez de un PostgreSQL local. El usuario está preparando el proyecto en Supabase; no se instala PostgreSQL local. Hasta que Supabase esté listo, sigue sin poder ejecutarse ninguna migración real.
+- **Migraciones de Prisma** (depende de Supabase): `apps/api/prisma/migrations/` **no existe todavía** — esto ya era cierto antes de C1 (C0 nunca llegó a generar una migración real). Se genera con `DATABASE_URL` apuntando a Supabase; no se ha podido ejecutar `prisma migrate dev` ni verificar que el esquema aplica limpio contra una base real.
+- **`.env` de `apps/api`** (depende de Supabase): tampoco existe en este entorno (solo `.env.example`). Cuando Supabase esté listo, `DATABASE_URL` debe apuntar a la cadena de conexión de Supabase (revisar si hace falta el *connection pooler* de Supabase para Prisma, además de la conexión directa para migraciones). Sin él no se puede levantar la API, generar el OpenAPI (`openapi:generate` instancia `AppModule`, que conecta a la base en `onModuleInit`) ni correr los tests e2e (`test:e2e`, distinto de los 50 unitarios que sí corrieron).
 - **Cliente OpenAPI del frontend** (depende de los dos puntos anteriores): `apps/web/src/lib/api/generated/` no se regeneró; sigue reflejando solo los endpoints de C0.
 - **`GET /vehicles/:id/maintenances`** (depende de C4 — tabla `Maintenance`): no implementado. `06-API.md` lo lista, pero la tabla no existe hasta C4.
 - **`GET /vehicles/:id/compatible-products`** (depende de C2/C4 — tablas `Product`, `ProductCompatibility`): no implementado por la misma razón.
@@ -49,17 +50,21 @@ Reales, no hipotéticos — cada uno depende de algo concreto que falta:
 
 Ninguna regla de negocio ni decisión pendiente bloquea C1 (confirmado en `docs/09-BACKLOG.md` §1: C0 y C1 no dependen de ningún dato pendiente de Brigith).
 
-- **Bloqueo operativo de esta sesión** (no de producto): sin PostgreSQL/`.env` locales no se puede generar la migración de C1 ni regenerar el OpenAPI. Se resuelve preparando el entorno local según el `README.md` §"Desarrollo local" (`cp apps/api/.env.example apps/api/.env`, Postgres 16 corriendo, `pnpm --filter @brigith/api prisma:migrate`).
+- **Bloqueo operativo** (no de producto): sin una base de datos real ni `.env` no se puede generar la migración de C1 ni regenerar el OpenAPI. Se resuelve cuando el usuario termine de preparar el proyecto en **Supabase** y comparta la cadena de conexión (ver "Próximo paso"). No se instala PostgreSQL local para esto.
 - **DEC-22** (modelado de presentaciones/unidad de producto): sigue bloqueando **C2** y **C3**. No afecta a C1.
 - El resto de decisiones pendientes en `docs/09-BACKLOG.md` §2 son configuración de negocio o de proceso; se necesitan antes del piloto, no antes de programar.
 
 ## Último commit
 
-`feat(c1): add customers and vehicles`, sobre `34811be` ("docs(status): record C0 commit and known tsbuildinfo artifact") y `fe6959e` (commit raíz de C0). Ver el hash exacto en el historial (`git log --oneline`); este archivo no lo fija para no quedar desactualizado en el próximo commit.
+`64f9c1b` — "feat(c1): add customers and vehicles", sobre `34811be` ("docs(status): record C0 commit and known tsbuildinfo artifact") y `fe6959e` (commit raíz de C0). **C1 queda cerrado aquí; no empezar C2 todavía.**
 
 ## Próximo paso
 
-1. Preparar Postgres local (`README.md` §"Desarrollo local"): crear `apps/api/.env` desde `.env.example`, tener Postgres 16 corriendo.
-2. `pnpm --filter @brigith/api prisma:migrate` — como no hay ninguna migración previa, esto genera **una sola migración inicial** que cubre C0 + C1 a la vez (negocio, usuarios, sesión, idempotencia, clientes, vehículos y modelos de vehículo).
-3. `pnpm --filter @brigith/api prisma:seed`, luego levantar la API y regenerar el OpenAPI/cliente tipado del frontend.
-4. Decidir si C1 necesita pantallas en `apps/web` antes de seguir, o si se pasa directo a **C2 — Catálogo** (categorías, productos, compatibilidad explícita) una vez resuelto DEC-22.
+**Detenido a propósito, a la espera de que el usuario prepare Supabase.** No instalar PostgreSQL local, no tocar código, no commitear, hasta que continúe la configuración:
+
+1. El usuario crea/prepara el proyecto en **Supabase** (PostgreSQL administrado) y comparte la cadena de conexión (`DATABASE_URL`; revisar si Prisma necesita el *connection pooler* de Supabase además de la conexión directa para migraciones — ver docs de Supabase + Prisma antes de configurar).
+2. Crear `apps/api/.env` desde `.env.example` con esa `DATABASE_URL` (y los demás secretos: `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `SEED_OWNER_PASSWORD`).
+3. `pnpm --filter @brigith/api prisma:migrate` — como no hay ninguna migración previa, esto genera **una sola migración inicial** que cubre C0 + C1 a la vez (negocio, usuarios, sesión, idempotencia, clientes, vehículos y modelos de vehículo), ya contra Supabase.
+4. `pnpm --filter @brigith/api prisma:seed`, luego levantar la API y regenerar el OpenAPI/cliente tipado del frontend.
+5. Validar C0 + C1 contra la base real (tests e2e, flujos de auth y de clientes/vehículos).
+6. Recién después: decidir si C1 necesita pantallas en `apps/web`, o si se pasa directo a **C2 — Catálogo** una vez resuelto DEC-22.

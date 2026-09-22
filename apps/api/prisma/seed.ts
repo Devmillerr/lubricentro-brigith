@@ -1,7 +1,12 @@
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 
-const prisma = new PrismaClient();
+// Prisma 7 exige un driver adapter explícito (mismo motivo que
+// `src/prisma/prisma.service.ts`); `new PrismaClient()` sin adapter falla.
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+});
 
 /**
  * Semilla mínima de C0: el negocio Brigith con su usuario dueño, y un negocio
