@@ -1,0 +1,124 @@
+// Brigith OS — esquema de base de datos (C0)
+// Solo las tablas necesarias para la base del proyecto: negocio, usuarios,
+// sesión y el mecanismo de idempotencia. Las tablas de dominio (Customer,
+// Vehicle, Product, ...) se agregan en los cortes C1+, ver /docs/05-DATABASE.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// La URL de conexión ya no va aquí (Prisma 7): ver `prisma.config.ts`.
+datasource db {
+  provider = "postgresql"
+}
+
+/// Regla de vencimiento cuando un mantenimiento tiene km y fecha (DEC-01).
+enum DueRule {
+  KM
+  DATE
+  ANY
+  ALL
+}
+
+/// Política ante stock insuficiente al usar un producto (DEC-05).
+enum InsufficientStockPolicy {
+  ALLOW_WITH_WARNING
+  BLOCK
+}
+
+/// Único rol del MVP. Agregar otro es un nuevo valor, no un cambio de estructura (P-12).
+enum UserRole {
+  OWNER
+}
+
+/// Un negocio (tenant). Brigith es el primero; "demo" existe para pruebas (BR-G7).
+model Business {
+  id     String @id @default(uuid())
+  name   String
+  slug   String @unique
+
+  timezone           String  @default("America/Lima")
+  currency           String? // A confirmar en el seed.
+  defaultCountryCode String? // Para el enlace de WhatsApp (BR-W5). A confirmar tras P-01.
+
+  /// Nulo hasta decidir (BR-R5, DEC-03).
+  reminderLeadDays Int?
+  /// Nulo hasta decidir (BR-M5, DEC-01).
+  defaultDueRuleWhenBoth DueRule?
+  /// Provisional: ALLOW_WITH_WARNING (BR-P11, BR-P12, DEC-05).
+  insufficientStockPolicy InsufficientStockPolicy @default(ALLOW_WITH_WARNING)
+  /// Nulo hasta P-13 (BR-W4).
+  whatsappTemplate String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users             User[]
+  refreshTokens     RefreshToken[]
+  idempotencyRecords IdempotencyRecord[]
+
+  @@map("businesses")
+}
+
+/// Usuario del negocio. En el MVP, un usuario pertenece a un solo negocio (BR-G2).
+/// `username` es único **globalmente**, no por negocio (DEC-25): el login es
+/// `{ username, password }` sin que el cliente indique el negocio, y el
+/// `businessId` se resuelve buscando este usuario. Es la única excepción a
+/// "las unicidades son por negocio" (04-ARCHITECTURE.md §5, 05-DATABASE.md §1).
+model User {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  name         String
+  username     String @unique
+  passwordHash String
+  role         UserRole @default(OWNER)
+  isActive     Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+/// Token de refresco, con rotación. Se guarda con hash, nunca en texto plano.
+model RefreshToken {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  /// Si se rotó, apunta al token que lo reemplazó (para detectar reuso).
+  replacedByTokenHash String?
+
+  createdAt DateTime @default(now())
+
+  @@index([businessId, userId])
+  @@map("refresh_tokens")
+}
+
+/// Registro de idempotencia para escrituras críticas (mantenimientos, inventario).
+/// Ver 04-ARCHITECTURE.md §7.3 y 05-DATABASE.md §3 (IdempotencyRecord).
+model IdempotencyRecord {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  key            String
+  endpoint       String
+  requestHash    String
+  responseStatus Int
+  responseBody   Json
+
+  createdAt DateTime @default(now())
+
+  @@unique([businessId, key])
+  @@map("idempotency_records")
+}

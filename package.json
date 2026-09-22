@@ -1,0 +1,35 @@
+{
+  "name": "brigith-os",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Brigith OS — sistema de gestión para lubricentro y lavado de vehículos.",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "packageManager": "pnpm@10.15.0",
+  "scripts": {
+    "dev:api": "pnpm --filter @brigith/api start:dev",
+    "dev:web": "pnpm --filter @brigith/web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.9.8",
+    "typescript": "^5.9.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "@prisma/client",
+      "@prisma/engines",
+      "@scarf/scarf",
+      "argon2",
+      "prisma",
+      "unrs-resolver"
+    ]
+  }
+}
