@@ -1,18 +1,20 @@
+import { InventoryService } from '../src/inventory/inventory.service';
 import { ProductsService } from '../src/products/products.service';
 import { buildFakeScopedPrisma } from './support/fake-scoped-prisma';
 
 function setup() {
   const { prisma, stores } = buildFakeScopedPrisma(
-    ['product', 'productCategory', 'productCompatibility', 'vehicleModel'],
+    ['product', 'productCategory', 'productCompatibility', 'vehicleModel', 'inventoryMovement'],
     { product: [['businessId', 'code']] },
   );
-  const service = new ProductsService(prisma);
+  const service = new ProductsService(prisma, new InventoryService(prisma));
   return {
     service,
     products: stores.get('product')!,
     categories: stores.get('productCategory')!,
     vehicleModels: stores.get('vehicleModel')!,
     compatibilities: stores.get('productCompatibility')!,
+    movements: stores.get('inventoryMovement')!,
   };
 }
 
@@ -92,6 +94,38 @@ describe('ProductsService', () => {
 
     expect(page.items).toHaveLength(1);
     expect(page.items[0]?.name).toBe('Uno');
+  });
+
+  it('list sin includeStock no agrega saldo', async () => {
+    const { service } = setup();
+    await service.create('biz-a', { name: 'Uno', unit: 'unidad' });
+
+    const page = await service.list('biz-a', {});
+
+    expect((page.items[0] as { stock?: unknown }).stock).toBeUndefined();
+  });
+
+  it('list con includeStock agrega saldo y estado de conteo (06-API.md, BR-P8)', async () => {
+    const { service, movements } = setup();
+    const product = await service.create('biz-a', { name: 'Uno', unit: 'unidad' });
+    movements.set('mv-1', {
+      id: 'mv-1',
+      businessId: 'biz-a',
+      productId: product.id,
+      type: 'COUNT',
+      quantityDelta: 5,
+      countedQuantity: 5,
+      previousBalance: 0,
+      occurredAt: new Date(),
+    });
+
+    const page = await service.list('biz-a', { includeStock: true });
+
+    const withStock = page.items[0] as typeof product & {
+      stock: { balance: number; isCounted: boolean };
+    };
+    expect(withStock.stock.balance).toBe(5);
+    expect(withStock.stock.isCounted).toBe(true);
   });
 
   it('deactivate pone isActive en false, nunca borra (BR-G5)', async () => {

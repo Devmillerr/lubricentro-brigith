@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Prisma, type Product, type VehicleModel } from '@prisma/client';
 import { ProblemException } from '../common/exceptions/problem.exception';
 import { paginate, type Page } from '../common/pagination';
+import { InventoryService, type StockView } from '../inventory/inventory.service';
 import { forBusiness } from '../prisma/business-scope';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateProductDto } from './dto/create-product.dto';
@@ -11,12 +12,16 @@ import type { UpdateProductDto } from './dto/update-product.dto';
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly inventoryService: InventoryService,
+  ) {}
 
-  // `includeStock` (06-API.md) no tiene efecto todavía: depende de
-  // InventoryMovement (C3). Se acepta y valida para no romper el contrato,
-  // pero la respuesta nunca trae saldo hasta ese corte.
-  async list(businessId: string, query: ListProductsQueryDto): Promise<Page<Product>> {
+  /** Con `includeStock`, agrega saldo y estado de conteo por producto (06-API.md, BR-P8). */
+  async list(
+    businessId: string,
+    query: ListProductsQueryDto,
+  ): Promise<Page<Product | (Product & { stock: StockView })>> {
     const limit = query.limit ?? 20;
     // Claves de primer nivel: Prisma ya las combina con AND implícito.
     const where: Prisma.ProductWhereInput = {};
@@ -42,7 +47,18 @@ export class ProductsService {
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
     });
 
-    return paginate(rows, limit);
+    const page = paginate(rows, limit);
+    if (!query.includeStock) {
+      return page;
+    }
+
+    const items = await Promise.all(
+      page.items.map(async (product) => ({
+        ...product,
+        stock: await this.inventoryService.getStock(businessId, product.id),
+      })),
+    );
+    return { ...page, items };
   }
 
   async create(businessId: string, dto: CreateProductDto): Promise<Product> {
