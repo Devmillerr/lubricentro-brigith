@@ -7,7 +7,14 @@ import { PrismaService } from './prisma.service';
  *
  * Al agregar un modelo de negocio nuevo (Customer, Vehicle, ...) agrégalo aquí.
  */
-const BUSINESS_SCOPED_MODELS = new Set(['User', 'RefreshToken', 'IdempotencyRecord']);
+const BUSINESS_SCOPED_MODELS = new Set([
+  'User',
+  'RefreshToken',
+  'IdempotencyRecord',
+  'Customer',
+  'VehicleModel',
+  'Vehicle',
+]);
 
 const BLOCKED_OPERATIONS = new Set(['findUnique', 'findUniqueOrThrow', 'upsert']);
 

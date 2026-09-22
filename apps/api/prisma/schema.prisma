@@ -1,7 +1,7 @@
-// Brigith OS — esquema de base de datos (C0)
-// Solo las tablas necesarias para la base del proyecto: negocio, usuarios,
-// sesión y el mecanismo de idempotencia. Las tablas de dominio (Customer,
-// Vehicle, Product, ...) se agregan en los cortes C1+, ver /docs/05-DATABASE.md.
+// Brigith OS — esquema de base de datos
+// C0: negocio, usuarios, sesión e idempotencia. C1: clientes y vehículos.
+// El resto de tablas de dominio (Product, Maintenance, ...) se agregan en los
+// cortes siguientes, ver /docs/05-DATABASE.md.
 
 generator client {
   provider = "prisma-client-js"
@@ -33,29 +33,32 @@ enum UserRole {
 
 /// Un negocio (tenant). Brigith es el primero; "demo" existe para pruebas (BR-G7).
 model Business {
-  id     String @id @default(uuid())
-  name   String
-  slug   String @unique
+  id   String @id @default(uuid())
+  name String
+  slug String @unique
 
   timezone           String  @default("America/Lima")
   currency           String? // A confirmar en el seed.
   defaultCountryCode String? // Para el enlace de WhatsApp (BR-W5). A confirmar tras P-01.
 
   /// Nulo hasta decidir (BR-R5, DEC-03).
-  reminderLeadDays Int?
+  reminderLeadDays        Int?
   /// Nulo hasta decidir (BR-M5, DEC-01).
-  defaultDueRuleWhenBoth DueRule?
+  defaultDueRuleWhenBoth  DueRule?
   /// Provisional: ALLOW_WITH_WARNING (BR-P11, BR-P12, DEC-05).
   insufficientStockPolicy InsufficientStockPolicy @default(ALLOW_WITH_WARNING)
   /// Nulo hasta P-13 (BR-W4).
-  whatsappTemplate String?
+  whatsappTemplate        String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users             User[]
-  refreshTokens     RefreshToken[]
+  users              User[]
+  refreshTokens      RefreshToken[]
   idempotencyRecords IdempotencyRecord[]
+  customers          Customer[]
+  vehicleModels      VehicleModel[]
+  vehicles           Vehicle[]
 
   @@map("businesses")
 }
@@ -71,7 +74,7 @@ model User {
   business   Business @relation(fields: [businessId], references: [id])
 
   name         String
-  username     String @unique
+  username     String   @unique
   passwordHash String
   role         UserRole @default(OWNER)
   isActive     Boolean  @default(true)
@@ -79,7 +82,10 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  refreshTokens RefreshToken[]
+  refreshTokens        RefreshToken[]
+  createdCustomers     Customer[]
+  createdVehicleModels VehicleModel[]
+  createdVehicles      Vehicle[]
 
   @@map("users")
 }
@@ -92,9 +98,9 @@ model RefreshToken {
   userId     String
   user       User     @relation(fields: [userId], references: [id])
 
-  tokenHash String   @unique
-  expiresAt DateTime
-  revokedAt DateTime?
+  tokenHash           String    @unique
+  expiresAt           DateTime
+  revokedAt           DateTime?
   /// Si se rotó, apunta al token que lo reemplazó (para detectar reuso).
   replacedByTokenHash String?
 
@@ -121,4 +127,88 @@ model IdempotencyRecord {
 
   @@unique([businessId, key])
   @@map("idempotency_records")
+}
+
+/// Cliente del negocio. Ningún campo es obligatorio salvo el id (BR-C3).
+model Customer {
+  id          String   @id @default(uuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+
+  name  String?
+  phone String?
+  notes String?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vehicles Vehicle[]
+
+  @@index([businessId, phone])
+  @@map("customers")
+}
+
+/// Marca y modelo de vehículo. Año y motor opcionales: el nivel de detalle de
+/// la compatibilidad de filtros se define con datos, no con estructura (BR-F6).
+model VehicleModel {
+  id          String   @id @default(uuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+
+  make       String
+  model      String
+  yearFrom   Int?
+  yearTo     Int?
+  engineNote String?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vehicles Vehicle[]
+
+  @@map("vehicle_models")
+}
+
+/// Vehículo. Siempre tiene placa; cliente y modelo son opcionales (BR-C4, BR-C5).
+model Vehicle {
+  id          String   @id @default(uuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+
+  /// Como el usuario la escribió.
+  plate           String
+  /// Mayúsculas, sin espacios ni guiones: para buscar y comparar. Única por
+  /// negocio (BR-C6).
+  plateNormalized String
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  vehicleModelId String?
+  vehicleModel   VehicleModel? @relation(fields: [vehicleModelId], references: [id])
+
+  year  Int?
+  color String?
+  notes String?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // El "último km conocido" se calcula desde el mantenimiento activo más
+  // reciente con km (05-DATABASE.md); no se guarda aquí.
+
+  @@unique([businessId, plateNormalized])
+  @@map("vehicles")
 }
