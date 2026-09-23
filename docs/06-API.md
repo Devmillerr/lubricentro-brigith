@@ -54,7 +54,9 @@ Códigos: 200/201 éxito · 400 validación · 401 sin sesión · 403 sin permis
 | PATCH | `/vehicles/:id` | Editar, incluido el cliente |
 | GET | `/vehicles/:id/maintenances` | Historial |
 | GET | `/vehicles/:id/compatible-products` | Productos con compatibilidad confirmada |
-| GET, POST, PATCH | `/vehicle-models` | Marca y modelo, con año y motor opcionales |
+| GET | `/vehicle-models` | Modelos del negocio |
+| POST | `/vehicle-models` | `{ make, model, yearFrom?, yearTo?, engineNote?, id? }`. Crear marca y modelo |
+| PATCH | `/vehicle-models/:id` | Editar los mismos campos. `isActive: false` desactiva (BR-G5) |
 
 ### Productos
 | Método | Ruta | Descripción |
@@ -62,7 +64,9 @@ Códigos: 200/201 éxito · 400 validación · 401 sin sesión · 403 sin permis
 | GET | `/product-categories` | Categorías |
 | POST | `/product-categories` | Crear categoría |
 | GET | `/products?search=&code=&categoryId=&includeStock=` | Buscar por código, nombre o marca. Con `includeStock`, agrega saldo y estado de conteo |
-| POST, PATCH, DELETE | `/products` … | Alta, edición y desactivación |
+| POST | `/products` | `{ name, unit, categoryId?, brand?, code?, salePrice?, tracksStock?, id? }`. `unit` es texto libre (BR-P15) |
+| PATCH | `/products/:id` | Editar los mismos campos. `isActive: false` desactiva (BR-G5) |
+| DELETE | `/products/:id` | Desactivar (no borra) |
 | GET | `/products/:id/compatible-models` | Modelos con compatibilidad confirmada |
 
 ### Compatibilidad (explícita) [DECISIÓN] D-12

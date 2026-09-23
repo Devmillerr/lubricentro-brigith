@@ -1,32 +1,56 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMemo, useState, useSyncExternalStore } from 'react';
+
+function readStorage(storageKey: string): string | null {
+  try {
+    return window.localStorage.getItem(storageKey);
+  } catch {
+    // Almacenamiento no disponible (privado/bloqueado): se sigue sin borrador.
+    return null;
+  }
+}
+
+function subscribeToStorage(onChange: () => void) {
+  window.addEventListener('storage', onChange);
+  return () => window.removeEventListener('storage', onChange);
+}
 
 /**
  * Guarda un borrador de formulario en localStorage mientras se escribe, para
  * no perderlo si falla el envío por red (04-ARCHITECTURE.md §8, "los
  * formularios conservan lo escrito si falla el envío"). No es persistencia
  * de datos de negocio: solo evita retipear tras un error.
+ *
+ * El borrador guardado se lee como fuente externa (en el servidor no hay
+ * borrador); lo que se escribe en esta pestaña tiene prioridad sobre él.
  */
 export function useFormDraft<T extends Record<string, unknown>>(
   key: string,
   initialValue: T,
 ): [T, (value: T) => void, () => void] {
   const storageKey = `brigith:draft:${key}`;
-  const [value, setValue] = useState<T>(initialValue);
+  const [edited, setEdited] = useState<T | null>(null);
 
-  useEffect(() => {
+  const raw = useSyncExternalStore(
+    subscribeToStorage,
+    () => readStorage(storageKey),
+    () => null,
+  );
+
+  const stored = useMemo<T | null>(() => {
+    if (!raw) return null;
     try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (raw) setValue(JSON.parse(raw) as T);
+      return JSON.parse(raw) as T;
     } catch {
-      // Almacenamiento no disponible (privado/bloqueado): se sigue sin borrador.
+      return null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey]);
+  }, [raw]);
+
+  const value = edited ?? stored ?? initialValue;
 
   function update(next: T) {
-    setValue(next);
+    setEdited(next);
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(next));
     } catch {
@@ -35,7 +59,7 @@ export function useFormDraft<T extends Record<string, unknown>>(
   }
 
   function clear() {
-    setValue(initialValue);
+    setEdited(initialValue);
     try {
       window.localStorage.removeItem(storageKey);
     } catch {

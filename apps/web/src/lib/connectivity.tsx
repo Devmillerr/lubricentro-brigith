@@ -1,27 +1,29 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useSyncExternalStore, type ReactNode } from 'react';
 
 const ConnectivityContext = createContext<boolean>(true);
+
+function subscribe(onChange: () => void) {
+  window.addEventListener('online', onChange);
+  window.addEventListener('offline', onChange);
+  return () => {
+    window.removeEventListener('online', onChange);
+    window.removeEventListener('offline', onChange);
+  };
+}
 
 /**
  * Detección de conexión para la carcasa PWA (04-ARCHITECTURE.md §8). Solo
  * informa al usuario; no cachea datos de negocio ni encola escrituras.
+ * En el servidor se asume conexión para no mostrar el aviso en el HTML inicial.
  */
 export function ConnectivityProvider({ children }: { children: ReactNode }) {
-  const [isOnline, setIsOnline] = useState(true);
-
-  useEffect(() => {
-    setIsOnline(navigator.onLine);
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
+  const isOnline = useSyncExternalStore(
+    subscribe,
+    () => navigator.onLine,
+    () => true,
+  );
 
   return <ConnectivityContext.Provider value={isOnline}>{children}</ConnectivityContext.Provider>;
 }
