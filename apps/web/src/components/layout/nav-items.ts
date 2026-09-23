@@ -17,7 +17,7 @@ export interface NavItem {
  */
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Inicio', href: '/dashboard', icon: House },
-  { label: 'Avisar', href: null, icon: Bell },
+  { label: 'Avisar', href: '/avisar', icon: Bell },
   { label: 'Productos', href: '/productos', icon: Package, sections: ['/inventario'] },
   {
     label: 'Más',
