@@ -13,13 +13,13 @@ const SECTIONS: { label: string; description: string; icon: LucideIcon; href: st
     label: 'Configuración',
     description: 'Plantilla de WhatsApp, anticipación y políticas',
     icon: Settings,
-    href: null,
+    href: '/configuracion',
   },
   {
     label: 'Resumen del piloto',
     description: 'Indicadores de adopción, mantenimiento e inventario',
     icon: ChartColumn,
-    href: null,
+    href: '/resumen',
   },
 ];
 

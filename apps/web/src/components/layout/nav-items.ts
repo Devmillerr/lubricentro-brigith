@@ -23,7 +23,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Más',
     href: '/mas',
     icon: Ellipsis,
-    sections: ['/clientes', '/vehiculos', '/mantenimientos'],
+    sections: ['/clientes', '/vehiculos', '/mantenimientos', '/resumen', '/configuracion'],
   },
 ];
 

@@ -28,10 +28,13 @@ const MAX_YEAR = 2100;
  * modelo, año, color y notas son opcionales. La API normaliza la placa y la
  * exige única por negocio (BR-C6, 409 `PLATE_ALREADY_EXISTS`). Al editar, el
  * modelo y el año no se pueden quitar (la API no acepta null en esos campos),
- * solo cambiar.
+ * solo cambiar. Un vehículo creado sin cliente (desde la búsqueda por placa)
+ * lleva a su ficha.
  */
 export function VehicleForm(
-  props: { mode: 'create'; customerId: string } | { mode: 'edit'; vehicle: Vehicle },
+  props:
+    | { mode: 'create'; customerId: string | null; initialPlate?: string }
+    | { mode: 'edit'; vehicle: Vehicle },
 ) {
   const router = useRouter();
   const vehicle = props.mode === 'edit' ? props.vehicle : null;
@@ -39,7 +42,7 @@ export function VehicleForm(
   const backHref = customerId ? `/clientes/${customerId}` : '/clientes';
 
   const [values, setValues] = useState<Values>({
-    plate: vehicle?.plate ?? '',
+    plate: vehicle?.plate ?? (props.mode === 'create' ? (props.initialPlate ?? '') : ''),
     vehicleModelId: vehicle?.vehicleModelId ?? '',
     year: vehicle?.year != null ? String(vehicle.year) : '',
     color: vehicle?.color ?? '',
@@ -120,7 +123,7 @@ export function VehicleForm(
     }
 
     if (result.ok) {
-      router.push(backHref);
+      router.push(!vehicle && !customerId ? `/vehiculos/${result.data.id}` : backHref);
       return;
     }
     const apiErrors = result.failure.fieldErrors;
