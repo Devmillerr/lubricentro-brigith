@@ -1,6 +1,6 @@
 'use client';
 
-import { Pencil } from 'lucide-react';
+import { Boxes, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
@@ -76,6 +76,11 @@ export default function ProductDetailPage() {
           {product.tracksStock ? 'Controla stock' : 'No controla stock'}
         </Detail>
       </dl>
+
+      <Link href={`/inventario/${product.id}`} className={buttonVariants({ variant: 'outline' })}>
+        <Boxes className="mr-2 size-4" aria-hidden />
+        Inventario: saldo, conteo, ingreso y ajuste
+      </Link>
 
       <CompatibilitiesSection productId={product.id} />
 

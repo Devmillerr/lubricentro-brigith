@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronRight, Plus, Search } from 'lucide-react';
+import { Boxes, ChevronRight, Plus, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { FormError } from '@/components/customers/form-error';
@@ -86,10 +86,16 @@ export default function ProductsPage() {
       <PageHeader
         title="Productos"
         action={
-          <Link href="/productos/nuevo" className={buttonVariants()}>
-            <Plus className="mr-1 size-4" aria-hidden />
-            Nuevo
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/inventario" className={buttonVariants({ variant: 'outline' })}>
+              <Boxes className="mr-1 size-4" aria-hidden />
+              Inventario
+            </Link>
+            <Link href="/productos/nuevo" className={buttonVariants()}>
+              <Plus className="mr-1 size-4" aria-hidden />
+              Nuevo
+            </Link>
+          </div>
         }
       />
 
