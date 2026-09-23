@@ -141,7 +141,10 @@ function VehicleCard({
   return (
     <li className="flex flex-col gap-2 rounded-lg border border-[var(--border)] p-4">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
+        <Link
+          href={`/vehiculos/${vehicle.id}`}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-md hover:bg-[var(--muted)]"
+        >
           <Car className="size-5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
           <div className="flex min-w-0 flex-col">
             <span className="text-lg font-semibold tracking-wide break-all">{vehicle.plate}</span>
@@ -149,7 +152,7 @@ function VehicleCard({
               {modelText}
             </span>
           </div>
-        </div>
+        </Link>
         <Link
           href={`/vehiculos/${vehicle.id}/editar`}
           className={buttonVariants({ variant: 'outline', className: 'h-10 shrink-0 px-3' })}
