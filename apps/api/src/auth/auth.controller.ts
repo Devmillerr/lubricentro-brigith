@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { LoginDto } from './dto/login.dto';
@@ -10,6 +11,13 @@ import type { AccessTokenPayload } from './types/jwt-payload';
 import { AUTH_ERRORS, ApiErrors, VALIDATION_ERRORS } from '../common/openapi/api-errors.decorator';
 import { MeResponse } from './dto/me.response';
 
+/**
+ * Límite propio de `/auth/login`, más estricto que el global (20/min por IP y
+ * por endpoint, app.module.ts): 5 intentos por minuto por IP. En memoria, sin
+ * bloqueo de cuentas (DEC-10 sin `trust proxy` todavía).
+ */
+export const LOGIN_THROTTLE = { ttl: 60_000, limit: 5 };
+
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
@@ -17,6 +25,7 @@ export class AuthController {
 
   @ApiOkResponse({ type: TokenPairDto })
   @ApiErrors({ 400: VALIDATION_ERRORS, 401: ['INVALID_CREDENTIALS'] })
+  @Throttle({ default: LOGIN_THROTTLE })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto): Promise<TokenPairDto> {

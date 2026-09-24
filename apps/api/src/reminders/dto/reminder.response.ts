@@ -12,6 +12,7 @@ import type {
   ReminderDetail,
   ReminderListItem,
   ReminderReason,
+  ReminderReopenBlock,
 } from '../reminders.service';
 
 export class ReminderResponse implements Reminder {
@@ -125,12 +126,33 @@ export class ReminderContactResponse implements ReminderContact {
   messageSnapshot!: string;
 }
 
+const REOPEN_BLOCKS = [
+  'DONE',
+  'SOURCE_VOIDED',
+  'OPEN_EXISTS',
+] as const satisfies readonly ReminderReopenBlock[];
+
 export class ReminderDetailResponse extends ReminderListItemResponse implements ReminderDetail {
   @ApiProperty({ description: 'Mensaje de WhatsApp con la plantilla actual del negocio.' })
   previewMessage!: string;
 
   @ApiProperty({ type: [ReminderContactResponse] })
   contacts!: ReminderContactResponse[];
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Motivo del cierre (cumplido, descartado, mantenimiento anulado…).',
+  })
+  closeReason!: string | null;
+
+  @ApiProperty({
+    enum: REOPEN_BLOCKS,
+    enumName: 'ReminderReopenBlock',
+    nullable: true,
+    description: 'Por qué no se puede volver a pendiente; null si se puede o si ya está abierto.',
+  })
+  reopenBlockedBy!: ReminderReopenBlock | null;
 }
 
 /** `POST /reminders/:id/contacts`: enlace wa.me y recordatorio ya en CONTACTED. */

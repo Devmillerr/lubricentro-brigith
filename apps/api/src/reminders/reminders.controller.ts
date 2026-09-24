@@ -59,7 +59,16 @@ export class RemindersController {
   }
 
   @ApiOkResponse({ type: ReminderResponse })
-  @ApiErrors({ 400: VALIDATION_ERRORS, 404: ['REMINDER_NOT_FOUND'] })
+  @ApiErrors({
+    400: VALIDATION_ERRORS,
+    404: ['REMINDER_NOT_FOUND'],
+    409: [
+      'REMINDER_ALREADY_CLOSED',
+      'REMINDER_DONE',
+      'REMINDER_SOURCE_VOIDED',
+      'REMINDER_OPEN_EXISTS',
+    ],
+  })
   @Patch(':id')
   updateStatus(
     @CurrentUser() user: AccessTokenPayload,

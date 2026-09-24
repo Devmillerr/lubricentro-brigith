@@ -78,6 +78,9 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 | BR-R8 | Un recordatorio sin teléfono se muestra como "sin teléfono", sin ocultarlo. | [TÉCNICO] |
 | BR-R9 | Descartar un recordatorio es una acción explícita del usuario. | [TÉCNICO] |
 | BR-R10 | Recordatorios enviados: el sistema registra que el aviso **se abrió en WhatsApp**, no que se envió (BR-W2). | [TÉCNICO] |
+| BR-R11 | **Reabrir** (volver a `PENDING`) solo es posible para un recordatorio descartado por el usuario o contactado ("deshacer"). No se reabre: uno cumplido (`DONE`); uno cuyo mantenimiento de origen fue anulado (BR-M12), que queda `DISMISSED` con el motivo "mantenimiento anulado"; ni uno para el que ya hay otro abierto del mismo vehículo y tipo (BR-R2). Un rechazo no modifica el recordatorio. La UI solo ofrece "Reabrir" cuando está permitido y, si no, explica el motivo. | [TÉCNICO] |
+| BR-R12 | Un recordatorio ya cerrado (`DONE` o `DISMISSED`) no se puede volver a descartar, así se conserva el motivo con el que se cerró (cumplido, descartado o mantenimiento anulado). | [TÉCNICO] |
+| BR-R13 | La búsqueda por placa del Inicio muestra, junto al próximo mantenimiento, el estado actual (BR-R7) del recordatorio que generó el último mantenimiento activo del vehículo, si lo generó. No muestra un historial de recordatorios. | [TÉCNICO] |
 
 ## BR-W — WhatsApp
 

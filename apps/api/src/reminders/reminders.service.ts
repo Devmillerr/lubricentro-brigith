@@ -1,5 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import {
+  MaintenanceStatus,
+  Prisma,
   ReminderContactChannel,
   ReminderStatus,
   type Reminder,
@@ -33,9 +35,17 @@ export interface ReminderListItem {
   reason: ReminderReason | null;
 }
 
+/**
+ * Por qué no se puede volver a PENDING (`null`: sí se puede, o ya está
+ * abierto). Lo calcula la API para que la UI no ofrezca "Reabrir" en vano.
+ */
+export type ReminderReopenBlock = 'DONE' | 'SOURCE_VOIDED' | 'OPEN_EXISTS';
+
 export interface ReminderDetail extends ReminderListItem {
   previewMessage: string;
   contacts: ReminderContact[];
+  closeReason: string | null;
+  reopenBlockedBy: ReminderReopenBlock | null;
 }
 
 export interface ContactResult {
@@ -122,7 +132,18 @@ export class RemindersService {
       proximoKm: reminder.dueKm,
     });
 
-    return { ...item, previewMessage, contacts };
+    const reopenBlockedBy =
+      reminder.status === ReminderStatus.DONE || reminder.status === ReminderStatus.DISMISSED
+        ? await this.findReopenBlock(scoped, reminder)
+        : null;
+
+    return {
+      ...item,
+      previewMessage,
+      contacts,
+      closeReason: reminder.closeReason,
+      reopenBlockedBy,
+    };
   }
 
   /**
@@ -139,11 +160,7 @@ export class RemindersService {
       throw this.notFound();
     }
     if (reminder.status === ReminderStatus.DONE || reminder.status === ReminderStatus.DISMISSED) {
-      throw new ProblemException({
-        status: HttpStatus.CONFLICT,
-        code: 'REMINDER_ALREADY_CLOSED',
-        title: 'El recordatorio ya está cerrado',
-      });
+      throw this.alreadyClosed();
     }
 
     const vehicle = await scoped.vehicle.findFirst({ where: { id: reminder.vehicleId } });
@@ -185,7 +202,13 @@ export class RemindersService {
     return { waLink, message, reminder: updated };
   }
 
-  /** Volver a PENDING ("deshacer", 07-UI-UX.md §3.4) o DISMISSED explícito (BR-R9). */
+  /**
+   * Volver a PENDING ("deshacer" o "reabrir", 07-UI-UX.md §3.4) o DISMISSED
+   * explícito (BR-R9). No se reabre un recordatorio cumplido (DONE) ni uno
+   * cuyo mantenimiento de origen fue anulado (BR-M12): queda cerrado con su
+   * motivo. Tampoco si ya hay otro abierto para el mismo vehículo y tipo
+   * (único parcial `reminders_open_unique`): 409, nunca 500.
+   */
   async updateStatus(
     businessId: string,
     id: string,
@@ -198,6 +221,11 @@ export class RemindersService {
     }
 
     if (dto.status === 'DISMISSED') {
+      // Descartar uno ya cerrado pisaría su motivo (cumplido o mantenimiento
+      // anulado); se rechaza igual que al avisar sobre uno cerrado.
+      if (existing.status === ReminderStatus.DONE || existing.status === ReminderStatus.DISMISSED) {
+        throw this.alreadyClosed();
+      }
       return scoped.reminder.update({
         where: { id },
         data: {
@@ -208,15 +236,57 @@ export class RemindersService {
       });
     }
 
-    return scoped.reminder.update({
-      where: { id },
-      data: {
-        status: ReminderStatus.PENDING,
-        closedByMaintenanceId: null,
-        closedAt: null,
-        closeReason: null,
-      },
+    const block = await this.findReopenBlock(scoped, existing);
+    if (block) {
+      throw this.reopenBlocked(block);
+    }
+
+    try {
+      return await scoped.reminder.update({
+        where: { id },
+        data: {
+          status: ReminderStatus.PENDING,
+          closedByMaintenanceId: null,
+          closedAt: null,
+          closeReason: null,
+        },
+      });
+    } catch (error) {
+      // Carrera con otra reapertura o con un mantenimiento nuevo del mismo tipo.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw this.reopenBlocked('OPEN_EXISTS');
+      }
+      throw error;
+    }
+  }
+
+  private async findReopenBlock(
+    scoped: ReturnType<typeof forBusiness>,
+    reminder: Reminder,
+  ): Promise<ReminderReopenBlock | null> {
+    if (reminder.status === ReminderStatus.DONE) {
+      return 'DONE';
+    }
+    const source = await scoped.maintenance.findFirst({
+      where: { id: reminder.sourceMaintenanceId },
     });
+    if (source?.status === MaintenanceStatus.VOIDED) {
+      return 'SOURCE_VOIDED';
+    }
+    if (reminder.status === ReminderStatus.DISMISSED) {
+      const otherOpen = await scoped.reminder.findFirst({
+        where: {
+          id: { not: reminder.id },
+          vehicleId: reminder.vehicleId,
+          maintenanceTypeId: reminder.maintenanceTypeId,
+          status: { in: [ReminderStatus.PENDING, ReminderStatus.CONTACTED] },
+        },
+      });
+      if (otherOpen) {
+        return 'OPEN_EXISTS';
+      }
+    }
+    return null;
   }
 
   private async toListItem(
@@ -268,6 +338,32 @@ export class RemindersService {
       due,
       reason,
     };
+  }
+
+  private reopenBlocked(block: ReminderReopenBlock): ProblemException {
+    const problems: Record<ReminderReopenBlock, { code: string; title: string }> = {
+      DONE: {
+        code: 'REMINDER_DONE',
+        title: 'El recordatorio ya se cumplió y no se puede reabrir',
+      },
+      SOURCE_VOIDED: {
+        code: 'REMINDER_SOURCE_VOIDED',
+        title: 'El mantenimiento que originó el recordatorio fue anulado; no se puede reabrir',
+      },
+      OPEN_EXISTS: {
+        code: 'REMINDER_OPEN_EXISTS',
+        title: 'Ya hay otro recordatorio abierto para este vehículo y tipo de mantenimiento',
+      },
+    };
+    return new ProblemException({ status: HttpStatus.CONFLICT, ...problems[block] });
+  }
+
+  private alreadyClosed(): ProblemException {
+    return new ProblemException({
+      status: HttpStatus.CONFLICT,
+      code: 'REMINDER_ALREADY_CLOSED',
+      title: 'El recordatorio ya está cerrado',
+    });
   }
 
   private notFound(): ProblemException {

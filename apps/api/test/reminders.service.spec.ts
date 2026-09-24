@@ -231,4 +231,150 @@ describe('RemindersService.updateStatus', () => {
       service.updateStatus('biz-b', 'rem-1', { status: 'DISMISSED' }),
     ).rejects.toMatchObject({ code: 'REMINDER_NOT_FOUND' });
   });
+
+  it('reabre uno descartado por el usuario si su mantenimiento sigue activo', async () => {
+    const { service, reminders, maintenances } = setup();
+    maintenances.set('mnt-1', { id: 'mnt-1', businessId: 'biz-a', status: 'ACTIVE' });
+    reminders.set(
+      'rem-1',
+      reminder({ status: 'DISMISSED', closedAt: new Date(), closeReason: 'descartado' }),
+    );
+
+    const updated = await service.updateStatus('biz-a', 'rem-1', { status: 'PENDING' });
+
+    expect(updated.status).toBe('PENDING');
+    expect(updated.closeReason).toBeNull();
+  });
+
+  it('no reabre uno cuyo mantenimiento de origen fue anulado: 409 y conserva el motivo (BR-M12)', async () => {
+    const { service, reminders, maintenances } = setup();
+    maintenances.set('mnt-1', { id: 'mnt-1', businessId: 'biz-a', status: 'VOIDED' });
+    const closedAt = new Date('2026-09-01');
+    reminders.set(
+      'rem-1',
+      reminder({ status: 'DISMISSED', closedAt, closeReason: 'mantenimiento anulado' }),
+    );
+
+    await expect(
+      service.updateStatus('biz-a', 'rem-1', { status: 'PENDING' }),
+    ).rejects.toMatchObject({ code: 'REMINDER_SOURCE_VOIDED', status: 409 });
+    expect(reminders.get('rem-1')).toMatchObject({
+      status: 'DISMISSED',
+      closedAt,
+      closeReason: 'mantenimiento anulado',
+    });
+  });
+
+  it('no reabre uno cumplido (DONE): 409 y conserva quién lo cerró', async () => {
+    const { service, reminders, maintenances } = setup();
+    maintenances.set('mnt-1', { id: 'mnt-1', businessId: 'biz-a', status: 'ACTIVE' });
+    reminders.set(
+      'rem-1',
+      reminder({
+        status: 'DONE',
+        closedAt: new Date(),
+        closeReason: 'cumplido',
+        closedByMaintenanceId: 'mnt-2',
+      }),
+    );
+
+    await expect(
+      service.updateStatus('biz-a', 'rem-1', { status: 'PENDING' }),
+    ).rejects.toMatchObject({ code: 'REMINDER_DONE', status: 409 });
+    expect(reminders.get('rem-1')).toMatchObject({
+      status: 'DONE',
+      closeReason: 'cumplido',
+      closedByMaintenanceId: 'mnt-2',
+    });
+  });
+
+  it('409 REMINDER_OPEN_EXISTS si ya hay otro abierto para el mismo vehículo y tipo', async () => {
+    const { service, reminders, maintenances } = setup();
+    maintenances.set('mnt-1', { id: 'mnt-1', businessId: 'biz-a', status: 'ACTIVE' });
+    reminders.set('rem-1', reminder({ status: 'DISMISSED', closeReason: 'descartado' }));
+    reminders.set(
+      'rem-2',
+      reminder({ id: 'rem-2', sourceMaintenanceId: 'mnt-2', status: 'CONTACTED' }),
+    );
+
+    await expect(
+      service.updateStatus('biz-a', 'rem-1', { status: 'PENDING' }),
+    ).rejects.toMatchObject({ code: 'REMINDER_OPEN_EXISTS', status: 409 });
+    expect(reminders.get('rem-1')?.status).toBe('DISMISSED');
+  });
+
+  it('otro abierto de otro tipo o de otro negocio no impide reabrir', async () => {
+    const { service, reminders, maintenances } = setup();
+    maintenances.set('mnt-1', { id: 'mnt-1', businessId: 'biz-a', status: 'ACTIVE' });
+    reminders.set('rem-1', reminder({ status: 'DISMISSED', closeReason: 'descartado' }));
+    reminders.set('rem-2', reminder({ id: 'rem-2', maintenanceTypeId: 'type-2' }));
+    reminders.set('rem-3', reminder({ id: 'rem-3', businessId: 'biz-b' }));
+
+    const updated = await service.updateStatus('biz-a', 'rem-1', { status: 'PENDING' });
+
+    expect(updated.status).toBe('PENDING');
+  });
+
+  it('descartar uno ya cerrado se rechaza y no pisa el motivo de anulación', async () => {
+    const { service, reminders } = setup();
+    reminders.set('rem-1', reminder({ status: 'DISMISSED', closeReason: 'mantenimiento anulado' }));
+
+    await expect(
+      service.updateStatus('biz-a', 'rem-1', { status: 'DISMISSED' }),
+    ).rejects.toMatchObject({ code: 'REMINDER_ALREADY_CLOSED', status: 409 });
+    expect(reminders.get('rem-1')?.closeReason).toBe('mantenimiento anulado');
+  });
+});
+
+describe('RemindersService.findOne: reopenBlockedBy', () => {
+  it('null si está abierto', async () => {
+    const { service, reminders } = setup();
+    reminders.set('rem-1', reminder({}));
+
+    const detail = await service.findOne('biz-a', 'rem-1');
+
+    expect(detail.reopenBlockedBy).toBeNull();
+  });
+
+  it('null si fue descartado por el usuario y se puede reabrir', async () => {
+    const { service, reminders, maintenances } = setup();
+    maintenances.set('mnt-1', { id: 'mnt-1', businessId: 'biz-a', status: 'ACTIVE' });
+    reminders.set('rem-1', reminder({ status: 'DISMISSED', closeReason: 'descartado' }));
+
+    const detail = await service.findOne('biz-a', 'rem-1');
+
+    expect(detail.reopenBlockedBy).toBeNull();
+    expect(detail.closeReason).toBe('descartado');
+  });
+
+  it('SOURCE_VOIDED si su mantenimiento fue anulado', async () => {
+    const { service, reminders, maintenances } = setup();
+    maintenances.set('mnt-1', { id: 'mnt-1', businessId: 'biz-a', status: 'VOIDED' });
+    reminders.set('rem-1', reminder({ status: 'DISMISSED', closeReason: 'mantenimiento anulado' }));
+
+    const detail = await service.findOne('biz-a', 'rem-1');
+
+    expect(detail.reopenBlockedBy).toBe('SOURCE_VOIDED');
+    expect(detail.closeReason).toBe('mantenimiento anulado');
+  });
+
+  it('DONE si ya se cumplió', async () => {
+    const { service, reminders } = setup();
+    reminders.set('rem-1', reminder({ status: 'DONE', closeReason: 'cumplido' }));
+
+    const detail = await service.findOne('biz-a', 'rem-1');
+
+    expect(detail.reopenBlockedBy).toBe('DONE');
+  });
+
+  it('OPEN_EXISTS si hay otro abierto para el mismo vehículo y tipo', async () => {
+    const { service, reminders, maintenances } = setup();
+    maintenances.set('mnt-1', { id: 'mnt-1', businessId: 'biz-a', status: 'ACTIVE' });
+    reminders.set('rem-1', reminder({ status: 'DISMISSED', closeReason: 'descartado' }));
+    reminders.set('rem-2', reminder({ id: 'rem-2', sourceMaintenanceId: 'mnt-2' }));
+
+    const detail = await service.findOne('biz-a', 'rem-1');
+
+    expect(detail.reopenBlockedBy).toBe('OPEN_EXISTS');
+  });
 });

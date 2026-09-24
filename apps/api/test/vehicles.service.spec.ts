@@ -12,6 +12,7 @@ function setup() {
       'productCompatibility',
       'maintenance',
       'maintenanceItem',
+      'reminder',
     ],
     { vehicle: [['businessId', 'plateNormalized']] },
   );
@@ -24,6 +25,7 @@ function setup() {
     products: stores.get('product')!,
     compatibilities: stores.get('productCompatibility')!,
     maintenances: stores.get('maintenance')!,
+    reminders: stores.get('reminder')!,
   };
 }
 
@@ -117,6 +119,63 @@ describe('VehiclesService', () => {
 
     expect(found?.lastMaintenance?.id).toBe('mnt-2');
     expect(found?.lastKnownKm).toBe(15000);
+  });
+
+  it('lookup incluye el estado del recordatorio que generó el último mantenimiento', async () => {
+    const { service, maintenances, reminders } = setup();
+    const vehicle = await service.create('biz-a', 'user-a', { plate: 'ABC-123' });
+    maintenances.set('mnt-1', {
+      id: 'mnt-1',
+      businessId: 'biz-a',
+      vehicleId: vehicle.id,
+      maintenanceTypeId: 'type-1',
+      status: 'ACTIVE',
+      performedAt: new Date('2026-01-01'),
+      odometerKm: 10000,
+    });
+    maintenances.set('mnt-2', {
+      id: 'mnt-2',
+      businessId: 'biz-a',
+      vehicleId: vehicle.id,
+      maintenanceTypeId: 'type-1',
+      status: 'ACTIVE',
+      performedAt: new Date('2026-03-01'),
+      odometerKm: 15000,
+    });
+    reminders.set('rem-1', {
+      id: 'rem-1',
+      businessId: 'biz-a',
+      sourceMaintenanceId: 'mnt-1',
+      status: 'DONE',
+    });
+    reminders.set('rem-2', {
+      id: 'rem-2',
+      businessId: 'biz-a',
+      sourceMaintenanceId: 'mnt-2',
+      status: 'CONTACTED',
+    });
+
+    const [found] = await service.lookup('biz-a', 'ABC-123');
+
+    expect(found?.lastMaintenanceReminder).toEqual({ id: 'rem-2', status: 'CONTACTED' });
+  });
+
+  it('lookup devuelve lastMaintenanceReminder null si el último mantenimiento no generó recordatorio', async () => {
+    const { service, maintenances } = setup();
+    const vehicle = await service.create('biz-a', 'user-a', { plate: 'ABC-123' });
+    maintenances.set('mnt-1', {
+      id: 'mnt-1',
+      businessId: 'biz-a',
+      vehicleId: vehicle.id,
+      maintenanceTypeId: 'type-1',
+      status: 'ACTIVE',
+      performedAt: new Date('2026-01-01'),
+      odometerKm: 10000,
+    });
+
+    const [found] = await service.lookup('biz-a', 'ABC-123');
+
+    expect(found?.lastMaintenanceReminder).toBeNull();
   });
 
   it('lookup no cruza negocios', async () => {

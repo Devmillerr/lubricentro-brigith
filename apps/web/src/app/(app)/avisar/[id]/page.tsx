@@ -123,7 +123,11 @@ function ReminderView({
       )}
       {reminder.status === 'DISMISSED' && (
         <Note>
-          Este recordatorio fue descartado. Puedes reabrirlo si todavía corresponde avisar.
+          {reminder.reopenBlockedBy === 'SOURCE_VOIDED'
+            ? 'Se cerró porque se anuló el mantenimiento que lo originó. No se puede reabrir.'
+            : reminder.reopenBlockedBy === 'OPEN_EXISTS'
+              ? 'Este recordatorio fue descartado. No se puede reabrir porque ya hay otro abierto para este vehículo y este mantenimiento.'
+              : 'Este recordatorio fue descartado. Puedes reabrirlo si todavía corresponde avisar.'}
         </Note>
       )}
 

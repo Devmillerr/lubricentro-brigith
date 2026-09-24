@@ -2,7 +2,7 @@
 
 import { ChevronRight, Plus, Search } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/page-header';
@@ -12,10 +12,12 @@ import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
 import { customerTitle, present, vehicleModelLabel } from '@/lib/customers/format';
 import { formatDate, formatKm } from '@/lib/maintenance/format';
+import { STATUS_LABELS } from '@/lib/reminders/format';
+import { useDebouncedValue } from '@/lib/use-debounced-value';
 
 type LookupItem = Schemas['VehicleLookupResponse'];
 
-const DEBOUNCE_MS = 250;
+const DEBOUNCE_MS = 400;
 
 /** Misma normalización que la API (BR-C6): mayúsculas, sin espacios ni guiones. */
 function normalizePlate(value: string): string {
@@ -29,12 +31,8 @@ function normalizePlate(value: string): string {
  */
 export function PlateSearch() {
   const [text, setText] = useState('');
-  const [plate, setPlate] = useState('');
-
-  useEffect(() => {
-    const timer = setTimeout(() => setPlate(normalizePlate(text)), DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [text]);
+  // Una sola petición cuando se deja de escribir, no una por tecla.
+  const plate = useDebouncedValue(normalizePlate(text), DEBOUNCE_MS);
 
   const lookup = useApiQuery(plate ? `plate-search:${plate}` : null, () =>
     callApi(api.GET('/vehicles/lookup', { params: { query: { plate } } })),
@@ -134,7 +132,14 @@ function LookupResult({ item }: { item: LookupItem }) {
             {last ? `Último mantenimiento: ${formatDate(last.performedAt)}` : 'Sin mantenimientos'}
             {item.lastKnownKm !== null ? ` · ${formatKm(item.lastKnownKm)}` : ''}
           </span>
-          {nextDueText && <span>Próximo: {nextDueText}</span>}
+          {nextDueText && (
+            <span className="flex flex-wrap items-center gap-2">
+              Próximo: {nextDueText}
+              {item.lastMaintenanceReminder && (
+                <Badge>Aviso: {STATUS_LABELS[item.lastMaintenanceReminder.status]}</Badge>
+              )}
+            </span>
+          )}
         </div>
         <ChevronRight className="mt-1 size-5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
       </Link>

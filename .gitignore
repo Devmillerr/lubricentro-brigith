@@ -36,5 +36,18 @@ apps/web/src/lib/api/generated/**
 !apps/web/src/lib/api/generated/.gitkeep
 openapi.json
 
+# TypeScript incremental build cache
+*.tsbuildinfo
+
 # Claude Code local session data
 .claude/
+
+# Instrucciones/contexto solo para agentes de IA (Claude, Next.js agent rules,
+# Cursor, Copilot…): no son parte del producto. `next dev` regenera
+# apps/web/AGENTS.md y apps/web/CLAUDE.md.
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+.cursorrules
+.cursor/
+.github/copilot-instructions.md

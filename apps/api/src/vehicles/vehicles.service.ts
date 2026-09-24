@@ -1,6 +1,12 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { Prisma, type Maintenance, type Product, type Vehicle } from '@prisma/client';
+import {
+  Prisma,
+  type Maintenance,
+  type Product,
+  type ReminderStatus,
+  type Vehicle,
+} from '@prisma/client';
 import { ProblemException } from '../common/exceptions/problem.exception';
 import type { MaintenanceWithItems } from '../maintenances/maintenances.service';
 import { MaintenancesService } from '../maintenances/maintenances.service';
@@ -14,8 +20,15 @@ type VehicleWithRelations = Prisma.VehicleGetPayload<{
   include: { customer: true; vehicleModel: true };
 }>;
 
+/** Recordatorio que generó el último mantenimiento: el de su "próximo" km/fecha. */
+export interface LookupReminder {
+  id: string;
+  status: ReminderStatus;
+}
+
 export type VehicleLookupResult = VehicleWithRelations & {
   lastMaintenance: Maintenance | null;
+  lastMaintenanceReminder: LookupReminder | null;
   lastKnownKm: number | null;
 };
 
@@ -28,7 +41,8 @@ export class VehiclesService {
 
   /**
    * Búsqueda rápida por placa, normalizada y parcial (BR-C1, B-013).
-   * Devuelve vehículo, cliente, último mantenimiento y último km conocido
+   * Devuelve vehículo, cliente, último mantenimiento (con el estado del
+   * recordatorio que generó, 07-UI-UX.md §3.1) y último km conocido
    * (06-API.md): quedó pendiente en C1 porque Maintenance no existía
    * todavía (STATUS.md); ya no depende de nada más.
    */
@@ -42,11 +56,24 @@ export class VehiclesService {
     });
 
     return Promise.all(
-      vehicles.map(async (vehicle) => ({
-        ...vehicle,
-        lastMaintenance: await this.maintenancesService.getLastMaintenance(businessId, vehicle.id),
-        lastKnownKm: await this.maintenancesService.getLastKnownKm(businessId, vehicle.id),
-      })),
+      vehicles.map(async (vehicle) => {
+        const lastMaintenance = await this.maintenancesService.getLastMaintenance(
+          businessId,
+          vehicle.id,
+        );
+        const reminder = lastMaintenance
+          ? await forBusiness(this.prisma, businessId).reminder.findFirst({
+              where: { sourceMaintenanceId: lastMaintenance.id },
+              orderBy: { createdAt: 'desc' },
+            })
+          : null;
+        return {
+          ...vehicle,
+          lastMaintenance,
+          lastMaintenanceReminder: reminder ? { id: reminder.id, status: reminder.status } : null,
+          lastKnownKm: await this.maintenancesService.getLastKnownKm(businessId, vehicle.id),
+        };
+      }),
     );
   }
 

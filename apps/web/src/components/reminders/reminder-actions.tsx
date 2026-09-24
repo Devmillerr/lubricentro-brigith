@@ -12,6 +12,11 @@ const MESSAGES = {
   byCode: {
     NO_PHONE: 'El cliente no tiene teléfono registrado: agrégalo en su ficha para poder avisarle.',
     REMINDER_ALREADY_CLOSED: 'Este recordatorio ya está cerrado.',
+    REMINDER_DONE: 'Este recordatorio ya se cumplió y no se puede reabrir.',
+    REMINDER_SOURCE_VOIDED:
+      'El mantenimiento que originó este recordatorio fue anulado: no se puede reabrir.',
+    REMINDER_OPEN_EXISTS:
+      'Ya hay otro recordatorio abierto para este vehículo y este mantenimiento.',
   },
   notFound: 'Este recordatorio ya no existe.',
 };
@@ -21,7 +26,9 @@ const MESSAGES = {
  * - WhatsApp: `POST /reminders/{id}/contacts` registra el aviso (BR-W6),
  *   devuelve el enlace `wa.me` y pasa el recordatorio a "contactado". El
  *   mensaje lo envía el usuario desde WhatsApp; nada se envía solo (BR-W2).
- * - Deshacer / reabrir: vuelve a "pendiente". Descartar: acción explícita (BR-R9).
+ * - Deshacer / reabrir: vuelve a "pendiente". "Reabrir" solo aparece si la API
+ *   lo permite (`reopenBlockedBy`: no si se cumplió, si se anuló su
+ *   mantenimiento o si ya hay otro abierto). Descartar: acción explícita (BR-R9).
  */
 export function ReminderActions({
   reminder,
@@ -71,6 +78,8 @@ export function ReminderActions({
     setWorking(null);
     if (!result.ok) {
       setFailure({ failure: result.failure, action });
+      // 409: el estado cambió (o ya no se puede reabrir); se recarga para ocultar la acción.
+      if (result.failure.status === 409) onChanged();
       return;
     }
     setConfirmDismiss(false);
@@ -81,14 +90,7 @@ export function ReminderActions({
 
   return (
     <div className="flex flex-col gap-3">
-      {failure && (
-        <FormError>
-          {failureMessage(failure.failure, MESSAGES)}
-          {failure.action === 'reopen' && failure.failure.status === 500
-            ? ' Puede que ya exista otro recordatorio abierto para este vehículo y tipo.'
-            : ''}
-        </FormError>
-      )}
+      {failure && <FormError>{failureMessage(failure.failure, MESSAGES)}</FormError>}
 
       {open && reminder.hasPhone && (
         <Button size="lg" onClick={openWhatsApp} disabled={working !== null}>
@@ -103,7 +105,7 @@ export function ReminderActions({
         </Button>
       )}
 
-      {reminder.status === 'DISMISSED' && (
+      {reminder.status === 'DISMISSED' && reminder.reopenBlockedBy === null && (
         <Button variant="outline" onClick={() => setStatus('PENDING')} disabled={working !== null}>
           <RotateCcw className="mr-2 size-4" aria-hidden />
           {working === 'reopen' ? 'Guardando…' : 'Reabrir recordatorio'}

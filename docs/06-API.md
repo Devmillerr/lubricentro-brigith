@@ -18,14 +18,14 @@ Etiquetas: ver `03-BUSINESS-RULES.md`. Todo lo de este documento es [TÉCNICO] s
 | Validación | DTOs validados; campos desconocidos rechazados |
 | Fechas | ISO 8601 UTC |
 
-Códigos: 200/201 éxito · 400 validación · 401 sin sesión · 403 sin permiso · 404 no existe (también para recursos de otro negocio) · 409 conflicto de unicidad o idempotencia · 422 regla de negocio · 5xx servidor.
+Códigos: 200/201 éxito · 400 validación · 401 sin sesión · 403 sin permiso · 404 no existe (también para recursos de otro negocio) · 409 conflicto de unicidad, idempotencia o estado (p. ej. reabrir un recordatorio que no se puede reabrir) · 429 demasiadas peticiones · 422 regla de negocio · 5xx servidor.
 
 ## 2. Endpoints del MVP
 
 ### Autenticación
 | Método | Ruta | Descripción |
 |---|---|---|
-| POST | `/auth/login` | Token de acceso y de refresco |
+| POST | `/auth/login` | Token de acceso y de refresco. Límite propio: 5 intentos por minuto por IP; al superarlo, 429 (ver §4) |
 | POST | `/auth/refresh` | Renueva el acceso |
 | POST | `/auth/logout` | Invalida el refresco |
 | GET | `/auth/me` | Usuario y negocio actuales |
@@ -48,7 +48,7 @@ Códigos: 200/201 éxito · 400 validación · 401 sin sesión · 403 sin permis
 ### Vehículos
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/vehicles/lookup?plate=` | **Búsqueda rápida por placa**: normalizada, coincidencia parcial. Devuelve vehículo, cliente, último mantenimiento y último km conocido |
+| GET | `/vehicles/lookup?plate=` | **Búsqueda rápida por placa**: normalizada, coincidencia parcial. Devuelve vehículo, cliente, último mantenimiento, último km conocido y `lastMaintenanceReminder` (`{ id, status }` del recordatorio que generó el último mantenimiento activo, o `null`; BR-R13). La web consulta cuando se deja de escribir (debounce de 400 ms), no en cada tecla |
 | POST | `/vehicles` | Crear con solo la placa (BR-C5). Cliente y modelo opcionales |
 | GET | `/vehicles/:id` | Detalle |
 | PATCH | `/vehicles/:id` | Editar, incluido el cliente |
@@ -118,9 +118,9 @@ Si se ingresan próximo km y próxima fecha sin `dueRule` y el negocio no defini
 | Método | Ruta | Descripción |
 |---|---|---|
 | GET | `/reminders?due=now\|upcoming\|all&status=` | Lista con motivo (`DATE_REACHED`, `KM_REACHED_BY_LAST_KNOWN`, `NO_PHONE`). Sin días de anticipación configurados, `now` significa desde la fecha exacta (BR-R5) |
-| GET | `/reminders/:id` | Detalle, con el texto que se enviaría según la plantilla |
+| GET | `/reminders/:id` | Detalle, con el texto que se enviaría según la plantilla. Incluye `closeReason` (motivo del cierre: `cumplido`, `descartado`, `mantenimiento anulado`…, o `null`) y `reopenBlockedBy` (`DONE`, `SOURCE_VOIDED`, `OPEN_EXISTS`, o `null` si se puede reabrir o ya está abierto; BR-R11) |
 | POST | `/reminders/:id/contacts` | Registra que se abrió el aviso y devuelve el enlace `wa.me`. Pasa el recordatorio a `CONTACTED`. Error 422 si no hay teléfono (BR-W6, BR-R10) |
-| PATCH | `/reminders/:id` | Cambiar el estado: volver a `PENDING`, o `DISMISSED` explícito (BR-R9) |
+| PATCH | `/reminders/:id` | Cambiar el estado: volver a `PENDING`, o `DISMISSED` explícito (BR-R9). Errores 409: `REMINDER_DONE` (cumplido, no se reabre), `REMINDER_SOURCE_VOIDED` (su mantenimiento fue anulado, no se reabre), `REMINDER_OPEN_EXISTS` (ya hay otro abierto para el mismo vehículo y tipo; también si la base rechaza la escritura por el único parcial, nunca 500), `REMINDER_ALREADY_CLOSED` (descartar uno ya cerrado; BR-R12). Un 409 no modifica el recordatorio |
 
 ### Indicadores del piloto [DECISIÓN] Visión §6
 | Método | Ruta | Descripción |
@@ -142,6 +142,7 @@ Si se ingresan próximo km y próxima fecha sin `dueRule` y el negocio no defini
 - Las lecturas son seguras de reintentar. Las escrituras críticas son idempotentes.
 - Ningún endpoint exige placa, teléfono ni cliente salvo donde `03` lo indique (BR-C1 a BR-C5).
 - Ningún endpoint modifica ni elimina movimientos de inventario.
+- Rate limit en memoria, por IP y por endpoint: 20 peticiones por minuto como protección general, y 5 por minuto en `POST /auth/login`. Al superarlo responde 429. No hay bloqueo de cuentas ni almacenamiento compartido (Redis). Sin `trust proxy`, detrás de un proxy todas las peticiones cuentan como la misma IP (DEC-10).
 
 ## 5. Puntos abiertos que afectan la API
 
