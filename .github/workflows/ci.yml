@@ -47,6 +47,11 @@ jobs:
       - name: Instalar dependencias
         run: pnpm install --frozen-lockfile
 
+      # Prisma 7 no genera el cliente al instalar: sin este paso, @prisma/client
+      # no exporta los modelos y falla todo lo que sigue. No necesita base de datos.
+      - name: Cliente Prisma
+        run: pnpm --filter @brigith/api prisma:generate
+
       # El contrato y el cliente de apps/web no se versionan (.gitignore): se
       # generan antes de tipar. No necesita base de datos (solo lee metadata).
       - name: Contrato OpenAPI y cliente de apps/web
