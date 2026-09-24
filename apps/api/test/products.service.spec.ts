@@ -7,9 +7,11 @@ function setup() {
     ['product', 'productCategory', 'productCompatibility', 'vehicleModel', 'inventoryMovement'],
     { product: [['businessId', 'code']] },
   );
-  const service = new ProductsService(prisma, new InventoryService(prisma));
+  const service = new ProductsService(prisma);
+  const inventory = new InventoryService(prisma);
   return {
     service,
+    inventory,
     products: stores.get('product')!,
     categories: stores.get('productCategory')!,
     vehicleModels: stores.get('vehicleModel')!,
@@ -106,18 +108,9 @@ describe('ProductsService', () => {
   });
 
   it('list con includeStock agrega saldo y estado de conteo (06-API.md, BR-P8)', async () => {
-    const { service, movements } = setup();
+    const { service, inventory } = setup();
     const product = await service.create('biz-a', { name: 'Uno', unit: 'unidad' });
-    movements.set('mv-1', {
-      id: 'mv-1',
-      businessId: 'biz-a',
-      productId: product.id,
-      type: 'COUNT',
-      quantityDelta: 5,
-      countedQuantity: 5,
-      previousBalance: 0,
-      occurredAt: new Date(),
-    });
+    await inventory.count('biz-a', 'user-a', { productId: product.id, countedQuantity: 5 });
 
     const page = await service.list('biz-a', { includeStock: true });
 

@@ -1,0 +1,247 @@
+import { HttpStatus } from '@nestjs/common';
+import { InventoryMovementType, Prisma, type InventoryMovement } from '@prisma/client';
+import { ProblemException } from '../common/exceptions/problem.exception';
+import type { ScopedTransaction } from '../prisma/business-scope';
+
+/**
+ * Qué hacer cuando una salida dejaría con saldo negativo un producto **con
+ * conteo inicial** (DEC-26):
+ * - `BLOCK`: rechaza la operación completa con 422 `INSUFFICIENT_STOCK`
+ *   (venta de mostrador, cuando exista).
+ * - `WARN`: guarda y devuelve el aviso `INSUFFICIENT_STOCK` (mantenimiento:
+ *   el producto ya se usó; ajustes y conteos reflejan el estante).
+ *
+ * Un producto **sin** conteo inicial nunca se bloquea: se registra con el
+ * aviso `PRODUCT_NOT_COUNTED`, porque su saldo no es confiable (DEC-27, BR-P8).
+ */
+export type StockPolicy = 'BLOCK' | 'WARN';
+
+export interface StockEntry {
+  productId: string;
+  type: InventoryMovementType;
+  /**
+   * Con signo: entra +, sale − (BR-P3). Se ignora en `COUNT`, donde el
+   * delta sale de `countedQuantity − saldo` (BR-P7).
+   */
+  quantityDelta?: number;
+  /** Solo en `COUNT`. */
+  countedQuantity?: number;
+  reason?: string;
+  refType?: string;
+  refId?: string;
+  occurredAt: Date;
+}
+
+export interface StockWarning {
+  code: 'INSUFFICIENT_STOCK' | 'PRODUCT_NOT_COUNTED';
+  message: string;
+  productId: string;
+  balance?: number;
+  requestedQuantity?: number;
+}
+
+export interface StockLedgerResult {
+  movements: InventoryMovement[];
+  warnings: StockWarning[];
+}
+
+/** Tipos que consumen stock y por eso pasan por la política (DEC-26/27). */
+const CONSUMPTION_TYPES = new Set<InventoryMovementType>([
+  InventoryMovementType.SALE,
+  InventoryMovementType.MAINTENANCE_USE,
+]);
+
+interface PlannedMovement {
+  entry: StockEntry;
+  quantityDelta: Prisma.Decimal;
+  previousBalance: Prisma.Decimal | null;
+  resultingBalance: Prisma.Decimal;
+}
+
+interface ProductPlan {
+  productId: string;
+  startBalance: Prisma.Decimal;
+  wasCounted: boolean;
+  finalBalance: Prisma.Decimal;
+  isCounted: boolean;
+  consumed: Prisma.Decimal;
+  movements: PlannedMovement[];
+}
+
+/**
+ * StockLedger: **único escritor** de movimientos de inventario (R1,
+ * 10-OPERACION-REAL.md §2.1). Venta, recepción, ajuste, conteo, mantenimiento
+ * y anulaciones pasan por aquí; ningún otro código crea `InventoryMovement`
+ * (lo verifica test/stock-ledger.single-writer.spec.ts).
+ *
+ * Debe llamarse dentro de una transacción de `forBusiness(...)`, la misma que
+ * guarda la operación de origen, para que movimiento, saldo en caché y
+ * operación se confirmen o se descarten juntos (BR-M10), y **antes de
+ * cualquier otra escritura** que referencie esos productos: una FK hacia
+ * `products` (p. ej. un `MaintenanceItem`) toma un lock compartido sobre la
+ * fila, y dos transacciones que ya lo tienen se traban al pedir el FOR
+ * UPDATE. En ella:
+ *
+ * 1. Bloquea las filas de producto (`FOR UPDATE`, en orden de id para no
+ *    provocar deadlocks entre dos operaciones con los mismos productos).
+ *    Con READ COMMITTED, la lectura siguiente ya ve el saldo que dejó la
+ *    transacción que tenía el bloqueo.
+ * 2. Lee saldo y `isCounted` desde la caché de `Product`, filtrando por
+ *    negocio: un producto de otro negocio no existe (`PRODUCT_NOT_FOUND`).
+ * 3. Calcula todo y evalúa la política **antes** de escribir: un rechazo no
+ *    deja nada a medias.
+ * 4. Inserta los movimientos (con `resultingBalance` y `createdById`) y
+ *    actualiza `Product.stockQuantity`/`isCounted`.
+ */
+export async function applyStockMovements(
+  tx: ScopedTransaction,
+  params: {
+    businessId: string;
+    createdById: string;
+    policy: StockPolicy;
+    entries: StockEntry[];
+  },
+): Promise<StockLedgerResult> {
+  const { businessId, createdById, policy, entries } = params;
+  if (entries.length === 0) {
+    return { movements: [], warnings: [] };
+  }
+
+  const productIds = [...new Set(entries.map((entry) => entry.productId))].sort();
+
+  // Los ids son `text` en Postgres (String de Prisma, sin @db.Uuid): se
+  // castea explícito porque el driver infiere `uuid` para strings con forma
+  // de UUID y Postgres no compara text = uuid.
+  await tx.$queryRaw(
+    Prisma.sql`SELECT "id" FROM "products" WHERE "businessId" = ${businessId}::text AND "id" = ANY(${productIds}::text[]) ORDER BY "id" FOR UPDATE`,
+  );
+
+  const products = await tx.product.findMany({ where: { id: { in: productIds } } });
+  const productById = new Map(products.map((product) => [product.id, product]));
+  for (const productId of productIds) {
+    if (!productById.has(productId)) {
+      throw new ProblemException({
+        status: HttpStatus.NOT_FOUND,
+        code: 'PRODUCT_NOT_FOUND',
+        title: 'Producto no encontrado',
+      });
+    }
+  }
+
+  const plans = productIds.map((productId) => {
+    const product = productById.get(productId)!;
+    const startBalance = new Prisma.Decimal(product.stockQuantity ?? 0);
+    const plan: ProductPlan = {
+      productId,
+      startBalance,
+      wasCounted: Boolean(product.isCounted),
+      finalBalance: startBalance,
+      isCounted: Boolean(product.isCounted),
+      consumed: new Prisma.Decimal(0),
+      movements: [],
+    };
+
+    for (const entry of entries.filter((e) => e.productId === productId)) {
+      const before = plan.finalBalance;
+      let quantityDelta: Prisma.Decimal;
+      let previousBalance: Prisma.Decimal | null = null;
+
+      if (entry.type === InventoryMovementType.COUNT) {
+        // Invariante 2: delta = contado − saldo, así el saldo queda en lo contado.
+        quantityDelta = new Prisma.Decimal(entry.countedQuantity ?? 0).minus(before);
+        previousBalance = before;
+        plan.isCounted = true;
+      } else {
+        quantityDelta = new Prisma.Decimal(entry.quantityDelta ?? 0);
+        if (CONSUMPTION_TYPES.has(entry.type) && quantityDelta.isNegative()) {
+          plan.consumed = plan.consumed.plus(quantityDelta.negated());
+        }
+      }
+
+      plan.finalBalance = before.plus(quantityDelta);
+      plan.movements.push({
+        entry,
+        quantityDelta,
+        previousBalance,
+        resultingBalance: plan.finalBalance,
+      });
+    }
+    return plan;
+  });
+
+  const warnings: StockWarning[] = [];
+  for (const plan of plans) {
+    if (plan.consumed.isZero()) continue;
+
+    if (!plan.wasCounted) {
+      warnings.push({
+        code: 'PRODUCT_NOT_COUNTED',
+        message:
+          'El producto no tiene conteo inicial: se registra el movimiento, sin evaluar stock.',
+        productId: plan.productId,
+      });
+      continue;
+    }
+
+    if (plan.finalBalance.isNegative()) {
+      const balance = plan.startBalance.toNumber();
+      const requestedQuantity = plan.consumed.toNumber();
+      if (policy === 'BLOCK') {
+        // Dentro de la transacción: nada de lo anterior se confirma.
+        throw new ProblemException({
+          status: HttpStatus.UNPROCESSABLE_ENTITY,
+          code: 'INSUFFICIENT_STOCK',
+          title: 'Stock insuficiente',
+          detail: `El producto ${plan.productId} quedaría con saldo negativo.`,
+          errors: [
+            {
+              field: 'items',
+              message: `Saldo actual ${balance}, cantidad pedida ${requestedQuantity}`,
+            },
+          ],
+        });
+      }
+      warnings.push({
+        code: 'INSUFFICIENT_STOCK',
+        message: 'El producto quedaría con saldo negativo.',
+        productId: plan.productId,
+        balance,
+        requestedQuantity,
+      });
+    }
+  }
+
+  const movements: InventoryMovement[] = [];
+  for (const plan of plans) {
+    for (const planned of plan.movements) {
+      const { entry } = planned;
+      movements.push(
+        await tx.inventoryMovement.create({
+          data: {
+            // forBusiness sobrescribe businessId igual; se pasa para que el tipo compile.
+            businessId,
+            productId: plan.productId,
+            type: entry.type,
+            quantityDelta: planned.quantityDelta,
+            countedQuantity:
+              entry.type === InventoryMovementType.COUNT ? entry.countedQuantity : null,
+            previousBalance: planned.previousBalance,
+            resultingBalance: planned.resultingBalance,
+            reason: entry.reason,
+            refType: entry.refType,
+            refId: entry.refId,
+            occurredAt: entry.occurredAt,
+            createdById,
+          },
+        }),
+      );
+    }
+
+    await tx.product.update({
+      where: { id: plan.productId },
+      data: { stockQuantity: plan.finalBalance, isCounted: plan.isCounted },
+    });
+  }
+
+  return { movements, warnings };
+}

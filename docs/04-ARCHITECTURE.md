@@ -56,7 +56,7 @@ El frontend usa un cliente **tipado generado desde el OpenAPI** de la API. El co
 | `due-rules` | Reglas de vencimiento (módulo puro, sin acceso a datos) |
 | `reminders` | Recordatorios, contactos y enlaces de WhatsApp |
 | `indicators` | Indicadores del piloto (solo lectura) |
-| *(Fase 2)* `sales`, `washes`, `daily-close` | Ventas, lavado y cierre |
+| *(Fase 2)* `sales`, `washes`, `dashboard` | Ventas, lavado y dashboard (sin cierre del día; ver `10-OPERACION-REAL.md`) |
 
 Cada módulo: controlador → servicio → acceso a datos con Prisma. DTOs validados. Un módulo no lee tablas de otro: pide al servicio del otro módulo.
 

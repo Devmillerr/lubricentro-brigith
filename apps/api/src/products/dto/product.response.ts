@@ -20,8 +20,8 @@ export class ProductCategoryResponse implements ProductCategory {
   updatedAt!: Date;
 }
 
-/** `salePrice` es `Decimal` en Prisma y viaja como string en el JSON. */
-export class ProductResponse implements Omit<Product, 'salePrice'> {
+/** `salePrice` y `stockQuantity` son `Decimal` en Prisma y viajan como string en el JSON. */
+export class ProductResponse implements Omit<Product, 'salePrice' | 'stockQuantity'> {
   @ApiProperty()
   id!: string;
 
@@ -52,6 +52,16 @@ export class ProductResponse implements Omit<Product, 'salePrice'> {
 
   @ApiProperty()
   tracksStock!: boolean;
+
+  @ApiProperty({
+    type: String,
+    description:
+      'Saldo en caché (Decimal(12,3) como string): suma de los movimientos del producto (BR-P3).',
+  })
+  stockQuantity!: string;
+
+  @ApiProperty({ description: 'Tiene al menos un conteo (BR-P8).' })
+  isCounted!: boolean;
 
   @ApiProperty()
   isActive!: boolean;

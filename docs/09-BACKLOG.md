@@ -22,7 +22,7 @@ Nada más bloquea el inicio. Las demás decisiones pendientes son configuración
 | DEC-02 | El km solo se evalúa contra el último km conocido; nunca se estima (BR-R4) | Técnica | — |
 | DEC-03 | Días de anticipación del aviso. Hoy vacío (BR-R5) | Pendiente (P-05) | Antes del piloto. No bloquea |
 | DEC-04 | El stock se actualiza mediante movimientos desde el MVP. Sin `inventoryEnabled` | **Aprobada** | — |
-| DEC-05 | Política ante stock insuficiente: `ALLOW_WITH_WARNING` o `BLOCK`. Hoy provisional en `ALLOW_WITH_WARNING` (BR-P11, BR-P12) | Pendiente (negocio) | Antes del piloto. No bloquea |
+| DEC-05 | Política ante stock insuficiente | **Resuelta por DEC-26/DEC-27** (2026-09-23): la venta bloquea si un producto con conteo no alcanza; el mantenimiento avisa y continúa; sin conteo, avisa. Ver `10-OPERACION-REAL.md` §3.2c | — |
 | DEC-06 | Aviso "¿marcar como compatible?" | Pendiente. **Fuera del MVP** | No se necesita |
 | DEC-07 | Nivel de detalle de la compatibilidad (marca y modelo; año; motor) | Pendiente (P-08) | Al cargar compatibilidades. No bloquea |
 | DEC-08 | Lavado y venta rápida en la Fase 2 | **Aprobada** | — |

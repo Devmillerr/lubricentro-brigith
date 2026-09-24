@@ -96,6 +96,7 @@ model User {
   confirmedCompatibilities ProductCompatibility[]
   voidedMaintenances       Maintenance[]
   reminderContacts         ReminderContact[]
+  inventoryMovements       InventoryMovement[]
 
   @@map("users")
 }
@@ -282,6 +283,14 @@ model Product {
   /// Por defecto controla stock (BR-P16); puede marcarse sin control.
   tracksStock Boolean @default(true)
 
+  /// Saldo en caché (R1, 10-OPERACION-REAL.md §2.1). Solo lo escribe el
+  /// StockLedger, en la misma transacción que inserta el movimiento y con la
+  /// fila bloqueada. Fuente de verdad: la suma de `quantityDelta` de sus
+  /// movimientos (BR-P3); la invariante se prueba contra Postgres real.
+  stockQuantity Decimal @default(0) @db.Decimal(12, 3)
+  /// Tiene al menos un COUNT (BR-P8). También en caché, escrito por el StockLedger.
+  isCounted     Boolean @default(false)
+
   isActive Boolean @default(true)
 
   createdAt DateTime @default(now())
@@ -334,8 +343,8 @@ enum InventoryMovementType {
 
 /// Todo cambio de stock es un movimiento; el saldo de un producto es la
 /// suma de sus `quantityDelta` (BR-P2, BR-P3). Solo se insertan filas:
-/// nunca se editan ni se borran (BR-G5). Sin `createdById`: no está en el
-/// campo documentado (05-DATABASE.md §3) — occurredAt hace ambas veces.
+/// nunca se editan ni se borran (BR-G5). Solo los inserta el StockLedger
+/// (src/inventory/stock-ledger.ts), que además mantiene `Product.stockQuantity`.
 model InventoryMovement {
   id         String   @id @default(uuid())
   businessId String
@@ -361,6 +370,14 @@ model InventoryMovement {
   /// Origen del movimiento (por ejemplo, el mantenimiento que lo generó).
   refType String?
   refId   String?
+
+  /// Saldo del producto justo después de este movimiento, calculado con la
+  /// fila del producto bloqueada. Nulo en los movimientos anteriores a R1.
+  resultingBalance Decimal? @db.Decimal(12, 3)
+
+  /// Quién lo registró. Nulo en los movimientos anteriores a R1.
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id])
 
   occurredAt DateTime @default(now())
 

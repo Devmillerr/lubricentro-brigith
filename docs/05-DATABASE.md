@@ -91,6 +91,8 @@ El "último km conocido" **se calcula** desde el mantenimiento activo más recie
 | unit | Unidad en la que se cuenta y descuenta (BR-P15). Vocabulario a definir con P-07 |
 | salePrice? | Opcional. Se usará en la Fase 2 |
 | tracksStock | Por defecto `true` (BR-P16) |
+| stockQuantity | Saldo en caché, `Decimal(12,3)`, por defecto 0. Solo lo escribe el StockLedger (R1) |
+| isCounted | En caché: tiene al menos un `COUNT` (BR-P8). Solo lo escribe el StockLedger (R1) |
 | isActive | |
 
 Cada fila es una **unidad de stock**. Cómo se representan presentaciones y granel queda para DEC-22; con esta estructura, ambas opciones son solo datos.
@@ -129,6 +131,8 @@ No hay precios ni totales en el MVP: cómo se cobra un cambio de aceite es P-09 
 | previousBalance? | Solo en `COUNT`: saldo calculado justo antes, para auditar la diferencia |
 | reason? | Obligatorio en `ADJUSTMENT` (BR-P10) |
 | refType?, refId? | Origen (por ejemplo, el mantenimiento) |
+| resultingBalance? | Saldo del producto justo después del movimiento, calculado con la fila bloqueada. Nulo en filas anteriores a R1 |
+| createdById? | Usuario que lo registró. Nulo en filas anteriores a R1 |
 | occurredAt | |
 
 **Solo se insertan filas; nunca se actualizan ni se borran** (BR-G5, BR-P3).
@@ -139,7 +143,9 @@ No hay precios ni totales en el MVP: cómo se cobra un cambio de aceite es P-09 
 3. Un producto está "con conteo inicial" si tiene al menos un `COUNT` (BR-P8).
 4. `MAINTENANCE_USE` y `MAINTENANCE_VOID` nacen en la misma transacción que el mantenimiento o su anulación (BR-M10).
 
-El saldo se calcula por suma. Con el volumen esperado del negocio no se necesita una columna de saldo guardada; si el rendimiento lo exigiera, se agrega después sin cambiar los movimientos.
+**Saldo en caché (R1, `10-OPERACION-REAL.md` §2.1):** `Product.stockQuantity` e `isCounted` guardan el saldo y el estado de conteo, y las lecturas (`GET /inventory/stock`, `GET /products?includeStock=true`) salen de ahí. La fuente de verdad sigue siendo la suma de movimientos: la invariante 5 se prueba contra Postgres en `test/integration/`.
+
+5. `Product.stockQuantity = Σ quantityDelta` de sus movimientos. La mantiene el **StockLedger** (`src/inventory/stock-ledger.ts`), único escritor de movimientos: bloquea las filas de producto (`FOR UPDATE`, en orden de id) antes de cualquier otra escritura de la transacción, inserta los movimientos y actualiza la caché en la misma transacción. La migración `r1_stock_ledger` rellena la caché desde los movimientos existentes.
 
 ### Reminder
 | Campo | Notas |

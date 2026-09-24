@@ -21,7 +21,7 @@ Un cambio de aceite debe poder:
 | # | Capacidad | Notas |
 |---|---|---|
 | F1-1 | Autenticación y negocio | Un negocio sembrado: Brigith. Sin auto-registro |
-| F1-2 | Clientes | Nombre y teléfono opcionales |
+| F1-2 | Clientes | Nombre obligatorio; teléfono opcional |
 | F1-3 | Vehículos | Búsqueda por placa. Cliente opcional |
 | F1-4 | Catálogo de productos | Categorías, marca, código, unidad. Precios opcionales |
 | F1-5 | Compatibilidad de productos | Relación explícita, creada o confirmada por el usuario |
@@ -34,7 +34,7 @@ Un cambio de aceite debe poder:
 | F1-12 | Swagger/OpenAPI | Desde el inicio |
 
 ### Fase 2 [DECISIÓN] DEC-08
-Venta rápida y pagos (Yape/efectivo), lavado con registro rápido opcional, y cierre/resumen del día.
+Venta rápida y pagos (Yape/efectivo), lavado con registro rápido, recepción en lote, ajuste, cobro del mantenimiento como monto único y dashboard. Sin cierre del día. Diseño en `10-OPERACION-REAL.md` (alineado al mapa funcional).
 
 ### Fuera de alcance
 Offline, WhatsApp API, facturación electrónica, IA, Kanban de lavado, SaaS con planes y facturación, aprendizaje automático de compatibilidades. Lista completa en `01-VISION.md` §8.
@@ -42,8 +42,8 @@ Offline, WhatsApp API, facturación electrónica, IA, Kanban de lavado, SaaS con
 ## 2. Flujos de usuario
 
 ### 2.1 Cambio de aceite (flujo principal)
-**Placa → vehículo → mantenimiento.**
-1. El usuario escribe la placa. La búsqueda ignora mayúsculas, guiones y espacios.
+**Placa (o cliente) → vehículo → mantenimiento.**
+1. El usuario escribe la placa (la búsqueda ignora mayúsculas, guiones y espacios) o busca al cliente y elige uno de sus vehículos.
 2. Si el vehículo existe, se ve su ficha. Si no, se crea con solo la placa.
 3. Se elige el tipo de mantenimiento.
 4. Se agregan los productos usados y sus cantidades.
@@ -52,7 +52,7 @@ Offline, WhatsApp API, facturación electrónica, IA, Kanban de lavado, SaaS con
 7. Si hay teléfono, se ofrece "Avisar por WhatsApp".
 
 ### 2.2 Cliente nuevo
-Se registra con placa. El teléfono se agrega solo si se quiere avisar; nunca es obligatorio (D-08).
+Se registra con su nombre, una sola vez. Las placas de sus vehículos se asocian cuando corresponda. El teléfono es opcional al registrar y solo se pide al enviar un WhatsApp (D-08).
 
 ### 2.3 Recordatorios
 Lista de vehículos a los que corresponde avisar → "WhatsApp" abre el mensaje listo → el usuario lo envía → el recordatorio queda como contactado.

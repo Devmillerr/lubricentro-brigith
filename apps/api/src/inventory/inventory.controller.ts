@@ -74,7 +74,7 @@ export class InventoryController {
       requestHash: this.idempotency.hashRequest(dto),
       handler: async () => ({
         status: HttpStatus.CREATED,
-        body: await this.inventoryService.count(user.businessId, dto),
+        body: await this.inventoryService.count(user.businessId, user.sub, dto),
       }),
     });
     return result.body;
@@ -100,7 +100,7 @@ export class InventoryController {
       requestHash: this.idempotency.hashRequest(dto),
       handler: async () => ({
         status: HttpStatus.CREATED,
-        body: await this.inventoryService.receipt(user.businessId, dto),
+        body: await this.inventoryService.receipt(user.businessId, user.sub, dto),
       }),
     });
     return result.body;
@@ -126,7 +126,7 @@ export class InventoryController {
       requestHash: this.idempotency.hashRequest(dto),
       handler: async () => ({
         status: HttpStatus.CREATED,
-        body: await this.inventoryService.adjustment(user.businessId, dto),
+        body: await this.inventoryService.adjustment(user.businessId, user.sub, dto),
       }),
     });
     return result.body;

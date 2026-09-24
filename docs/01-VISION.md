@@ -74,7 +74,7 @@ En términos de producto:
 3. **Avisar al cliente por WhatsApp** mediante un mensaje pre-armado que el dueño envía; sin WhatsApp API. **[DECISIÓN]** D-04
 4. **Conocer los productos usados** en cada mantenimiento y **mantener el stock actualizado mediante movimientos** de inventario, en lugar del control visual de hoy. **[DECISIÓN]** D-13, aprobado en sección 11
 5. **Consultar filtros** con compatibilidades que el usuario crea o confirma; nunca inferidas. **[DECISIÓN]** D-12
-6. **Registrar ventas y lavados sin interrumpir el trabajo**: registro rápido y opcional, más un cierre posterior. **[DECISIÓN]** D-14
+6. **Registrar ventas y lavados sin interrumpir el trabajo**: registro rápido al cobrar, sin cliente ni placa. El dashboard del día hace de resumen; no hay cierre posterior. **[DECISIÓN]** D-14, ajustada por el mapa funcional (ver `10-OPERACION-REAL.md`)
 
 Lo que la solución **no** hace: decidir por el negocio cuándo toca el próximo mantenimiento. Esa regla depende del vehículo y su uso (C-09) y la define el usuario en cada caso. **[DECISIÓN]** D-09
 
@@ -127,7 +127,8 @@ La Fase 1 construye el **núcleo**, no solo el reemplazo del sticker.
 
 **Queda para la Fase 2** **[DECISIÓN]** DEC-08:
 - Venta rápida y pagos (Yape/efectivo).
-- Lavado: registro rápido opcional y cierre/resumen del día.
+- Lavado: registro rápido (tipo → precio → pago → confirmar). Sin cierre del día: el resumen lo da el dashboard.
+- Diseño de la Fase 2: `10-OPERACION-REAL.md`, alineado al mapa funcional.
 
 Lo que aún condiciona el alcance: P-01 (dónde están los teléfonos), P-02 (qué lleva el sticker), P-03/P-04 (cómo se decide el próximo mantenimiento), P-07/P-08 (productos y códigos concretos) y P-13 (mensaje de aviso).
 

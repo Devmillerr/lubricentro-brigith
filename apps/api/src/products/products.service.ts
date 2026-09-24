@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Prisma, type Product, type VehicleModel } from '@prisma/client';
 import { ProblemException } from '../common/exceptions/problem.exception';
 import { paginate, type Page } from '../common/pagination';
-import { InventoryService, type StockView } from '../inventory/inventory.service';
+import { toStockView, type StockView } from '../inventory/inventory.service';
 import { forBusiness } from '../prisma/business-scope';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateProductDto } from './dto/create-product.dto';
@@ -12,12 +12,13 @@ import type { UpdateProductDto } from './dto/update-product.dto';
 
 @Injectable()
 export class ProductsService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly inventoryService: InventoryService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  /** Con `includeStock`, agrega saldo y estado de conteo por producto (06-API.md, BR-P8). */
+  /**
+   * Con `includeStock`, agrega saldo y estado de conteo por producto
+   * (06-API.md, BR-P8), leídos de la caché del propio producto: sin una
+   * consulta por producto.
+   */
   async list(
     businessId: string,
     query: ListProductsQueryDto,
@@ -52,12 +53,7 @@ export class ProductsService {
       return page;
     }
 
-    const items = await Promise.all(
-      page.items.map(async (product) => ({
-        ...product,
-        stock: await this.inventoryService.getStock(businessId, product.id),
-      })),
-    );
+    const items = page.items.map((product) => ({ ...product, stock: toStockView(product) }));
     return { ...page, items };
   }
 

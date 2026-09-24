@@ -14,7 +14,7 @@ describe('InventoryService', () => {
     const { service } = setup();
 
     await expect(
-      service.count('biz-a', { productId: 'no-existe', countedQuantity: 5 }),
+      service.count('biz-a', 'user-a', { productId: 'no-existe', countedQuantity: 5 }),
     ).rejects.toMatchObject({ code: 'PRODUCT_NOT_FOUND' });
   });
 
@@ -29,17 +29,22 @@ describe('InventoryService', () => {
   it('count sobre un producto sin movimientos: quantityDelta = countedQuantity (invariante 2)', async () => {
     const { service } = setup();
 
-    const movement = await service.count('biz-a', { productId: 'prod-a', countedQuantity: 10 });
+    const movement = await service.count('biz-a', 'user-a', {
+      productId: 'prod-a',
+      countedQuantity: 10,
+    });
 
     expect(movement.type).toBe('COUNT');
-    expect(movement.previousBalance).toBe(0);
+    expect(Number(movement.previousBalance)).toBe(0);
     expect(Number(movement.quantityDelta)).toBe(10);
     expect(movement.countedQuantity).toBe(10);
+    expect(Number(movement.resultingBalance)).toBe(10);
+    expect(movement.createdById).toBe('user-a');
   });
 
   it('tras un count, el saldo es igual a lo contado y queda "con conteo" (BR-P7, BR-P8)', async () => {
     const { service } = setup();
-    await service.count('biz-a', { productId: 'prod-a', countedQuantity: 7 });
+    await service.count('biz-a', 'user-a', { productId: 'prod-a', countedQuantity: 7 });
 
     const stock = await service.getStock('biz-a', 'prod-a');
 
@@ -49,9 +54,9 @@ describe('InventoryService', () => {
 
   it('receipt suma al saldo (BR-P6)', async () => {
     const { service } = setup();
-    await service.count('biz-a', { productId: 'prod-a', countedQuantity: 5 });
+    await service.count('biz-a', 'user-a', { productId: 'prod-a', countedQuantity: 5 });
 
-    const movement = await service.receipt('biz-a', { productId: 'prod-a', quantity: 3 });
+    const movement = await service.receipt('biz-a', 'user-a', { productId: 'prod-a', quantity: 3 });
 
     expect(movement.type).toBe('PURCHASE_IN');
     expect(Number(movement.quantityDelta)).toBe(3);
@@ -61,9 +66,9 @@ describe('InventoryService', () => {
 
   it('adjustment exige un motivo y puede restar del saldo (BR-P10)', async () => {
     const { service } = setup();
-    await service.count('biz-a', { productId: 'prod-a', countedQuantity: 5 });
+    await service.count('biz-a', 'user-a', { productId: 'prod-a', countedQuantity: 5 });
 
-    const movement = await service.adjustment('biz-a', {
+    const movement = await service.adjustment('biz-a', 'user-a', {
       productId: 'prod-a',
       quantityDelta: -2,
       reason: 'Producto dañado',
@@ -76,9 +81,13 @@ describe('InventoryService', () => {
 
   it('saldo = suma de quantityDelta de todos los movimientos (invariante 1)', async () => {
     const { service } = setup();
-    await service.count('biz-a', { productId: 'prod-a', countedQuantity: 10 });
-    await service.receipt('biz-a', { productId: 'prod-a', quantity: 5 });
-    await service.adjustment('biz-a', { productId: 'prod-a', quantityDelta: -4, reason: 'Merma' });
+    await service.count('biz-a', 'user-a', { productId: 'prod-a', countedQuantity: 10 });
+    await service.receipt('biz-a', 'user-a', { productId: 'prod-a', quantity: 5 });
+    await service.adjustment('biz-a', 'user-a', {
+      productId: 'prod-a',
+      quantityDelta: -4,
+      reason: 'Merma',
+    });
 
     const stock = await service.getStock('biz-a', 'prod-a');
 
@@ -87,12 +96,15 @@ describe('InventoryService', () => {
 
   it('un segundo count corrige el saldo hacia lo contado, sin importar el historial previo', async () => {
     const { service } = setup();
-    await service.count('biz-a', { productId: 'prod-a', countedQuantity: 10 });
-    await service.receipt('biz-a', { productId: 'prod-a', quantity: 5 });
+    await service.count('biz-a', 'user-a', { productId: 'prod-a', countedQuantity: 10 });
+    await service.receipt('biz-a', 'user-a', { productId: 'prod-a', quantity: 5 });
 
-    const recount = await service.count('biz-a', { productId: 'prod-a', countedQuantity: 12 });
+    const recount = await service.count('biz-a', 'user-a', {
+      productId: 'prod-a',
+      countedQuantity: 12,
+    });
 
-    expect(recount.previousBalance).toBe(15);
+    expect(Number(recount.previousBalance)).toBe(15);
     expect(Number(recount.quantityDelta)).toBe(-3);
     const stock = await service.getStock('biz-a', 'prod-a');
     expect(stock.balance).toBe(12);
@@ -107,7 +119,7 @@ describe('InventoryService', () => {
   it('getStock no cruza negocios', async () => {
     const { service, products } = setup();
     products.set('prod-b', { id: 'prod-b', businessId: 'biz-b', name: 'Ajeno', unit: 'unidad' });
-    await service.count('biz-b', { productId: 'prod-b', countedQuantity: 99 });
+    await service.count('biz-b', 'user-a', { productId: 'prod-b', countedQuantity: 99 });
 
     await expect(service.getStock('biz-a', 'prod-b')).rejects.toMatchObject({
       code: 'PRODUCT_NOT_FOUND',
@@ -117,9 +129,9 @@ describe('InventoryService', () => {
   it('listMovements filtra por productId y type, y no cruza negocios', async () => {
     const { service, products } = setup();
     products.set('prod-b', { id: 'prod-b', businessId: 'biz-a', name: 'Otro', unit: 'unidad' });
-    await service.count('biz-a', { productId: 'prod-a', countedQuantity: 5 });
-    await service.receipt('biz-a', { productId: 'prod-a', quantity: 2 });
-    await service.count('biz-a', { productId: 'prod-b', countedQuantity: 1 });
+    await service.count('biz-a', 'user-a', { productId: 'prod-a', countedQuantity: 5 });
+    await service.receipt('biz-a', 'user-a', { productId: 'prod-a', quantity: 2 });
+    await service.count('biz-a', 'user-a', { productId: 'prod-b', countedQuantity: 1 });
 
     const forProductA = await service.listMovements('biz-a', { productId: 'prod-a' });
     expect(forProductA.items).toHaveLength(2);

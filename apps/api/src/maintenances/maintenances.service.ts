@@ -3,14 +3,14 @@ import { randomUUID } from 'node:crypto';
 import {
   InventoryMovementType,
   MaintenanceStatus,
-  Prisma,
   ReminderStatus,
   type Maintenance,
   type MaintenanceItem,
   type Reminder,
 } from '@prisma/client';
 import { ProblemException } from '../common/exceptions/problem.exception';
-import { forBusiness } from '../prisma/business-scope';
+import { applyStockMovements } from '../inventory/stock-ledger';
+import { forBusiness, type ScopedTransaction } from '../prisma/business-scope';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveDueRule } from './due-rules';
 import type { CreateMaintenanceDto } from './dto/create-maintenance.dto';
@@ -37,11 +37,6 @@ export interface MaintenanceWarning {
  */
 const CLOSE_REASON_CORRECTED_WITHOUT_DUE = 'mantenimiento corregido sin próximo km ni fecha';
 
-/** Cliente de la transacción interactiva de `forBusiness(...).$transaction`. */
-type ScopedTransaction = Parameters<
-  Parameters<ReturnType<typeof forBusiness>['$transaction']>[0]
->[0];
-
 export type MaintenanceWithItems = Maintenance & { items: MaintenanceItem[] };
 
 export interface CreateMaintenanceResult {
@@ -50,22 +45,13 @@ export interface CreateMaintenanceResult {
   warnings: MaintenanceWarning[];
 }
 
-class InsufficientStockBlockedError extends Error {
-  constructor(
-    public readonly productId: string,
-    public readonly balance: number,
-    public readonly requestedQuantity: number,
-  ) {
-    super('INSUFFICIENT_STOCK_BLOCKED');
-  }
-}
-
 /**
  * Guardar un mantenimiento es una sola transacción indivisible: crea el
  * mantenimiento, sus productos, sus movimientos de inventario y su
- * recordatorio, o no crea nada (BR-M10, 04-ARCHITECTURE.md §7.1). Todas las
- * validaciones (referencias, coherencia de dueRule, stock) corren antes de
- * la primera escritura, así que un rechazo nunca deja nada a medias.
+ * recordatorio, o no crea nada (BR-M10, 04-ARCHITECTURE.md §7.1). Las
+ * validaciones (referencias, coherencia de dueRule) corren antes de la
+ * primera escritura; el stock lo evalúa el StockLedger dentro de la misma
+ * transacción, y por DEC-26 solo produce avisos, nunca un rechazo.
  */
 @Injectable()
 export class MaintenancesService {
@@ -158,173 +144,110 @@ export class MaintenancesService {
 
     const stockItems = items.filter((item) => productById.get(item.productId)!.tracksStock);
 
-    try {
-      const result = await scoped.$transaction(async (tx) => {
-        if (stockItems.length) {
-          // 04-ARCHITECTURE.md §7.2: bloquea las filas de producto
-          // involucradas para que la evaluación de stock y la escritura no
-          // se crucen con otra petición simultánea.
-          const productIdsToLock = [...new Set(stockItems.map((item) => item.productId))];
-          await tx.$queryRaw(
-            // Los ids son `text` en Postgres (String de Prisma, sin @db.Uuid);
-            // se castea explícito porque el driver infiere `uuid` para
-            // strings con forma de UUID y Postgres no compara text = uuid.
-            Prisma.sql`SELECT "id" FROM "products" WHERE "businessId" = ${businessId}::text AND "id" = ANY(${productIdsToLock}::text[]) FOR UPDATE`,
-          );
-        }
+    const maintenanceId = dto.id ?? randomUUID();
 
-        // Stock insuficiente / sin conteo (BR-P8, BR-P11, BR-P12): se evalúa
-        // por producto (sumando líneas repetidas), con las filas ya
-        // bloqueadas, antes de escribir nada.
-        for (const productId of new Set(stockItems.map((item) => item.productId))) {
-          const movements = await tx.inventoryMovement.findMany({
-            where: { businessId, productId },
-          });
-          const isCounted = movements.some(
-            (movement) => movement.type === InventoryMovementType.COUNT,
-          );
-          const totalQuantity = stockItems
-            .filter((item) => item.productId === productId)
-            .reduce((sum, item) => sum + item.quantity, 0);
+    const result = await scoped.$transaction(async (tx) => {
+      // Stock (BR-P5) primero: el StockLedger bloquea las filas de
+      // producto antes de cualquier otra escritura. Si los ítems se
+      // insertaran antes, su FK tomaría un lock compartido sobre el
+      // producto y dos mantenimientos simultáneos se trabarían al pedir el
+      // FOR UPDATE (deadlock, visto en test/integration). DEC-26: el
+      // mantenimiento nunca se bloquea por saldo (el producto ya se usó);
+      // un saldo negativo o un producto sin conteo (DEC-27) vuelve como
+      // aviso.
+      const stock = await applyStockMovements(tx, {
+        businessId,
+        createdById: userId,
+        policy: 'WARN',
+        entries: stockItems.map((item) => ({
+          productId: item.productId,
+          type: InventoryMovementType.MAINTENANCE_USE,
+          quantityDelta: -item.quantity,
+          refType: 'Maintenance',
+          refId: maintenanceId,
+          occurredAt: performedAt,
+        })),
+      });
+      warnings.push(...stock.warnings);
 
-          if (!isCounted) {
-            warnings.push({
-              code: 'PRODUCT_NOT_COUNTED',
-              message:
-                'El producto no tiene conteo inicial: se registra el movimiento, sin evaluar stock.',
-              productId,
-            });
-            continue;
-          }
-
-          const balance = movements.reduce(
-            (sum, movement) => sum + Number(movement.quantityDelta),
-            0,
-          );
-          const resultingBalance = balance - totalQuantity;
-          if (resultingBalance < 0) {
-            if (business.insufficientStockPolicy === 'BLOCK') {
-              throw new InsufficientStockBlockedError(productId, balance, totalQuantity);
-            }
-            warnings.push({
-              code: 'INSUFFICIENT_STOCK',
-              message: 'El producto quedaría con saldo negativo.',
-              productId,
-              balance,
-              requestedQuantity: totalQuantity,
-            });
-          }
-        }
-
-        const maintenance = await tx.maintenance.create({
-          data: {
-            id: dto.id ?? randomUUID(),
-            businessId,
-            vehicleId: dto.vehicleId,
-            maintenanceTypeId: dto.maintenanceTypeId,
-            performedAt,
-            odometerKm: dto.odometerKm,
-            nextDueKm: dto.nextDueKm,
-            nextDueDate,
-            dueRule,
-            notes: dto.notes,
-            // Explícito en vez de confiar en el default de Postgres, que no
-            // todo entorno de prueba simula (mismo motivo que tracksStock
-            // en products.service.ts).
-            status: MaintenanceStatus.ACTIVE,
-          },
-        });
-
-        for (const item of items) {
-          const product = productById.get(item.productId)!;
-          await tx.maintenanceItem.create({
-            data: {
-              maintenanceId: maintenance.id,
-              productId: item.productId,
-              productNameSnapshot: product.name,
-              productCodeSnapshot: product.code,
-              quantity: item.quantity,
-            },
-          });
-
-          if (product.tracksStock) {
-            await tx.inventoryMovement.create({
-              data: {
-                businessId,
-                productId: item.productId,
-                type: InventoryMovementType.MAINTENANCE_USE,
-                quantityDelta: -item.quantity,
-                refType: 'Maintenance',
-                refId: maintenance.id,
-                occurredAt: performedAt,
-              },
-            });
-          }
-        }
-
-        // Recordatorio (BR-R1, BR-R2): el anterior abierto del mismo tipo
-        // queda cumplido, haya o no uno nuevo.
-        const priorOpen = await tx.reminder.findFirst({
-          where: {
-            businessId,
-            vehicleId: dto.vehicleId,
-            maintenanceTypeId: dto.maintenanceTypeId,
-            status: { in: [ReminderStatus.PENDING, ReminderStatus.CONTACTED] },
-          },
-        });
-        if (priorOpen) {
-          await tx.reminder.update({
-            where: { id: priorOpen.id },
-            data: {
-              status: ReminderStatus.DONE,
-              closedByMaintenanceId: maintenance.id,
-              closedAt: new Date(),
-              closeReason: 'cumplido',
-            },
-          });
-        }
-
-        let reminder: Reminder | null = null;
-        if (dueRule) {
-          reminder = await tx.reminder.create({
-            data: {
-              businessId,
-              vehicleId: dto.vehicleId,
-              maintenanceTypeId: dto.maintenanceTypeId,
-              sourceMaintenanceId: maintenance.id,
-              dueDate: nextDueDate,
-              dueKm: dto.nextDueKm,
-              dueRule,
-              status: ReminderStatus.PENDING,
-            },
-          });
-        }
-
-        const maintenanceItems = await tx.maintenanceItem.findMany({
-          where: { maintenanceId: maintenance.id },
-        });
-
-        return { maintenance: { ...maintenance, items: maintenanceItems }, reminder };
+      const maintenance = await tx.maintenance.create({
+        data: {
+          id: maintenanceId,
+          businessId,
+          vehicleId: dto.vehicleId,
+          maintenanceTypeId: dto.maintenanceTypeId,
+          performedAt,
+          odometerKm: dto.odometerKm,
+          nextDueKm: dto.nextDueKm,
+          nextDueDate,
+          dueRule,
+          notes: dto.notes,
+          // Explícito en vez de confiar en el default de Postgres, que no
+          // todo entorno de prueba simula (mismo motivo que tracksStock
+          // en products.service.ts).
+          status: MaintenanceStatus.ACTIVE,
+        },
       });
 
-      return { ...result, warnings };
-    } catch (error) {
-      if (error instanceof InsufficientStockBlockedError) {
-        throw new ProblemException({
-          status: HttpStatus.UNPROCESSABLE_ENTITY,
-          code: 'INSUFFICIENT_STOCK',
-          title: 'Stock insuficiente',
-          detail: `El producto ${error.productId} quedaría con saldo negativo.`,
-          errors: [
-            {
-              field: 'items',
-              message: `Saldo actual ${error.balance}, cantidad pedida ${error.requestedQuantity}`,
-            },
-          ],
+      for (const item of items) {
+        const product = productById.get(item.productId)!;
+        await tx.maintenanceItem.create({
+          data: {
+            maintenanceId: maintenance.id,
+            productId: item.productId,
+            productNameSnapshot: product.name,
+            productCodeSnapshot: product.code,
+            quantity: item.quantity,
+          },
         });
       }
-      throw error;
-    }
+
+      // Recordatorio (BR-R1, BR-R2): el anterior abierto del mismo tipo
+      // queda cumplido, haya o no uno nuevo.
+      const priorOpen = await tx.reminder.findFirst({
+        where: {
+          businessId,
+          vehicleId: dto.vehicleId,
+          maintenanceTypeId: dto.maintenanceTypeId,
+          status: { in: [ReminderStatus.PENDING, ReminderStatus.CONTACTED] },
+        },
+      });
+      if (priorOpen) {
+        await tx.reminder.update({
+          where: { id: priorOpen.id },
+          data: {
+            status: ReminderStatus.DONE,
+            closedByMaintenanceId: maintenance.id,
+            closedAt: new Date(),
+            closeReason: 'cumplido',
+          },
+        });
+      }
+
+      let reminder: Reminder | null = null;
+      if (dueRule) {
+        reminder = await tx.reminder.create({
+          data: {
+            businessId,
+            vehicleId: dto.vehicleId,
+            maintenanceTypeId: dto.maintenanceTypeId,
+            sourceMaintenanceId: maintenance.id,
+            dueDate: nextDueDate,
+            dueKm: dto.nextDueKm,
+            dueRule,
+            status: ReminderStatus.PENDING,
+          },
+        });
+      }
+
+      const maintenanceItems = await tx.maintenanceItem.findMany({
+        where: { maintenanceId: maintenance.id },
+      });
+
+      return { maintenance: { ...maintenance, items: maintenanceItems }, reminder };
+    });
+
+    return { ...result, warnings };
   }
 
   async findOne(businessId: string, id: string): Promise<MaintenanceWithItems> {
@@ -569,19 +492,19 @@ export class MaintenancesService {
           type: InventoryMovementType.MAINTENANCE_USE,
         },
       });
-      for (const movement of useMovements) {
-        await tx.inventoryMovement.create({
-          data: {
-            businessId,
-            productId: movement.productId,
-            type: InventoryMovementType.MAINTENANCE_VOID,
-            quantityDelta: Number(movement.quantityDelta) * -1,
-            refType: 'Maintenance',
-            refId: id,
-            occurredAt: new Date(),
-          },
-        });
-      }
+      await applyStockMovements(tx, {
+        businessId,
+        createdById: userId,
+        policy: 'WARN',
+        entries: useMovements.map((movement) => ({
+          productId: movement.productId,
+          type: InventoryMovementType.MAINTENANCE_VOID,
+          quantityDelta: Number(movement.quantityDelta) * -1,
+          refType: 'Maintenance',
+          refId: id,
+          occurredAt: new Date(),
+        })),
+      });
 
       const ownReminder = await tx.reminder.findFirst({
         where: {

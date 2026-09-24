@@ -1,7 +1,23 @@
 import { plainToInstance } from 'class-transformer';
 import { UpdateMaintenanceDto } from '../src/maintenances/dto/update-maintenance.dto';
 import { MaintenancesService } from '../src/maintenances/maintenances.service';
-import { buildFakeScopedPrisma } from './support/fake-scoped-prisma';
+import { buildFakeScopedPrisma, type Store } from './support/fake-scoped-prisma';
+
+/**
+ * Deja `prod-tracked` con un conteo inicial: el movimiento COUNT y el saldo
+ * en caché que el StockLedger mantendría (R1).
+ */
+function seedCount(movements: Store, products: Store, quantity: number) {
+  movements.set('mv-count', {
+    id: 'mv-count',
+    businessId: 'biz-a',
+    productId: 'prod-tracked',
+    type: 'COUNT',
+    quantityDelta: quantity,
+    occurredAt: new Date('2026-01-01'),
+  });
+  Object.assign(products.get('prod-tracked')!, { stockQuantity: quantity, isCounted: true });
+}
 
 function setup() {
   const { prisma, stores, businesses } = buildFakeScopedPrisma([
@@ -175,15 +191,8 @@ describe('MaintenancesService.create', () => {
   });
 
   it('stock suficiente y contado: descuenta sin avisos (BR-P5)', async () => {
-    const { service, movements } = setup();
-    movements.set('mv-count', {
-      id: 'mv-count',
-      businessId: 'biz-a',
-      productId: 'prod-tracked',
-      type: 'COUNT',
-      quantityDelta: 10,
-      occurredAt: new Date('2026-01-01'),
-    });
+    const { service, movements, products } = setup();
+    seedCount(movements, products, 10);
 
     const result = await service.create('biz-a', 'user-a', {
       ...base,
@@ -196,15 +205,8 @@ describe('MaintenancesService.create', () => {
   });
 
   it('stock insuficiente con ALLOW_WITH_WARNING: guarda y avisa (BR-P11, BR-P12)', async () => {
-    const { service, movements } = setup();
-    movements.set('mv-count', {
-      id: 'mv-count',
-      businessId: 'biz-a',
-      productId: 'prod-tracked',
-      type: 'COUNT',
-      quantityDelta: 2,
-      occurredAt: new Date('2026-01-01'),
-    });
+    const { service, movements, products } = setup();
+    seedCount(movements, products, 2);
 
     const result = await service.create('biz-a', 'user-a', {
       ...base,
@@ -222,32 +224,41 @@ describe('MaintenancesService.create', () => {
     expect(result.maintenance.items).toHaveLength(1);
   });
 
-  it('stock insuficiente con BLOCK: 422 y no guarda nada (06-API.md, BR-M10)', async () => {
-    const { service, movements, maintenances, items, businesses } = setup();
-    movements.set('mv-count', {
-      id: 'mv-count',
-      businessId: 'biz-a',
-      productId: 'prod-tracked',
-      type: 'COUNT',
-      quantityDelta: 2,
-      occurredAt: new Date('2026-01-01'),
-    });
+  it('stock insuficiente con BLOCK configurado: igual guarda y avisa, y el saldo queda negativo (DEC-26)', async () => {
+    const { service, movements, products, businesses } = setup();
+    seedCount(movements, products, 2);
     businesses.set('biz-a', {
       id: 'biz-a',
       defaultDueRuleWhenBoth: null,
       insufficientStockPolicy: 'BLOCK',
     });
 
-    await expect(
-      service.create('biz-a', 'user-a', {
-        ...base,
-        items: [{ productId: 'prod-tracked', quantity: 5 }],
-      }),
-    ).rejects.toMatchObject({ code: 'INSUFFICIENT_STOCK' });
+    const result = await service.create('biz-a', 'user-a', {
+      ...base,
+      items: [{ productId: 'prod-tracked', quantity: 5 }],
+    });
 
-    expect(maintenances.size).toBe(0);
-    expect(items.size).toBe(0);
-    expect([...movements.values()].filter((m) => m.type === 'MAINTENANCE_USE')).toHaveLength(0);
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ code: 'INSUFFICIENT_STOCK', balance: 2, requestedQuantity: 5 }),
+    );
+    expect(Number(products.get('prod-tracked')!.stockQuantity)).toBe(-3);
+    const created = [...movements.values()].find((m) => m.refId === result.maintenance.id);
+    expect(created?.createdById).toBe('user-a');
+    expect(Number(created?.resultingBalance)).toBe(-3);
+  });
+
+  it('anular devuelve el saldo en caché al valor previo (BR-P9)', async () => {
+    const { service, movements, products } = setup();
+    seedCount(movements, products, 10);
+    const created = await service.create('biz-a', 'user-a', {
+      ...base,
+      items: [{ productId: 'prod-tracked', quantity: 3 }],
+    });
+    expect(Number(products.get('prod-tracked')!.stockQuantity)).toBe(7);
+
+    await service.void('biz-a', 'user-a', created.maintenance.id, { reason: 'Prueba' });
+
+    expect(Number(products.get('prod-tracked')!.stockQuantity)).toBe(10);
   });
 
   it('avisa si el km es menor al último conocido, sin bloquear (BR-M7)', async () => {
@@ -310,15 +321,8 @@ describe('MaintenancesService.create', () => {
 
 describe('MaintenancesService.void', () => {
   it('genera movimientos inversos por cada producto usado (BR-P9, BR-M12)', async () => {
-    const { service, movements } = setup();
-    movements.set('mv-count', {
-      id: 'mv-count',
-      businessId: 'biz-a',
-      productId: 'prod-tracked',
-      type: 'COUNT',
-      quantityDelta: 10,
-      occurredAt: new Date('2026-01-01'),
-    });
+    const { service, movements, products } = setup();
+    seedCount(movements, products, 10);
     const created = await service.create('biz-a', 'user-a', {
       ...base,
       items: [{ productId: 'prod-tracked', quantity: 3 }],

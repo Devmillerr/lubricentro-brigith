@@ -80,7 +80,7 @@ No existe ningún endpoint ni efecto lateral que cree compatibilidades a partir 
 ### Inventario [DECISIÓN] DEC-04
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/inventory/stock?productId=` | Saldo por producto, con `isCounted` (BR-P8) |
+| GET | `/inventory/stock?productId=` | Saldo por producto, con `isCounted` (BR-P8). Lee la caché de `Product` (R1) |
 | GET | `/inventory/movements?productId=&type=` | Historial de movimientos |
 | POST | `/inventory/counts` | `{ productId, countedQuantity, occurredAt? }`. Conteo físico; sirve como stock inicial (BR-P7). Guarda la diferencia contra el saldo |
 | POST | `/inventory/receipts` | `{ productId, quantity, occurredAt? }`. Ingreso de mercadería (BR-P6) |
@@ -102,13 +102,13 @@ No existen endpoints para editar ni borrar movimientos (BR-G5).
 
 | Código | Cuándo |
 |---|---|
-| `INSUFFICIENT_STOCK` | Un producto con conteo inicial quedaría con saldo negativo (con política `ALLOW_WITH_WARNING`). Incluye producto, saldo y cantidad pedida |
+| `INSUFFICIENT_STOCK` | Un producto con conteo inicial queda con saldo negativo. Se guarda igual (DEC-26). Incluye producto, saldo y cantidad pedida |
 | `PRODUCT_NOT_COUNTED` | Un producto sin conteo inicial: se registra el movimiento, no se evalúa stock |
 | `ODOMETER_LOWER_THAN_PREVIOUS` | El km es menor al último conocido |
 | `NEXT_KM_NOT_ABOVE_CURRENT` | El próximo km no supera al km actual |
 | `NEXT_DATE_BEFORE_PERFORMED` | La próxima fecha es anterior a la del mantenimiento |
 
-Con política `BLOCK`, un producto con conteo inicial que quedaría en negativo produce **422 `INSUFFICIENT_STOCK`** con el detalle, y no se guarda nada.
+**DEC-26:** el mantenimiento nunca se rechaza por stock, aunque `Business.insufficientStockPolicy` sea `BLOCK`: el producto ya se usó. El 422 `INSUFFICIENT_STOCK` queda para la venta de mostrador (R4), cuando un producto **con conteo** no alcanza. Un producto sin conteo nunca se bloquea (DEC-27).
 
 Si se ingresan próximo km y próxima fecha sin `dueRule` y el negocio no definió `defaultDueRuleWhenBoth`, la respuesta es **400** con el campo `dueRule` requerido (BR-M5).
 
@@ -132,7 +132,7 @@ Si se ingresan próximo km y próxima fecha sin `dueRule` y el negocio no defini
 | `POST /sales` | Venta rápida: líneas y pago. Genera movimientos de stock con el mismo mecanismo (BR-V4). Sin cliente ni placa obligatorios |
 | `GET /payment-methods` | Efectivo y Yape (C-17) |
 | `GET /wash-types`, `POST /wash-records` | Lavado rápido opcional al recibir o cobrar |
-| `GET /daily-closes/:date`, `POST /daily-closes` | Resumen del día |
+| ~~`/daily-closes`~~ | Retirado: no hay cierre del día; el resumen lo da `GET /dashboard`. Diseño vigente de la Fase 2: `10-OPERACION-REAL.md` §2.7 |
 
 ## 4. Reglas transversales
 

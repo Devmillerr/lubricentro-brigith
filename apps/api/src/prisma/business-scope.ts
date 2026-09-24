@@ -99,3 +99,6 @@ export function forBusiness(prisma: PrismaService, businessId: string) {
 }
 
 export type ScopedPrismaClient = ReturnType<typeof forBusiness>;
+
+/** Cliente de una transacción interactiva abierta con `forBusiness(...).$transaction`. */
+export type ScopedTransaction = Parameters<Parameters<ScopedPrismaClient['$transaction']>[0]>[0];

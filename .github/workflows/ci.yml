@@ -26,6 +26,9 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://brigith:brigith@localhost:5432/brigith_test?schema=public
+      # Pruebas de integración (StockLedger: bloqueos, concurrencia, invariante).
+      # Deben apuntar a una base cuyo nombre termine en "_test".
+      TEST_DATABASE_URL: postgresql://brigith:brigith@localhost:5432/brigith_test?schema=public
       CORS_ORIGIN: http://localhost:3000
       JWT_ACCESS_SECRET: ci-access-secret-not-for-prod
       JWT_REFRESH_SECRET: ci-refresh-secret-not-for-prod
@@ -62,6 +65,9 @@ jobs:
 
       - name: Pruebas (API)
         run: pnpm --filter @brigith/api test
+
+      - name: Pruebas de integración (API, Postgres real)
+        run: pnpm --filter @brigith/api test:integration
 
       - name: Pruebas e2e (API)
         run: pnpm --filter @brigith/api test:e2e

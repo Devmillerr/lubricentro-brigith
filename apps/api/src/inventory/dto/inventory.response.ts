@@ -7,14 +7,16 @@ export class StockViewResponse implements StockView {
   @ApiProperty()
   productId!: string;
 
-  @ApiProperty({ description: 'Suma de los movimientos del producto (BR-P3).' })
+  @ApiProperty({
+    description: 'Saldo en caché del producto: igual a la suma de sus movimientos (BR-P3).',
+  })
   balance!: number;
 
   @ApiProperty({ description: 'Tiene al menos un conteo (BR-P8).' })
   isCounted!: boolean;
 }
 
-type DecimalFields = 'quantityDelta' | 'countedQuantity' | 'previousBalance';
+type DecimalFields = 'quantityDelta' | 'countedQuantity' | 'previousBalance' | 'resultingBalance';
 
 /** Los campos `Decimal` de Prisma viajan como string en el JSON. */
 export class InventoryMovementResponse implements Omit<InventoryMovement, DecimalFields> {
@@ -47,6 +49,14 @@ export class InventoryMovementResponse implements Omit<InventoryMovement, Decima
   })
   previousBalance!: string | null;
 
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Saldo del producto justo después del movimiento (Decimal(12,3) como string). Nulo en movimientos anteriores a R1.',
+  })
+  resultingBalance!: string | null;
+
   @ApiProperty({ type: String, nullable: true })
   reason!: string | null;
 
@@ -55,6 +65,13 @@ export class InventoryMovementResponse implements Omit<InventoryMovement, Decima
 
   @ApiProperty({ type: String, nullable: true })
   refId!: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Usuario que lo registró. Nulo en movimientos anteriores a R1.',
+  })
+  createdById!: string | null;
 
   @ApiProperty({ type: String, format: 'date-time' })
   occurredAt!: Date;

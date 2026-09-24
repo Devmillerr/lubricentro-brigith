@@ -14,7 +14,7 @@
 | **[PENDIENTE]** | Falta información de Brigith (P-xx) |
 | **[DECISIÓN PENDIENTE]** | Falta que alguien decida. El sistema se diseña para poder decidirlo después sin rehacer la arquitectura |
 
-Ninguna regla de este documento convierte una hipótesis en hecho. Los valores concretos de Brigith que aún no están transcritos (productos, códigos, precios) no aparecen aquí.
+Ninguna regla de este documento convierte una hipótesis en hecho. Los valores concretos del dueño (códigos de filtros, precios de lavado, cobro del cambio de aceite, aceite de balde) están en `10-OPERACION-REAL.md` §0. Cuando una regla los cita como [CONFIRMADO], la fuente es esa sección: todavía no están transcritos a Discovery. El mapa funcional del 2026-09-23 es la referencia de cómo debe funcionar el sistema.
 
 ---
 
@@ -43,7 +43,7 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 | BR-C7 | Un cliente puede tener varios vehículos. Un vehículo tiene como máximo un cliente actual. Cambiar el cliente de un vehículo conserva su historial. | [TÉCNICO] |
 | BR-C8 | El teléfono se guarda tal como se ingresa. La normalización se aplica solo al generar el enlace de WhatsApp (BR-W5). | [TÉCNICO] |
 | BR-C9 | Los clientes frecuentes ya tienen teléfono registrado. Dónde y en qué formato está registrado no se sabe. | [CONFIRMADO] C-07 · [PENDIENTE] P-01 |
-| BR-C10 | Vehículos sin placa, otros identificadores y clientes duplicados. | [PENDIENTE] (no registrado en Discovery; llevarlo a la próxima sesión con Brigith) |
+| BR-C10 | Vehículos sin placa y otros identificadores. Clientes duplicados: si se registra un teléfono que ya existe, se ofrece reutilizar el cliente existente, sin bloquear. | Vehículos sin placa: [PENDIENTE] · teléfono repetido: [DECISIÓN] mapa funcional (DEC-47) |
 
 ## BR-M — Mantenimiento
 
@@ -105,11 +105,11 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 | BR-P8 | Un producto sin ningún `COUNT` está **sin conteo inicial**: sus movimientos se registran, pero su saldo no es confiable y no se evalúa stock insuficiente hasta el primer conteo. | [TÉCNICO] |
 | BR-P9 | Anular un mantenimiento genera un movimiento `MAINTENANCE_VOID` por producto, con la cantidad opuesta. | [TÉCNICO] |
 | BR-P10 | Los ajustes manuales (`ADJUSTMENT`) exigen un motivo escrito. | [TÉCNICO] |
-| BR-P11 | **Stock insuficiente:** al guardar un mantenimiento, si un producto con conteo inicial quedaría con saldo negativo, el sistema lo detecta y lo informa con producto, saldo y cantidad pedida. Qué hace después lo define una configuración del negocio: `ALLOW_WITH_WARNING` (guarda y avisa) o `BLOCK` (no guarda). | [DECISIÓN PENDIENTE] DEC-05 |
-| BR-P12 | Mientras DEC-05 no se decida, el sistema opera con `ALLOW_WITH_WARNING` como **valor provisional de configuración**, para no interrumpir el trabajo (D-05) con datos de inventario imperfectos. No es una decisión del negocio. | [TÉCNICO] provisional |
+| BR-P11 | **Stock insuficiente en productos con conteo inicial:** la **venta** se bloquea si el producto no alcanza (422 con producto, saldo y cantidad pedida). El **mantenimiento** continúa y avisa aunque el saldo quede negativo: el producto ya se usó. | [DECISIÓN] DEC-26 |
+| BR-P12 | **Productos sin conteo inicial:** se pueden vender y usar; la operación avisa que su stock no es confiable (BR-P8). | [DECISIÓN] DEC-27 |
 | BR-P13 | **Proceso de carga del stock inicial** (conteo completo antes de empezar, o conteo progresivo producto por producto, quién lo hace y cuándo). El sistema soporta ambos sin cambios. | [DECISIÓN PENDIENTE] DEC-21 |
 | BR-P14 | **Salidas por venta de producto.** El inventario las contempla como movimientos `SALE`/`SALE_VOID`: el saldo solo es fiel si toda salida física de un producto tiene su movimiento, sea por mantenimiento o por venta. Lo que se decide es **cuándo existe un punto de entrada** para registrar las ventas de producto (una salida solo de stock —producto y cantidad, sin precio ni pago— o la venta rápida completa de la Fase 2) y si Brigith vende productos sin mantenimiento y con qué frecuencia (C-03 confirma que vende lubricantes y filtros; no confirma si lo hace por separado). Mientras no exista, la diferencia entre el saldo y el estante se regulariza con un conteo (BR-P7). | [DECISIÓN PENDIENTE] DEC-24 |
-| BR-P15 | Cada producto es una unidad de stock en la que se cuenta y se descuenta. Cómo se modelan las presentaciones (por ejemplo, la misma marca en distintos tamaños), si hay venta por litro o a granel, y en qué unidad se descuenta cada producto. La cantidad admite decimales para no cerrar ninguna opción. | [DECISIÓN PENDIENTE] DEC-22 · [PENDIENTE] P-07 |
+| BR-P15 | Cada producto es una unidad de stock en la que se cuenta y se descuenta. La cantidad admite decimales. El aceite de balde se vende por litros o el balde completo. Qué presentaciones existen de cada producto y la capacidad de cada balde no se asumen. | Aceite de balde: [CONFIRMADO] (`10-OPERACION-REAL.md` §0.4) · presentaciones y capacidad: [PENDIENTE] P-07 |
 | BR-P16 | Por defecto un producto controla stock. Puede marcarse sin control de stock. | [TÉCNICO] |
 | BR-P17 | Los precios de venta son opcionales en el catálogo. Ningún precio se asume. | [PENDIENTE] P-07 |
 | BR-P18 | Categorías iniciales: **Lubricante** y **Filtro** (lo confirmado en C-03). Otras se agregan desde la app. | [TÉCNICO] |
@@ -122,7 +122,7 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 | BR-F2 | Registrar un mantenimiento o (en Fase 2) una venta **nunca** crea ni confirma una compatibilidad. | [DECISIÓN] D-12 |
 | BR-F3 | La compatibilidad es informativa: nunca bloquea usar un producto en un mantenimiento. | [TÉCNICO] |
 | BR-F4 | Cada compatibilidad guarda quién la confirmó y cuándo. | [TÉCNICO] |
-| BR-F5 | Ningún código de filtro ni compatibilidad real está registrado en estos documentos. Cualquier ejemplo de compatibilidad usado al definir el producto es solo ilustrativo. | [CONFIRMADO] C-11 (existen códigos) · [PENDIENTE] P-08 (valores) |
+| BR-F5 | Los códigos de filtros de aire y de aceite que dio el dueño, y las compatibilidades que indicó, son datos reales (`10-OPERACION-REAL.md` §0.4). Las compatibilidades que no dio no se cargan ni se suponen. | Códigos y compatibilidades dadas: [CONFIRMADO] · compatibilidades faltantes: [PENDIENTE] P-08 |
 | BR-F6 | Nivel de detalle de la compatibilidad (marca y modelo; año; motor). El modelo de vehículo admite año y motor opcionales, así que el nivel se define con datos, no con estructura. | [DECISIÓN PENDIENTE] DEC-07 · [PENDIENTE] P-08 |
 | BR-F7 | Un aviso "¿marcar como compatible?" al usar un filtro sin compatibilidad. | [DECISIÓN PENDIENTE] DEC-06 · **fuera del MVP** |
 
@@ -139,9 +139,9 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 
 | ID | Regla | Estado |
 |---|---|---|
-| BR-V1 | Venta rápida: producto → cantidad → pago. No exige cliente ni placa. | [DECISIÓN] D-07, D-13 |
+| BR-V1 | Venta rápida: categorías → productos → carrito → pago → confirmar. Los productos se eligen del catálogo, no se escriben. No exige cliente ni placa. | [DECISIÓN] D-07, D-13, mapa funcional |
 | BR-V2 | Métodos de pago confirmados: **Yape** y **efectivo**. | [CONFIRMADO] C-17 |
-| BR-V3 | Otros métodos de pago, ventas a crédito y cómo se cobra hoy un cambio de aceite (producto más mano de obra). | [PENDIENTE] P-09 |
+| BR-V3 | El cambio de aceite se cobra con **un único monto total** (producto + mano de obra). Los productos usados solo descuentan stock y no generan otro ingreso. Otros métodos de pago y ventas a crédito siguen sin definir. | Monto único: [CONFIRMADO] (`10-OPERACION-REAL.md` §0.2) · resto: [PENDIENTE] P-09 |
 | BR-V4 | Cada producto vendido genera un movimiento de stock `SALE` con el mismo mecanismo del MVP (BR-P3, BR-P14). | [TÉCNICO] |
 
 ## BR-L — Lavado (Fase 2)
@@ -149,10 +149,10 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 | ID | Regla | Estado |
 |---|---|---|
 | BR-L1 | El lavado no exige interacción durante el trabajo. Sin Kanban ni estados de lavado. | [DECISIÓN] D-05 |
-| BR-L2 | El registro rápido es opcional, al recibir o cobrar: tipo de lavado → precio → pago. Puede hacerse con o sin placa. | [DECISIÓN] D-14, D-07 |
-| BR-L3 | Existe un cierre/resumen posterior del día. | [DECISIÓN] D-14 |
-| BR-L4 | El cierre puede aceptar conteos manuales por tipo de lavado, sin vehículo. | [HIPÓTESIS] H-07 · [DECISIÓN PENDIENTE] DEC-15 |
+| BR-L2 | Registro rápido: tipo de lavado → precio → pago → confirmar. No pide cliente, placa ni el motivo del precio. | [DECISIÓN] D-14, D-07, mapa funcional |
+| BR-L3 | No hay cierre del día: el dashboard "Hoy" hace de resumen. | [DECISIÓN] mapa funcional (reemplaza D-14 en este punto) |
+| BR-L4 | Sin conteos manuales de cierre (consecuencia de BR-L3). | [DECISIÓN] mapa funcional · resuelve DEC-15 |
 | BR-L5 | Volumen aproximado: 10 a 15 lavados diarios. | [CONFIRMADO] C-13 |
-| BR-L6 | Tipos de lavado y precios por tipo de vehículo. | [CONFIRMADO] C-12 (existen) · [PENDIENTE] P-10 (valores) |
+| BR-L6 | Tipos y precios: moto lineal S/8 o S/10 · mototaxi S/15 · Tico S/15 · auto S/15 · camioneta S/30 o S/40 · furgón S/30. Con dos montos, el dueño elige uno al ver el vehículo; el sistema no aplica criterio. | [CONFIRMADO] C-12 y `10-OPERACION-REAL.md` §0.3 |
 | BR-L7 | Momento real del cobro y quién cobra. | [PENDIENTE] P-11 |
 | BR-L8 | Se atiende por orden de llegada; no se asume un módulo de citas ni de turnos. | [CONFIRMADO] C-19 · [HIPÓTESIS] H-11 |
