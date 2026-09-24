@@ -1,5 +1,7 @@
 'use client';
 
+import { ChevronRight, FolderTree } from 'lucide-react';
+import Link from 'next/link';
 import { SettingsForm } from '@/components/business/settings-form';
 import { PageHeader } from '@/components/ui/page-header';
 import { ErrorState, LoadingState } from '@/components/ui/states';
@@ -30,6 +32,19 @@ export default function SettingsPage() {
           onRetry={business.reload}
         />
       )}
+      <Link
+        href="/configuracion/categorias"
+        className="flex min-h-14 items-center gap-3 rounded-lg border border-[var(--border)] px-4 py-3 hover:bg-[var(--muted)]"
+      >
+        <FolderTree className="size-5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="font-medium">Categorías de productos</span>
+          <span className="text-sm text-[var(--muted-foreground)]">
+            Crear, renombrar, mover, ordenar o desactivar
+          </span>
+        </span>
+        <ChevronRight className="size-5 text-[var(--muted-foreground)]" aria-hidden />
+      </Link>
       {business.status === 'success' && <SettingsForm business={business.data} />}
     </div>
   );

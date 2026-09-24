@@ -13,11 +13,29 @@ export class ProductCategoryResponse implements ProductCategory {
   @ApiProperty()
   name!: string;
 
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'null = categoría de primer nivel; con valor = subcategoría (BR-P18).',
+  })
+  parentId!: string | null;
+
+  @ApiProperty()
+  sortOrder!: number;
+
+  @ApiProperty()
+  isActive!: boolean;
+
   @ApiProperty({ type: String, format: 'date-time' })
   createdAt!: Date;
 
   @ApiProperty({ type: String, format: 'date-time' })
   updatedAt!: Date;
+}
+
+export class ProductCategoryWithCountResponse extends ProductCategoryResponse {
+  @ApiProperty({ description: 'Productos activos asignados directamente a esta categoría.' })
+  productCount!: number;
 }
 
 /** `salePrice` y `stockQuantity` son `Decimal` en Prisma y viajan como string en el JSON. */
@@ -63,6 +81,19 @@ export class ProductResponse implements Omit<Product, 'salePrice' | 'stockQuanti
   @ApiProperty({ description: 'Tiene al menos un conteo (BR-P8).' })
   isCounted!: boolean;
 
+  @ApiProperty({ type: String, nullable: true })
+  viscosity!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  presentation!: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Sin subida todavía (DEC-34): null = la UI muestra un placeholder.',
+  })
+  imageKey!: string | null;
+
   @ApiProperty()
   isActive!: boolean;
 
@@ -102,4 +133,26 @@ export class ProductCompatibilityResponse implements ProductCompatibility {
 
   @ApiProperty({ type: String, nullable: true })
   note!: string | null;
+}
+
+export class FacetValueResponse {
+  @ApiProperty()
+  value!: string;
+
+  @ApiProperty({ description: 'Productos activos con este valor.' })
+  count!: number;
+
+  @ApiProperty({ description: 'Es un valor confirmado por el dueño (10-OPERACION-REAL.md §0.4).' })
+  suggested!: boolean;
+}
+
+export class ProductFacetsResponse {
+  @ApiProperty({ type: [FacetValueResponse] })
+  brands!: FacetValueResponse[];
+
+  @ApiProperty({ type: [FacetValueResponse] })
+  viscosities!: FacetValueResponse[];
+
+  @ApiProperty({ type: [FacetValueResponse] })
+  presentations!: FacetValueResponse[];
 }

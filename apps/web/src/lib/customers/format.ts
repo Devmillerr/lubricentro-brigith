@@ -22,5 +22,6 @@ export function vehicleModelLabel(model: VehicleModel): string {
       : model.yearFrom || model.yearTo
         ? ` (${model.yearFrom ?? model.yearTo})`
         : '';
-  return `${model.make} ${model.model}${years}`;
+  // `make` es opcional (R2): el texto del dueño puede venir completo en `model`.
+  return `${[model.make, model.model].filter(Boolean).join(' ')}${years}`;
 }

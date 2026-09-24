@@ -11,8 +11,8 @@ export class VehicleModelResponse implements VehicleModel {
   @ApiProperty()
   createdById!: string;
 
-  @ApiProperty()
-  make!: string;
+  @ApiProperty({ type: String, nullable: true })
+  make!: string | null;
 
   @ApiProperty()
   model!: string;

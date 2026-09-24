@@ -39,6 +39,18 @@ export class CreateProductDto {
   @MaxLength(50)
   code?: string;
 
+  @ApiPropertyOptional({ description: 'Opcional, p. ej. "10W40" (BR-P19b).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  viscosity?: string;
+
+  @ApiPropertyOptional({ description: 'Opcional, p. ej. "1.5 L" o "Balde" (BR-P19b).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  presentation?: string;
+
   @ApiProperty()
   @IsString()
   @MaxLength(200)

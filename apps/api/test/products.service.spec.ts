@@ -163,4 +163,180 @@ describe('ProductsService', () => {
     expect(found).toHaveLength(1);
     expect(found[0]?.id).toBe('model-1');
   });
+
+  describe('catálogo (R2)', () => {
+    function seedCatalog(categories: Map<string, Record<string, unknown>>) {
+      const add = (
+        id: string,
+        businessId: string,
+        name: string,
+        parentId: string | null,
+        isActive = true,
+      ) => categories.set(id, { id, businessId, name, parentId, isActive });
+      add('cat-filtro', 'biz-a', 'Filtro', null);
+      add('cat-aire', 'biz-a', 'Filtro de aire', 'cat-filtro');
+      add('cat-lub', 'biz-a', 'Lubricante', null);
+      add('cat-off', 'biz-a', 'Apagada', null, false);
+      add('cat-b', 'biz-b', 'Ajena', null);
+    }
+
+    it('crea con viscosidad y presentación opcionales, sin precio ni imagen (BR-P19b)', async () => {
+      const { service } = setup();
+
+      const product = await service.create('biz-a', {
+        name: 'Repsol 10W40 1.5 L',
+        unit: 'unidad',
+        brand: 'Repsol',
+        viscosity: '10W40',
+        presentation: '1.5 L',
+      });
+
+      expect(product).toMatchObject({ viscosity: '10W40', presentation: '1.5 L' });
+      expect(product.salePrice ?? null).toBeNull();
+      expect(product.imageKey ?? null).toBeNull();
+    });
+
+    it('rechaza una categoría desactivada o de otro negocio', async () => {
+      const { service, categories } = setup();
+      seedCatalog(categories);
+
+      await expect(
+        service.create('biz-a', { name: 'X', unit: 'u', categoryId: 'cat-off' }),
+      ).rejects.toMatchObject({ code: 'INVALID_REFERENCE' });
+      await expect(
+        service.create('biz-a', { name: 'X', unit: 'u', categoryId: 'cat-b' }),
+      ).rejects.toMatchObject({ code: 'INVALID_REFERENCE' });
+    });
+
+    it('update con null deja pendientes precio, marca, código y atributos', async () => {
+      const { service } = setup();
+      const product = await service.create('biz-a', {
+        name: 'Filtro',
+        unit: 'unidad',
+        code: '3007',
+        brand: 'X',
+        viscosity: 'V',
+        presentation: 'P',
+        salePrice: 10,
+      });
+
+      const updated = await service.update('biz-a', product.id, {
+        salePrice: null,
+        brand: null,
+        code: null,
+        viscosity: null,
+        presentation: null,
+      });
+
+      expect(updated).toMatchObject({
+        salePrice: null,
+        brand: null,
+        code: null,
+        viscosity: null,
+        presentation: null,
+      });
+    });
+
+    it('reactiva un producto desactivado con isActive: true', async () => {
+      const { service } = setup();
+      const product = await service.create('biz-a', { name: 'Uno', unit: 'unidad' });
+      await service.deactivate('biz-a', product.id);
+
+      const reactivated = await service.update('biz-a', product.id, { isActive: true });
+
+      expect(reactivated.isActive).toBe(true);
+    });
+
+    it('filtra por estado, categoría con subcategorías, marca, viscosidad, presentación y sin precio', async () => {
+      const { service, categories } = setup();
+      seedCatalog(categories);
+      await service.create('biz-a', {
+        name: 'Filtro 21050',
+        unit: 'u',
+        code: '21050',
+        categoryId: 'cat-aire',
+      });
+      await service.create('biz-a', {
+        name: 'Filtro raíz',
+        unit: 'u',
+        categoryId: 'cat-filtro',
+        salePrice: 5,
+      });
+      await service.create('biz-a', {
+        name: 'Repsol 10W40',
+        unit: 'u',
+        categoryId: 'cat-lub',
+        brand: 'Repsol',
+        viscosity: '10W40',
+        presentation: 'Litro',
+        salePrice: 30,
+      });
+      const inactive = await service.create('biz-a', {
+        name: 'Vistony 20W50',
+        unit: 'u',
+        categoryId: 'cat-lub',
+        brand: 'Vistony',
+        viscosity: '20W50',
+      });
+      await service.deactivate('biz-a', inactive.id);
+      await service.create('biz-b', { name: 'Ajeno', unit: 'u', brand: 'Repsol' });
+
+      const names = async (query: Parameters<typeof service.list>[1]) =>
+        (await service.list('biz-a', query)).items.map((p) => p.name).sort();
+
+      expect(await names({ categoryId: 'cat-filtro' })).toEqual(['Filtro 21050', 'Filtro raíz']);
+      expect(await names({ categoryId: 'cat-aire' })).toEqual(['Filtro 21050']);
+      expect(await names({ isActive: true, categoryId: 'cat-lub' })).toEqual(['Repsol 10W40']);
+      expect(await names({ isActive: false })).toEqual(['Vistony 20W50']);
+      expect(await names({ brand: 'repsol' })).toEqual(['Repsol 10W40']);
+      expect(await names({ viscosity: '10w40' })).toEqual(['Repsol 10W40']);
+      expect(await names({ presentation: 'LITRO' })).toEqual(['Repsol 10W40']);
+      expect(await names({ missingPrice: true, isActive: true })).toEqual(['Filtro 21050']);
+    });
+
+    it('la búsqueda cubre viscosidad y presentación', async () => {
+      const { service } = setup();
+      await service.create('biz-a', {
+        name: 'Aceite A',
+        unit: 'u',
+        viscosity: '25W60',
+        presentation: 'Balde',
+      });
+      await service.create('biz-a', { name: 'Aceite B', unit: 'u' });
+
+      const search = async (term: string) =>
+        (await service.list('biz-a', { search: term })).items.map((p) => p.name);
+      expect(await search('25w60')).toEqual(['Aceite A']);
+      expect(await search('balde')).toEqual(['Aceite A']);
+    });
+
+    it('facets: valores en uso con conteo, agrupados sin mayúsculas, y luego las sugerencias', async () => {
+      const { service, categories } = setup();
+      seedCatalog(categories);
+      const create = (name: string, categoryId: string, brand: string, viscosity?: string) =>
+        service.create('biz-a', { name, unit: 'u', categoryId, brand, viscosity });
+      await create('A', 'cat-lub', 'Repsol', '10W40');
+      await create('B', 'cat-lub', 'repsol', '10W40');
+      await create('C', 'cat-lub', 'Castrol');
+      const off = await create('D', 'cat-lub', 'Inactiva');
+      await service.deactivate('biz-a', off.id);
+      await create('E', 'cat-aire', 'Otra');
+      await service.create('biz-b', { name: 'F', unit: 'u', brand: 'DeOtroNegocio' });
+
+      const facets = await service.facets('biz-a', 'cat-lub');
+
+      expect(facets.brands.slice(0, 2)).toEqual([
+        { value: 'Repsol', count: 2, suggested: true },
+        { value: 'Castrol', count: 1, suggested: false },
+      ]);
+      expect(facets.brands.map((b) => b.value)).toEqual([
+        'Repsol',
+        'Castrol',
+        'Vistony',
+        'Valvoline',
+      ]);
+      expect(facets.viscosities[0]).toEqual({ value: '10W40', count: 2, suggested: true });
+      expect(facets.presentations.every((p) => p.count === 0 && p.suggested)).toBe(true);
+    });
+  });
 });

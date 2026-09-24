@@ -1,6 +1,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { seedBrigithCatalog } from './seed-catalog';
 
 // Prisma 7 exige un driver adapter explícito (mismo motivo que
 // `src/prisma/prisma.service.ts`); `new PrismaClient()` sin adapter falla.
@@ -10,10 +11,10 @@ const prisma = new PrismaClient({
 
 /**
  * Semilla de C0 (negocio Brigith con su usuario dueño, y un negocio "demo"
- * separado para pruebas, BR-G7), C2 (categorías Lubricante y Filtro,
- * BR-P18) y C4 (tipo "Cambio de aceite", BR-M13). No siembra productos,
- * mantenimientos reales ni plantillas: dependen de datos reales que aún no
- * existen (05-DATABASE.md §6).
+ * separado para pruebas, BR-G7), C4 (tipo "Cambio de aceite", BR-M13) y R2
+ * (catálogo confirmado de brigith: ver prisma/seed-catalog.ts). No siembra
+ * aceites, fluidos, mantenimientos reales ni plantillas: dependen de datos
+ * que el dueño todavía no dio (05-DATABASE.md §6).
  */
 async function main() {
   const ownerPassword = process.env.SEED_OWNER_PASSWORD;
@@ -35,7 +36,7 @@ async function main() {
 
   const passwordHash = await argon2.hash(ownerPassword, { type: argon2.argon2id });
 
-  await prisma.user.upsert({
+  const owner = await prisma.user.upsert({
     where: { username: 'brigith' },
     update: {},
     create: {
@@ -57,13 +58,9 @@ async function main() {
     },
   });
 
-  for (const name of ['Lubricante', 'Filtro']) {
-    await prisma.productCategory.upsert({
-      where: { businessId_name: { businessId: brigith.id, name } },
-      update: {},
-      create: { businessId: brigith.id, name },
-    });
-  }
+  // R2: categorías (Lubricante y Filtro, BR-P18, más el árbol de DEC-37),
+  // filtros y compatibilidades confirmadas. Solo en brigith; demo no se toca.
+  const catalog = await seedBrigithCatalog(prisma, brigith.id, owner.id);
 
   await prisma.maintenanceType.upsert({
     where: { businessId_name: { businessId: brigith.id, name: 'Cambio de aceite' } },
@@ -72,7 +69,7 @@ async function main() {
   });
 
   console.log(
-    'Seed completa: negocios "brigith" y "demo"; categorías Lubricante y Filtro; tipo "Cambio de aceite".',
+    `Seed completa: negocios "brigith" y "demo"; tipo "Cambio de aceite"; catálogo de brigith: ${catalog.categories} categorías, ${catalog.airFilters} filtros de aire, ${catalog.oilFilters} filtros de aceite y ${catalog.compatibilities} compatibilidades.`,
   );
 }
 

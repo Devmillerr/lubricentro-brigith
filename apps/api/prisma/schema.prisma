@@ -181,7 +181,9 @@ model VehicleModel {
   createdById String
   createdBy   User     @relation(fields: [createdById], references: [id])
 
-  make       String
+  /// Opcional desde R2: los textos del dueño ("Kia 2016", "Yaris moderno") se
+  /// guardan tal cual en `model`, sin inventar una marca (BR-F6, DEC-07).
+  make       String?
   model      String
   yearFrom   Int?
   yearTo     Int?
@@ -237,7 +239,8 @@ model Vehicle {
   @@map("vehicles")
 }
 
-/// Categoría de producto. Semilla: Lubricante y Filtro (BR-P18). Sin
+/// Categoría de producto. Semilla: Lubricante y Filtro (BR-P18) y el árbol de
+/// DEC-37 debajo de ellas. Sin
 /// `createdById`: no está en el campo documentado (05-DATABASE.md §3).
 model ProductCategory {
   id         String   @id @default(uuid())
@@ -245,6 +248,15 @@ model ProductCategory {
   business   Business @relation(fields: [businessId], references: [id])
 
   name String
+
+  /// Máximo 2 niveles (categoría → subcategoría), validado en el servicio. Es
+  /// un dato editable desde Configuración, no una taxonomía fija (BR-P18, R2).
+  parentId String?
+  parent   ProductCategory?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children ProductCategory[] @relation("CategoryTree")
+
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -291,6 +303,13 @@ model Product {
   /// Tiene al menos un COUNT (BR-P8). También en caché, escrito por el StockLedger.
   isCounted     Boolean @default(false)
 
+  /// Opcionales (R2, BR-P19b): se eligen de sugerencias (`GET /products/facets`),
+  /// nunca se inventan ni se exigen.
+  viscosity    String?
+  presentation String?
+  /// Opcional. Sin subida todavía (DEC-34): la UI muestra un placeholder.
+  imageKey     String?
+
   isActive Boolean @default(true)
 
   createdAt DateTime @default(now())
@@ -301,6 +320,7 @@ model Product {
   maintenanceItems   MaintenanceItem[]
 
   @@unique([businessId, code])
+  @@index([businessId, categoryId, isActive])
   @@map("products")
 }
 

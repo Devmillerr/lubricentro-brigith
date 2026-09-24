@@ -8,10 +8,14 @@ export class CreateVehicleModelDto {
   @IsUUID()
   id?: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional({
+    description:
+      'Opcional (R2): si el dueño dio un solo texto ("Kia 2016"), va completo en model (BR-F6).',
+  })
+  @IsOptional()
   @IsString()
   @MaxLength(100)
-  make!: string;
+  make?: string;
 
   @ApiProperty()
   @IsString()

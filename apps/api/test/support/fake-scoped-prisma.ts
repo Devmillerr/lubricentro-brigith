@@ -34,7 +34,17 @@ function toComparable(value: unknown): string {
 }
 
 function fieldMatches(value: unknown, condition: unknown): boolean {
+  // Como Prisma: `{ campo: null }` coincide con NULL (en el fake, también sin definir).
+  if (condition === null) return value === null || value === undefined;
   if (condition !== null && typeof condition === 'object') {
+    if ('equals' in condition) {
+      const mode = (condition as { mode?: string }).mode;
+      const expected = toComparable(condition.equals);
+      const actual = toComparable(value);
+      return value !== null && value !== undefined && mode === 'insensitive'
+        ? actual.toLowerCase() === expected.toLowerCase()
+        : value === condition.equals;
+    }
     if ('contains' in condition) {
       const needle = toComparable(condition.contains).toLowerCase();
       const mode = (condition as { mode?: string }).mode;

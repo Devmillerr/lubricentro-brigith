@@ -13,7 +13,7 @@ export interface CatalogWithStock {
 }
 
 /**
- * Catálogo completo con saldo (`GET /products?includeStock=true`). La API no
+ * Productos activos con saldo (`GET /products?includeStock=true&isActive=true`). La API no
  * filtra por stock, así que "sin stock" / "con stock" / "sin conteo" se
  * calculan sobre la lista completa en el cliente.
  */
@@ -25,7 +25,12 @@ export async function loadCatalogWithStock(): Promise<ApiResult<CatalogWithStock
     const result = await callApi(
       api.GET('/products', {
         params: {
-          query: { limit: PAGE_SIZE, includeStock: true, ...(cursor ? { cursor } : {}) },
+          query: {
+            limit: PAGE_SIZE,
+            includeStock: true,
+            isActive: true,
+            ...(cursor ? { cursor } : {}),
+          },
         },
       }),
     );

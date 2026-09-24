@@ -17,6 +17,15 @@ describe('VehicleModelsService', () => {
     expect(model.engineNote).toBeUndefined();
   });
 
+  it('crea un modelo sin marca, con el texto del dueño tal cual (R2, BR-F6)', async () => {
+    const { service } = setup();
+
+    const model = await service.create('biz-a', 'user-a', { model: 'Kia 2016' });
+
+    expect(model.model).toBe('Kia 2016');
+    expect(model.make ?? null).toBeNull();
+  });
+
   it('list solo devuelve los modelos del negocio (aislamiento)', async () => {
     const { service } = setup();
     await service.create('biz-a', 'user-a', { make: 'Toyota', model: 'Hilux' });

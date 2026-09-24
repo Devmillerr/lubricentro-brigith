@@ -55,17 +55,19 @@ Códigos: 200/201 éxito · 400 validación · 401 sin sesión · 403 sin permis
 | GET | `/vehicles/:id/maintenances` | Historial |
 | GET | `/vehicles/:id/compatible-products` | Productos con compatibilidad confirmada |
 | GET | `/vehicle-models` | Modelos del negocio |
-| POST | `/vehicle-models` | `{ make, model, yearFrom?, yearTo?, engineNote?, id? }`. Crear marca y modelo |
+| POST | `/vehicle-models` | `{ make?, model, yearFrom?, yearTo?, engineNote?, id? }`. `make` es opcional (R2) |
 | PATCH | `/vehicle-models/:id` | Editar los mismos campos. `isActive: false` desactiva (BR-G5) |
 
 ### Productos
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/product-categories` | Categorías |
-| POST | `/product-categories` | Crear categoría |
-| GET | `/products?search=&code=&categoryId=&includeStock=` | Buscar por código, nombre o marca. Con `includeStock`, agrega saldo y estado de conteo |
-| POST | `/products` | `{ name, unit, categoryId?, brand?, code?, salePrice?, tracksStock?, id? }`. `unit` es texto libre (BR-P15) |
-| PATCH | `/products/:id` | Editar los mismos campos. `isActive: false` desactiva (BR-G5) |
+| GET | `/product-categories?includeInactive=` | Categorías con `parentId`, `sortOrder`, `isActive` y `productCount` (productos activos). Por defecto solo las activas |
+| POST | `/product-categories` | `{ name, parentId?, sortOrder?, id? }`. Máximo 2 niveles |
+| PATCH | `/product-categories/:id` | `{ name?, parentId? (null = subir a categoría), sortOrder?, isActive? }`. Errores: `CATEGORY_DEPTH_EXCEEDED`, `CATEGORY_IN_USE` (desactivar con productos o subcategorías activos) |
+| GET | `/products?search=&code=&categoryId=&isActive=&brand=&viscosity=&presentation=&missingPrice=&includeStock=` | La búsqueda cubre nombre, marca, código, viscosidad, presentación y vehículo compatible. `categoryId` incluye sus subcategorías. Sin `isActive` devuelve activos e inactivos |
+| GET | `/products/facets?categoryId=` | Marcas, viscosidades y presentaciones de los productos activos (con conteo) más las sugerencias confirmadas |
+| POST | `/products` | `{ name, unit, categoryId?, brand?, code?, viscosity?, presentation?, salePrice?, tracksStock?, id? }`. `unit` es texto libre (BR-P15) |
+| PATCH | `/products/:id` | Editar los mismos campos; `null` borra los opcionales. `isActive: false` desactiva y `true` reactiva (BR-G5) |
 | DELETE | `/products/:id` | Desactivar (no borra) |
 | GET | `/products/:id/compatible-models` | Modelos con compatibilidad confirmada |
 

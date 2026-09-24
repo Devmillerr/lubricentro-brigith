@@ -31,14 +31,16 @@ export function NewModelForm({ onCreated }: { onCreated: (model: VehicleModel) =
   }
 
   async function save() {
-    if (!make.trim() || !model.trim()) {
-      setError('Ingresa la marca y el modelo.');
+    if (!model.trim()) {
+      setError('Ingresa el modelo.');
       return;
     }
     setSaving(true);
     setError(null);
     const result = await callApi(
-      api.POST('/vehicle-models', { body: { make: make.trim(), model: model.trim() } }),
+      api.POST('/vehicle-models', {
+        body: { model: model.trim(), ...(make.trim() ? { make: make.trim() } : {}) },
+      }),
     );
     setSaving(false);
     if (!result.ok) {
@@ -55,7 +57,7 @@ export function NewModelForm({ onCreated }: { onCreated: (model: VehicleModel) =
     <div className="flex flex-col gap-3 rounded-lg border border-[var(--border)] p-3">
       <p className="text-sm font-medium">Nuevo modelo</p>
       <div className="grid grid-cols-2 gap-3">
-        <Field id="new-model-make" label="Marca">
+        <Field id="new-model-make" label="Marca" optional>
           <Input
             id="new-model-make"
             value={make}

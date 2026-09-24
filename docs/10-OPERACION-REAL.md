@@ -252,6 +252,19 @@ Ver §3 (lista completa con recomendación).
 - **Anular el mantenimiento** anula su venta en la misma transacción. **Anular solo la venta** corrige el cobro sin tocar el stock (el stock pertenece al mantenimiento) y permite volver a cobrar.
 - **Dashboard:** el ingreso de mantenimiento se muestra como **un solo monto** ("Mantenimiento"). No se reparte entre producto y mano de obra, porque el negocio no lo separa. Las unidades de aceite y filtros que se usan en mantenimientos sí aparecen en "productos más usados/vendidos", pero desde el stock, no desde el dinero.
 
+### 2.2b Diseño aprobado de R2 — Catálogo (2026-09-23)
+
+**Reemplaza** las partes de catálogo de §2.3 (`Brand`, `CatalogOption`, `attributeKinds`, `ProductCategory.imageKey`), §2.4 (selección dependiente por tipo) y §2.7 (`/catalog/tree`, `/brands`, `/catalog-options`, `/products/variants`, `/products/:id/reactivate`, `/products/:id/image`). Donde esas secciones digan otra cosa, manda esta.
+
+- **Categorías de máximo 2 niveles** (categoría → subcategoría) en `ProductCategory` (`parentId`, `sortOrder`, `isActive`). Son datos, no enums: se crean, renombran, mueven, ordenan y desactivan desde Configuración. El nombre sigue siendo único por negocio. No se renombran las categorías existentes (Lubricante, Filtro): el árbol inicial se arma debajo de ellas (DEC-37).
+- **Atributos opcionales del producto:** `viscosity` y `presentation` (texto). La **marca sigue siendo texto** (`brand`), sin tabla `Brand`. Para elegir en vez de escribir, `GET /products/facets` devuelve los valores ya usados más las sugerencias confirmadas por el dueño (§0.4), que viven como constante en la API, no en una tabla.
+- **Imagen:** solo `Product.imageKey` (nullable) y un placeholder visual. Sin subida ni almacenamiento: queda para un corte posterior (DEC-34).
+- **Reactivar** con `PATCH /products/:id { isActive: true }` (ya existía en la API).
+- **Filtros del catálogo:** estado, categoría (incluye sus subcategorías), marca, viscosidad, presentación y sin precio. La búsqueda también cubre viscosidad, presentación y el vehículo compatible.
+- **`VehicleModel.make` opcional:** las compatibilidades guardan el texto del dueño tal cual en `model` ("Kia 2016"). Separar marca y año sigue siendo DEC-07.
+- **No se hace en R2:** tabla `Brand`, `CatalogOption`, variantes masivas, formas de venta (`ProductSaleUnit`, R4), subida de imágenes, cambios de rate limit.
+- **Siembra (solo negocio brigith):** árbol de categorías, 13 filtros de aire y 14 de aceite como productos (sin marca, precio, imagen ni conteo) y las 11 compatibilidades de filtros de aire confirmadas. 2001 y 0Y040 quedan sin compatibilidad. No se siembran aceites ni fluidos. El negocio demo no se toca.
+
 ### 2.3 Modelo de datos propuesto
 
 Solo se muestran modelos nuevos y campos nuevos. `businessId` + `@@index` en todo modelo de negocio; todos entran a `BUSINESS_SCOPED_MODELS`.
@@ -623,7 +636,7 @@ Barra inferior de 5:
 | Corte | Contenido | Tests clave |
 |---|---|---|
 | R1 | `StockLedger` + `Product.stockQuantity/isCounted` + `createdById` en movimientos + bloqueo en conteo/ingreso/ajuste | Invariante caché = suma de movimientos; bloqueo concurrente (integración Postgres); política de stock |
-| R2 | Catálogo: jerarquía, `Brand`, `CatalogOption`, atributos de producto, `catalog/tree`, variantes, reactivar, siembra confirmada | Validación de opciones por tipo; unicidad; aislamiento entre negocios; traspaso `brand`→`brandId` |
+| R2 | Catálogo según §2.2b: categorías de 2 niveles, viscosidad/presentación/imagen opcionales, facetas, filtros, búsqueda por vehículo, `make` opcional, siembra confirmada | Profundidad y ciclos de categorías; filtros y facetas; aislamiento entre negocios; siembra idempotente |
 | R3 | Recepción en lote + ajuste por cantidad física + alertas | Lote atómico (una línea inválida → nada); idempotencia; anterior/diferencia/resultante |
 | R4 | Ventas (`Sale`, `SaleLine`) + anulación | Total calculado en servidor; stock baja una vez; anulación revierte; idempotencia; 422 por stock |
 | R5 | Lavados (`WashType`, `WashPriceOption`, `POST /washes`) | Precio debe pertenecer al tipo; se registra sin cliente ni placa |
@@ -714,6 +727,8 @@ Lo que pide el mapa (§10) y dónde se consulta. Todo registro es inmutable o se
 | DEC-29 | El precio aplicado en una venta se puede modificar y queda guardado como snapshot de esa operación (R4) |
 | DEC-31 | Se permite un mantenimiento sin vehículo; en ese caso no hay recordatorio (R6) |
 | DEC-38 | Capa de datos web: TanStack Query (Fase 4) |
+| DEC-34 | R2 solo agrega `Product.imageKey` (nullable) y un placeholder visual. La subida y el almacenamiento (Supabase Storage) van en un corte posterior |
+| DEC-37 | Árbol inicial de 2 niveles, editable desde Configuración, sin enums. Se arma debajo de las categorías existentes, sin renombrarlas: Lubricante (Aceite auto, Aceite moto, Aceite 2 tiempos, Aceite de transmisión) · Filtro (Filtro de aire, Filtro de aceite) · Fluidos (Refrigerante, Líquido de freno, Limpiaparabrisas, Hidrolina) · Siliconas (Silicona, Silicona de empaque) |
 
 ### 3.3 Pendientes que todavía requieren decisión (del dueño o tuya)
 
@@ -722,9 +737,7 @@ Numeración continúa `09-BACKLOG.md` §2. **Negritas = necesarias antes de empe
 | ID | Decisión | Recomendación | Quién | Antes de |
 |---|---|---|---|---|
 | DEC-30 | Pago mixto (parte Yape, parte efectivo) en una misma venta | Un método por venta; si ocurre, dos ventas. Preguntar al dueño | Dueño | R4 |
-| DEC-34 | Almacenamiento de imágenes | Supabase Storage detrás de una interfaz `ImageStorage`; hasta decidir, solo campo + UI con íconos | Tú | R2 (subida) |
 | DEC-36 | Costo de compra y proveedor en la recepción | No por ahora (no se pidió; sin datos, P-16). El dashboard aclara que son ingresos, no ganancias | Tú | R3 |
-| DEC-37 | Agrupación de tipos en categorías de primer nivel (Aceites, Filtros, Fluidos, Siliconas, Otros) | Proponerla al dueño con la pantalla; es organización, no un dato del negocio | Dueño | R2 |
 | DEC-39 | Motivos de ajuste como chips | Propuesta "Conteo físico distinto", "Producto dañado", "Consumo interno", "Otro", con texto libre; validar con el dueño | Dueño | R3 |
 | DEC-40 | Rate limit | Por usuario autenticado, más alto en GET; login con límite propio | Tú | R7 |
 

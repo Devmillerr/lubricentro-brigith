@@ -6,9 +6,52 @@ import { paginate, type Page } from '../common/pagination';
 import { toStockView, type StockView } from '../inventory/inventory.service';
 import { forBusiness } from '../prisma/business-scope';
 import { PrismaService } from '../prisma/prisma.service';
+import { CATALOG_SUGGESTIONS } from './catalog-suggestions';
 import type { CreateProductDto } from './dto/create-product.dto';
 import type { ListProductsQueryDto } from './dto/list-products-query.dto';
 import type { UpdateProductDto } from './dto/update-product.dto';
+
+export interface FacetValue {
+  value: string;
+  count: number;
+  suggested: boolean;
+}
+
+export interface ProductFacets {
+  brands: FacetValue[];
+  viscosities: FacetValue[];
+  presentations: FacetValue[];
+}
+
+/**
+ * Primero los valores en uso (más productos primero), luego las sugerencias
+ * confirmadas que todavía no se usan, en su orden original.
+ */
+function buildFacet(values: (string | null)[], suggestions: readonly string[]): FacetValue[] {
+  const groups = new Map<string, Map<string, number>>();
+  for (const raw of values) {
+    const value = raw?.trim();
+    if (!value) continue;
+    const key = value.toLocaleLowerCase('es');
+    const spellings = groups.get(key) ?? new Map<string, number>();
+    spellings.set(value, (spellings.get(value) ?? 0) + 1);
+    groups.set(key, spellings);
+  }
+  const suggestedKeys = new Set(suggestions.map((value) => value.toLocaleLowerCase('es')));
+
+  const used: FacetValue[] = [...groups.entries()].map(([key, spellings]) => {
+    const [value] = [...spellings.entries()].sort((a, b) => b[1] - a[1])[0]!;
+    const count = [...spellings.values()].reduce((total, n) => total + n, 0);
+    return { value, count, suggested: suggestedKeys.has(key) };
+  });
+  used.sort((a, b) => b.count - a.count || a.value.localeCompare(b.value, 'es'));
+
+  const unused = suggestions
+    .filter((value) => !groups.has(value.toLocaleLowerCase('es')))
+    .map((value) => ({ value, count: 0, suggested: true }));
+
+  return [...used, ...unused];
+}
 
 @Injectable()
 export class ProductsService {
@@ -28,17 +71,42 @@ export class ProductsService {
     const where: Prisma.ProductWhereInput = {};
 
     if (query.search) {
+      const contains = { contains: query.search, mode: 'insensitive' } as const;
       where.OR = [
-        { name: { contains: query.search, mode: 'insensitive' } },
-        { brand: { contains: query.search, mode: 'insensitive' } },
-        { code: { contains: query.search, mode: 'insensitive' } },
+        { name: contains },
+        { brand: contains },
+        { code: contains },
+        { viscosity: contains },
+        { presentation: contains },
+        // Por vehículo compatible confirmado ("yaris" → sus filtros). La
+        // compatibilidad pertenece al mismo negocio que el producto (BR-F1).
+        {
+          compatibilities: {
+            some: { vehicleModel: { OR: [{ model: contains }, { make: contains }] } },
+          },
+        },
       ];
     }
     if (query.code) {
       where.code = { equals: query.code, mode: 'insensitive' };
     }
     if (query.categoryId) {
-      where.categoryId = query.categoryId;
+      where.categoryId = { in: await this.categoryWithChildren(businessId, query.categoryId) };
+    }
+    if (query.isActive !== undefined) {
+      where.isActive = query.isActive;
+    }
+    if (query.brand) {
+      where.brand = { equals: query.brand, mode: 'insensitive' };
+    }
+    if (query.viscosity) {
+      where.viscosity = { equals: query.viscosity, mode: 'insensitive' };
+    }
+    if (query.presentation) {
+      where.presentation = { equals: query.presentation, mode: 'insensitive' };
+    }
+    if (query.missingPrice) {
+      where.salePrice = null;
     }
 
     const rows = await forBusiness(this.prisma, businessId).product.findMany({
@@ -57,6 +125,36 @@ export class ProductsService {
     return { ...page, items };
   }
 
+  /**
+   * Valores para elegir en vez de escribir (BR-P19b): marcas, viscosidades y
+   * presentaciones de los productos activos (de la categoría y sus
+   * subcategorías, si se indica), con su conteo, más las sugerencias
+   * confirmadas por el dueño. Los valores iguales sin distinguir mayúsculas
+   * se agrupan con la escritura más usada.
+   */
+  async facets(businessId: string, categoryId?: string): Promise<ProductFacets> {
+    const where: Prisma.ProductWhereInput = { isActive: true };
+    if (categoryId) {
+      where.categoryId = { in: await this.categoryWithChildren(businessId, categoryId) };
+    }
+    const products = await forBusiness(this.prisma, businessId).product.findMany({ where });
+
+    return {
+      brands: buildFacet(
+        products.map((product) => product.brand),
+        CATALOG_SUGGESTIONS.brands,
+      ),
+      viscosities: buildFacet(
+        products.map((product) => product.viscosity),
+        CATALOG_SUGGESTIONS.viscosities,
+      ),
+      presentations: buildFacet(
+        products.map((product) => product.presentation),
+        CATALOG_SUGGESTIONS.presentations,
+      ),
+    };
+  }
+
   async create(businessId: string, dto: CreateProductDto): Promise<Product> {
     if (dto.categoryId) {
       await this.ensureCategoryExists(businessId, dto.categoryId);
@@ -71,6 +169,8 @@ export class ProductsService {
           categoryId: dto.categoryId,
           brand: dto.brand,
           code: dto.code,
+          viscosity: dto.viscosity,
+          presentation: dto.presentation,
           name: dto.name,
           unit: dto.unit,
           salePrice: dto.salePrice,
@@ -122,18 +222,32 @@ export class ProductsService {
     return rows.map((row) => row.vehicleModel);
   }
 
+  /** Una categoría activa del negocio: las desactivadas no reciben productos nuevos. */
   private async ensureCategoryExists(businessId: string, categoryId: string): Promise<void> {
     const category = await forBusiness(this.prisma, businessId).productCategory.findFirst({
       where: { id: categoryId },
     });
-    if (!category) {
+    if (!category?.isActive) {
       throw new ProblemException({
         status: HttpStatus.BAD_REQUEST,
         code: 'INVALID_REFERENCE',
         title: 'Referencia inválida',
-        errors: [{ field: 'categoryId', message: 'La categoría indicada no existe' }],
+        errors: [
+          {
+            field: 'categoryId',
+            message: category ? 'La categoría está desactivada' : 'La categoría indicada no existe',
+          },
+        ],
       });
     }
+  }
+
+  /** La categoría y sus subcategorías (máximo 2 niveles, BR-P18), dentro del negocio. */
+  private async categoryWithChildren(businessId: string, categoryId: string): Promise<string[]> {
+    const children = await forBusiness(this.prisma, businessId).productCategory.findMany({
+      where: { parentId: categoryId },
+    });
+    return [categoryId, ...children.map((child) => child.id)];
   }
 
   private async ensureExists(businessId: string, id: string): Promise<void> {

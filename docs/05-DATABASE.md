@@ -62,7 +62,7 @@ Cada punto abierto es **una columna de configuración**, no una estructura: deci
 `id, businessId, name?, phone?, notes?, isActive`. Ningún campo obligatorio salvo el id (BR-C3).
 
 ### VehicleModel
-`id, businessId, make, model, yearFrom?, yearTo?, engineNote?, isActive`. Año y motor son opcionales: el nivel de detalle de la compatibilidad se define con datos (BR-F6).
+`id, businessId, make?, model, yearFrom?, yearTo?, engineNote?, isActive`. `make` es opcional desde R2: el texto del dueño se guarda tal cual en `model`. Año y motor son opcionales: el nivel de detalle de la compatibilidad se define con datos (BR-F6).
 
 ### Vehicle
 | Campo | Notas |
@@ -78,7 +78,7 @@ Cada punto abierto es **una columna de configuración**, no una estructura: deci
 El "último km conocido" **se calcula** desde el mantenimiento activo más reciente con km. No se guarda.
 
 ### ProductCategory
-`id, businessId, name`. Semilla: **Lubricante** y **Filtro** (BR-P18).
+`id, businessId, name, parentId?, sortOrder, isActive`. Máximo 2 niveles (validado en el servicio). `name` único por negocio. Semilla: **Lubricante** y **Filtro** (BR-P18) y el árbol de DEC-37 debajo de ellas.
 
 ### Product
 | Campo | Notas |
@@ -91,6 +91,8 @@ El "último km conocido" **se calcula** desde el mantenimiento activo más recie
 | unit | Unidad en la que se cuenta y descuenta (BR-P15). Vocabulario a definir con P-07 |
 | salePrice? | Opcional. Se usará en la Fase 2 |
 | tracksStock | Por defecto `true` (BR-P16) |
+| viscosity?, presentation? | Texto opcional (R2). Sugerencias desde `GET /products/facets` |
+| imageKey? | Opcional (R2). Sin subida todavía (DEC-34): la UI muestra un placeholder |
 | stockQuantity | Saldo en caché, `Decimal(12,3)`, por defecto 0. Solo lo escribe el StockLedger (R1) |
 | isCounted | En caché: tiene al menos un `COUNT` (BR-P8). Solo lo escribe el StockLedger (R1) |
 | isActive | |

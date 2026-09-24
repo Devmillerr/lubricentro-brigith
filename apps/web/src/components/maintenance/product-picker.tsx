@@ -46,7 +46,9 @@ export function ProductPicker({
   );
   const results = useApiQuery(term ? `maintenance-products:${term}` : null, () =>
     callApi(
-      api.GET('/products', { params: { query: { search: term, includeStock: true, limit: 10 } } }),
+      api.GET('/products', {
+        params: { query: { search: term, includeStock: true, isActive: true, limit: 10 } },
+      }),
     ),
   );
 

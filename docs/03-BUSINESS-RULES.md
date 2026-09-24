@@ -112,7 +112,8 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 | BR-P15 | Cada producto es una unidad de stock en la que se cuenta y se descuenta. La cantidad admite decimales. El aceite de balde se vende por litros o el balde completo. Qué presentaciones existen de cada producto y la capacidad de cada balde no se asumen. | Aceite de balde: [CONFIRMADO] (`10-OPERACION-REAL.md` §0.4) · presentaciones y capacidad: [PENDIENTE] P-07 |
 | BR-P16 | Por defecto un producto controla stock. Puede marcarse sin control de stock. | [TÉCNICO] |
 | BR-P17 | Los precios de venta son opcionales en el catálogo. Ningún precio se asume. | [PENDIENTE] P-07 |
-| BR-P18 | Categorías iniciales: **Lubricante** y **Filtro** (lo confirmado en C-03). Otras se agregan desde la app. | [TÉCNICO] |
+| BR-P18 | Categorías iniciales: **Lubricante** y **Filtro** (lo confirmado en C-03). Las categorías tienen como máximo 2 niveles (categoría → subcategoría) y son datos editables desde Configuración (crear, renombrar, mover, ordenar, desactivar); no hay taxonomía fija. | [TÉCNICO] · árbol inicial: [DECISIÓN] DEC-37 |
+| BR-P19b | Marca, viscosidad, presentación, código, precio e imagen son **opcionales** en todo producto. Se ofrecen como sugerencias (valores ya usados y confirmados por el dueño); nunca se inventan ni se exigen. Sin imagen se muestra un placeholder. | [DECISIÓN] R2 · DEC-34 |
 
 ## BR-F — Compatibilidad de filtros
 
@@ -123,7 +124,7 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 | BR-F3 | La compatibilidad es informativa: nunca bloquea usar un producto en un mantenimiento. | [TÉCNICO] |
 | BR-F4 | Cada compatibilidad guarda quién la confirmó y cuándo. | [TÉCNICO] |
 | BR-F5 | Los códigos de filtros de aire y de aceite que dio el dueño, y las compatibilidades que indicó, son datos reales (`10-OPERACION-REAL.md` §0.4). Las compatibilidades que no dio no se cargan ni se suponen. | Códigos y compatibilidades dadas: [CONFIRMADO] · compatibilidades faltantes: [PENDIENTE] P-08 |
-| BR-F6 | Nivel de detalle de la compatibilidad (marca y modelo; año; motor). El modelo de vehículo admite año y motor opcionales, así que el nivel se define con datos, no con estructura. | [DECISIÓN PENDIENTE] DEC-07 · [PENDIENTE] P-08 |
+| BR-F6 | Nivel de detalle de la compatibilidad (marca y modelo; año; motor). El modelo de vehículo admite marca, año y motor opcionales, así que el nivel se define con datos, no con estructura; los textos del dueño se guardan tal cual en `model` ("Kia 2016"). | [DECISIÓN PENDIENTE] DEC-07 · [PENDIENTE] P-08 |
 | BR-F7 | Un aviso "¿marcar como compatible?" al usar un filtro sin compatibilidad. | [DECISIÓN PENDIENTE] DEC-06 · **fuera del MVP** |
 
 ## BR-I — Indicadores del piloto

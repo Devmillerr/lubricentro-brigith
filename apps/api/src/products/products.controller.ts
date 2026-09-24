@@ -24,10 +24,15 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AccessTokenPayload } from '../auth/types/jwt-payload';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ListProductsQueryDto } from './dto/list-products-query.dto';
+import { ProductFacetsQueryDto } from './dto/product-facets-query.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductsService } from './products.service';
 import { AUTH_ERRORS, ApiErrors, VALIDATION_ERRORS } from '../common/openapi/api-errors.decorator';
-import { ProductPageResponse, ProductResponse } from './dto/product.response';
+import {
+  ProductFacetsResponse,
+  ProductPageResponse,
+  ProductResponse,
+} from './dto/product.response';
 import { VehicleModelResponse } from '../vehicles/dto/vehicle-model.response';
 
 @ApiTags('products')
@@ -43,6 +48,13 @@ export class ProductsController {
   @Get()
   list(@CurrentUser() user: AccessTokenPayload, @Query() query: ListProductsQueryDto) {
     return this.productsService.list(user.businessId, query);
+  }
+
+  @ApiOkResponse({ type: ProductFacetsResponse })
+  @ApiErrors({ 400: VALIDATION_ERRORS })
+  @Get('facets')
+  facets(@CurrentUser() user: AccessTokenPayload, @Query() query: ProductFacetsQueryDto) {
+    return this.productsService.facets(user.businessId, query.categoryId);
   }
 
   @ApiCreatedResponse({ type: ProductResponse })
