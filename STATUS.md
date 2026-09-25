@@ -1,8 +1,25 @@
 # STATUS — Estado del proyecto
 
-**Actualizado:** 2026-09-24
+**Actualizado:** 2026-09-25
 
-## Corte actual (2026-09-24)
+## Estado al 2026-09-25
+
+- **R2 y las correcciones previas a R3 ya tienen commit y están en `origin/main`** (lo que sigue en las secciones del 2026-09-24 como "sin commit" ya no aplica):
+  - `2e27013` feat(catalog): implement R2 product catalog foundation
+  - `d933504` fix: complete pre-R3 auth reminders CI and repo cleanup
+  - `368fa31` fix(ci): generate Prisma client before api generation
+- **CI en verde** en GitHub Actions con `368fa31` (confirmado por el usuario). Repo: https://github.com/Devmillerr/lubricentro-brigith
+- **R2 cerrado y consolidado. Baseline estable previa a R3: `368fa31`.**
+- Verificado el 2026-09-25: `HEAD` = `origin/main` = `368fa31`; `prisma migrate status` contra Supabase dice "Database schema is up to date" (8 migraciones, la última es `20260924011039_r2_catalog`); unitarias 238/238. Integración (22/22) y e2e (4/4) no se volvieron a correr: son los últimos resultados válidos.
+- **R3 no iniciado.** No se escribe código, no se crean migraciones ni se preparan commits de R3 sin autorización explícita del usuario.
+- **Prueba manual del login con el usuario `demo` cerrada (2026-09-25).** Se hizo contra la API local (puerto 4000) conectada a Supabase y la web en `next dev` (puerto 3000):
+  - **Login incorrecto: OK.** Lo probó la IA en Chrome con una contraseña inventada. Muestra "Usuario o contraseña incorrectos.", marca los campos en rojo y no entra.
+  - **Login correcto: OK.** Lo probó el usuario a mano: desde `/login` entra a Inicio.
+  - **Persistencia de sesión tras recarga: OK** (usuario).
+- **Ya no queda ningún pendiente funcional antes de R3.**
+- **Pendientes del piloto (registrados, sin resolver):** rate limit (`429` con `HTTP_ERROR`), mensajes de validación en inglés, `trust proxy`, DEC-01, DEC-03, DEC-10 (hosting), P-01 y P-13.
+
+## Corte anterior (2026-09-24)
 
 - **R1 cerrado:** commit `3316de6` "feat(api): implement stock ledger and cached inventory", ya en `origin/main`. Migración `20260924001851_r1_stock_ledger` aplicada en Supabase.
 - **R2 (Catálogo) implementado y validado localmente**, sin commit:
@@ -21,7 +38,7 @@
 
 ## Sesión 2026-09-24 (b): correcciones previas a R3 (sin commit ni push)
 
-No se inició R3 ni se tocó el catálogo R2. **El login correcto queda pendiente de la prueba manual del usuario.**
+No se inició R3 ni se tocó el catálogo R2. El login correcto quedó pendiente de la prueba manual del usuario, que se hizo el 2026-09-25 (OK).
 
 - **CI:** `.github/workflows/ci.yml` ya no pasa `with: version: 10` a `pnpm/action-setup@v4`. La versión sale de `packageManager` (`pnpm@10.15.0`). No se probó en GitHub Actions.
 - **Recordatorios (`PATCH /reminders/:id`):** no se reabre uno `DONE` (409 `REMINDER_DONE`) ni uno cuyo mantenimiento de origen está `VOIDED` (409 `REMINDER_SOURCE_VOIDED`). Si ya hay otro abierto para el mismo vehículo y tipo, responde 409 `REMINDER_OPEN_EXISTS`, tanto por la verificación previa como si falla el único parcial (P2002). Ya no devuelve 500. Descartar uno ya cerrado devuelve 409 `REMINDER_ALREADY_CLOSED` para no pisar el motivo "mantenimiento anulado" ni "cumplido". `GET /reminders/:id` agrega `closeReason` y `reopenBlockedBy`. La web oculta "Reabrir" cuando `reopenBlockedBy` no es null y explica el motivo.
@@ -151,11 +168,11 @@ Datos de prueba que quedan en demo (no se borraron: la UI solo desactiva, y borr
 
 ## Último commit
 
-"feat(api): implement stock ledger and cached inventory" (`3316de6`, R1), sobre `94a1a63`, `ebc4c5e`, `585fb5d` y `ba39d83` (`v1.0-mvp`). Ya en `origin/main`. Las migraciones `20260922200000_idempotency_key_per_endpoint` y `20260924001851_r1_stock_ledger` están aplicadas en Supabase: no borrarlas, renombrarlas ni modificarlas. R2 sigue sin commit.
+`368fa31` "fix(ci): generate Prisma client before api generation", sobre `d933504` (pre-R3), `2e27013` (R2), `3316de6` (R1) y `ba39d83` (`v1.0-mvp`). Todo en `origin/main`, CI en verde. Las migraciones `20260922200000_idempotency_key_per_endpoint`, `20260924001851_r1_stock_ledger` y `20260924011039_r2_catalog` están aplicadas en Supabase: no borrarlas, renombrarlas ni modificarlas.
 
 ## Próximo paso
 
-0. R2 ya está en Supabase: falta el commit (solo cuando el usuario lo pida). No empezar R3. Migración `20260924011039_r2_catalog` aplicada: no borrarla, renombrarla ni modificarla. Pendiente para un corte de limpieza: retirar `Business.insufficientStockPolicy` de Configuración y de la API (hoy no tiene efecto).
-1. Confirmar en GitHub Actions que CI pasa con `94a1a63` (incluido el paso "Lint" y `pnpm api:generate`).
-2. Probar el login correcto e incorrecto con el usuario `demo` (lo único que falta de la prueba manual) y decidir si se bloquea reabrir recordatorios de mantenimientos anulados.
-3. Decidir el estado del recordatorio en la búsqueda por placa y el rate limit antes del piloto.
+1. ~~Probar el login correcto e incorrecto con el usuario `demo`~~: hecho el 2026-09-25 (correcto, incorrecto y recarga OK).
+2. R3 solo cuando el usuario lo autorice de forma explícita (antes, revisar `docs/10-OPERACION-REAL.md` y `docs/09-BACKLOG.md` §1).
+3. Antes del piloto: rate limit (`429`, `Retry-After`), mensajes en inglés, `trust proxy` y decisiones DEC-01, DEC-03, DEC-10 (hosting), P-01 y P-13.
+4. Corte de limpieza: retirar `Business.insufficientStockPolicy` de Configuración y de la API (hoy no tiene efecto), y los hallazgos menores de UI.
