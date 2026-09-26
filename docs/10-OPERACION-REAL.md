@@ -8,6 +8,8 @@ Etiquetas: ver `03-BUSINESS-RULES.md`. Nada de este documento está implementado
 
 **Cambios de la v0.2:** respuestas confirmadas del dueño (cobro del cambio de aceite, aceite de balde, lavado de moto y camioneta, catálogo con códigos de filtros) y rediseño de Clientes + Avisar por WhatsApp. Ver §0, §2.2, §2.3, §2.5, §2.11, §3 y §4.
 
+**Cambios del 2026-09-26 (alcance de R4, aprobado por el usuario):** DEC-30 cerrada (un método de pago por venta); R4 fijado como ventas de mostrador + consultas + anulación + su UI; `ProductSaleUnit` fuera de R4; la venta aplica `BLOCK` fijo y no lee `Business.insufficientStockPolicy`. Ver §2.1, §2.5, §2.6, §2.7, §2.10 y §3.2e.
+
 ---
 
 ## 0. Datos del dueño
@@ -226,7 +228,7 @@ Ver §3 (lista completa con recomendación).
 
 1. **Un solo libro de dinero:** todo ingreso (venta de mostrador, lavado, cobro de mantenimiento) es una `Sale`. El dashboard suma una sola tabla. Nunca hay un ingreso fuera de `Sale`.
 2. **Un solo libro de stock:** todo cambio de stock es un `InventoryMovement` (como hoy). **Una línea de venta no mueve stock por sí misma**: el stock lo mueve la operación que consumió el producto (venta de mostrador → `SALE`; mantenimiento → `MAINTENANCE_USE`). Así nunca se descuenta ni se cobra dos veces.
-3. **Un solo escritor de stock:** `StockLedger.apply(tx, movimientos)` bloquea las filas de producto (`FOR UPDATE`), evalúa la política, inserta movimientos y actualiza `Product.stockQuantity` en la misma transacción. Venta, recepción, ajuste, conteo, mantenimiento y anulaciones lo usan todos.
+3. **Un solo escritor de stock:** `StockLedger.apply(tx, movimientos)` bloquea las filas de producto (`FOR UPDATE`), evalúa la política que fija cada operación (no una configuración del negocio: la venta usa `BLOCK`; el mantenimiento, el conteo, la recepción y el ajuste usan `WARN`; DEC-26), inserta movimientos y actualiza `Product.stockQuantity` en la misma transacción. Venta, recepción, ajuste, conteo, mantenimiento y anulaciones lo usan todos.
 4. **Seleccionar, no escribir:** todo valor conocido (categoría, tipo, marca, viscosidad, presentación, variante, tipo de lavado, precio de lavado, método de pago) viene de una tabla y se elige con chips/tarjetas.
 5. **Nada obligatorio que el negocio no pida:** venta y lavado sin cliente ni placa.
 
@@ -262,7 +264,7 @@ Ver §3 (lista completa con recomendación).
 - **Reactivar** con `PATCH /products/:id { isActive: true }` (ya existía en la API).
 - **Filtros del catálogo:** estado, categoría (incluye sus subcategorías), marca, viscosidad, presentación y sin precio. La búsqueda también cubre viscosidad, presentación y el vehículo compatible.
 - **`VehicleModel.make` opcional:** las compatibilidades guardan el texto del dueño tal cual en `model` ("Kia 2016"). Separar marca y año sigue siendo DEC-07.
-- **No se hace en R2:** tabla `Brand`, `CatalogOption`, variantes masivas, formas de venta (`ProductSaleUnit`, R4), subida de imágenes, cambios de rate limit.
+- **No se hace en R2:** tabla `Brand`, `CatalogOption`, variantes masivas, formas de venta (`ProductSaleUnit`: fuera de R4 por decisión del 2026-09-26; va en un corte posterior, cuando se conozca la capacidad del balde), subida de imágenes, cambios de rate limit.
 - **Siembra (solo negocio brigith):** árbol de categorías, 13 filtros de aire y 14 de aceite como productos (sin marca, precio, imagen ni conteo) y las 11 compatibilidades de filtros de aire confirmadas. 2001 y 0Y040 quedan sin compatibilidad. No se siembran aceites ni fluidos. El negocio demo no se toca.
 
 ### 2.3 Modelo de datos propuesto
@@ -323,7 +325,7 @@ model Product {                    // MODIFICADO
 /// balde completo ([CONFIRMADO] §0.4). El stock se lleva en `Product.unit`
 /// (para el balde: litros) y cada forma de venta descuenta `factor` unidades.
 /// Los productos normales no tienen filas aquí: se venden en su propia unidad (factor 1).
-model ProductSaleUnit {            // NUEVO
+model ProductSaleUnit {            // NUEVO — fuera de R4 (§3.2e)
   id, businessId, productId
   label      String                // "Litro", "Balde completo"
   factor     Decimal @db.Decimal(12, 3)   // unidades de stock por unidad vendida. "Balde completo" se agrega solo cuando se conozca su capacidad en L [PENDIENTE]; mientras tanto el producto se vende en su propia unidad
@@ -380,11 +382,11 @@ model SaleLine {                   // NUEVO (con businessId: el dashboard agrega
   kind              SaleLineKind
   productId         String?   // PRODUCT
   washTypeId        String?   // WASH
-  saleUnitId        String?   // forma de venta usada (litro/balde); nulo = unidad del producto
-  saleUnitLabelSnapshot String?
+  saleUnitId        String?   // forma de venta usada (litro/balde); nulo = unidad del producto. Fuera de R4: no se crea en R4
+  saleUnitLabelSnapshot String?   // fuera de R4, igual que saleUnitId
   descriptionSnapshot String  // "Repsol 10W40 1.5 L", "Lavado Auto", "Cambio de aceite" (BR-G6)
   codeSnapshot      String?
-  quantity          Decimal @db.Decimal(12, 3)   // en la forma de venta; stock descontado = quantity × factor
+  quantity          Decimal @db.Decimal(12, 3)   // en la forma de venta; stock descontado = quantity × factor (en R4, sin formas de venta: quantity en la unidad del producto)
   unitPrice         Decimal @db.Decimal(10, 2)  // precio aplicado
   subtotal          Decimal @db.Decimal(10, 2)
   movesStock        Boolean   // true solo en PRODUCT de mostrador; nunca en SERVICE
@@ -460,8 +462,8 @@ Filtros (tarjeta)
 
 **Venta de productos** (mostrador, sin cliente ni placa)
 Flujo del mapa: Inicio → Vender → categorías → productos → carrito → pago → confirmar.
-1. Inicio → **Vender**. 2. Elegir categoría y tocar productos (o buscarlos); cada toque suma 1, con −/+ en la barra del carrito. Si el producto tiene formas de venta (aceite de balde), se elige **Litro** o **Balde completo** y la cantidad (admite decimales en litros). 3. Barra fija: "3 productos · S/ 120.00 → Cobrar". 4. Pantalla de cobro: líneas con precio aplicado (editable si DEC-29 lo permite; si el producto aún no tiene precio en el catálogo, el dueño escribe el monto que cobra en esa venta, sin tener que completar el catálogo), total, dos botones grandes **Efectivo** / **Yape** para elegir el pago y **Confirmar**. 5. `POST /sales` (idempotente) → `SALE` por línea con `movesStock` → saldo en caché baja → invalidación → dashboard actualizado. 6. Confirmación con **Deshacer** (anula) durante unos segundos.
-- Stock insuficiente: según DEC-26/27; el servidor responde 422 con producto, saldo y cantidad; la UI permite corregir la cantidad o (si la política lo permite) confirmar.
+1. Inicio → **Vender**. 2. Elegir categoría y tocar productos (o buscarlos); cada toque suma 1, con −/+ en la barra del carrito. La cantidad admite decimales en la unidad del producto (p. ej. litros). Elegir **Litro** o **Balde completo** (formas de venta, `ProductSaleUnit`) queda **fuera de R4**: en R4 cada producto se vende en su propia unidad. 3. Barra fija: "3 productos · S/ 120.00 → Cobrar". 4. Pantalla de cobro: líneas con precio aplicado (editable si DEC-29 lo permite; si el producto aún no tiene precio en el catálogo, el dueño escribe el monto que cobra en esa venta, sin tener que completar el catálogo), total, dos botones grandes **Efectivo** / **Yape** para elegir el pago y **Confirmar**. 5. `POST /sales` (idempotente) → `SALE` por línea con `movesStock` → saldo en caché baja → invalidación → dashboard actualizado. 6. Confirmación con **Deshacer** (anula) durante unos segundos.
+- Stock insuficiente (DEC-26/27; decisión de R4 del 2026-09-26): la venta aplica **`BLOCK` fijo** y **no** lee `Business.insufficientStockPolicy`. Si un producto **con conteo** no alcanza, el servidor responde 422 `INSUFFICIENT_STOCK` con producto, saldo y cantidad, y **no se guarda nada** de la venta. La UI permite corregir la cantidad o quitar el producto; **no hay "confirmar igual"**. Un producto **sin conteo** se vende con aviso de stock no confiable.
 
 **Recepción de mercadería** (lote)
 1. Inventario → **Recibir**. 2. Elegir productos (catálogo/búsqueda, con filtro rápido "Aceites auto/moto" por ser la reposición semanal). 3. Cantidad con −/+ o teclado. 4. **Guardar recepción** → `POST /inventory/receipts` con todas las líneas → una cabecera + N `PURCHASE_IN` en una transacción. 5. Historial de recepciones con detalle.
@@ -498,7 +500,7 @@ Flujo del mapa: Inicio → Vender → categorías → productos → carrito → 
 |---|---|---|
 | BR-V1…V4 | Venta: pasa de Fase 2 a implementación; métodos Efectivo/Yape; `SALE` por línea de mostrador | [DECISIÓN] al aprobar |
 | BR-V5 | Todo ingreso es una `Sale`; una línea de venta no mueve stock, lo mueve la operación que consumió el producto | [TÉCNICO] |
-| BR-V6 | Una venta tiene un solo método de pago | [TÉCNICO] provisional · pago mixto [PENDIENTE] DEC-30 |
+| BR-V6 | Una venta tiene un solo método de pago: `CASH` o `YAPE` | [DECISIÓN] DEC-30 (aprobada el 2026-09-26). El pago mixto queda fuera de R4, como decisión futura |
 | BR-V7 | Anular una venta exige motivo, genera `SALE_VOID` de sus líneas con stock y la saca de los totales | [TÉCNICO] |
 | BR-V8 | El precio aplicado se guarda en la línea; cambiar el precio del catálogo no altera ventas pasadas | [TÉCNICO] (BR-G6) |
 | BR-L2 | Lavado: tipo → precio (de sus opciones) → pago → confirmar; sin cliente ni placa | [DECISIÓN] mapa funcional · DEC-44 |
@@ -513,7 +515,7 @@ Flujo del mapa: Inicio → Vender → categorías → productos → carrito → 
 | BR-C3 | Cliente: el **nombre** es el dato principal; el **teléfono es opcional** al registrar o guardar. Solo se pide al enviar un WhatsApp. No se agregan otros datos obligatorios; los vehículos se asocian cuando corresponda | [DECISIÓN] DEC-45 (coherente con BR-C3 y D-08) |
 | BR-W8 | Avisar desde un cliente: elegir cliente → vehículo (si aplica) → mensaje prellenado → `wa.me`; se registra el aviso. Se permite aviso manual sin recordatorio, siempre que haya teléfono | [DECISIÓN] DEC-43, DEC-46 |
 | BR-P7b | Ajuste = el dueño ingresa la cantidad física; el sistema guarda anterior, diferencia y resultante | [TÉCNICO] |
-| BR-P11/P12 | Política de stock negativo | [DECISIÓN PENDIENTE] DEC-26/27 |
+| BR-P11/P12 | Política de stock negativo: la venta se bloquea (`BLOCK` fijo, sin leer `Business.insufficientStockPolicy` ni "confirmar igual"); el mantenimiento avisa y continúa; sin conteo, se vende y se usa con aviso | [DECISIÓN] DEC-26/27 (aprobadas el 2026-09-23) · `BLOCK` fijo en la venta (2026-09-26) |
 | BR-P19 | Stock que requiere atención = agotados, negativos y sin conteo inicial. No hay stock mínimo por producto | [DECISIÓN] mapa funcional · resuelve DEC-28 |
 | BR-P20 | Opciones de catálogo (viscosidad, presentación, variante) solo desde valores confirmados; el dueño agrega nuevas desde la app | [TÉCNICO] |
 | BR-I1 | Adopción cuenta mantenimientos, ventas y lavados activos | [TÉCNICO] |
@@ -535,7 +537,7 @@ Todas las escrituras de dinero o stock exigen `Idempotency-Key` y aceptan `id` U
 | PUT/DELETE | `/products/:id/image` | Depende de DEC-34 |
 | GET | `/inventory/receipts`, `/inventory/receipts/:id` | Historial con líneas |
 | GET | `/inventory/alerts` | `{ outOfStock[], negative[], notCountedCount }` |
-| POST | `/sales` | `{ id?, paymentMethod, occurredAt?, note?, lines: [{ productId, saleUnitId?, quantity, unitPrice }] }` → `SaleResponse` + `warnings` |
+| POST | `/sales` | `{ id?, paymentMethod, occurredAt?, note?, lines: [{ productId, quantity, unitPrice }] }` → `SaleResponse` + `warnings`. Sin `saleUnitId` en R4 |
 | GET | `/sales` | `?from&to&source&paymentMethod&status&cursor&limit` |
 | GET | `/sales/:id` | Con líneas |
 | POST | `/sales/:id/void` | `{ reason }` |
@@ -543,7 +545,7 @@ Todas las escrituras de dinero o stock exigen `Idempotency-Key` y aceptan `id` U
 | POST/PATCH | `/wash-types`, `/wash-types/:id`, `/wash-types/:id/prices` | Configuración (Configuración → Lavados) |
 | POST | `/washes` | `{ id?, washTypeId, priceOptionId, paymentMethod, occurredAt? }` → `SaleResponse` |
 | POST | `/maintenances/:id/charge` | `{ paymentMethod, totalAmount }` → `SaleResponse` (una línea SERVICE) |
-| PUT | `/products/:id/sale-units` | `[{ label, factor, salePrice? }]` (formas de venta: litro/balde) |
+| PUT | `/products/:id/sale-units` | `[{ label, factor, salePrice? }]` (formas de venta: litro/balde). **Fuera de R4** |
 | POST | `/customers/with-vehicles` | `{ name, phone?, vehicles?: [{ plate, vehicleModelId? }] }` → cliente + vehículos en una transacción (alta desde Avisar) |
 | GET | `/customers/:id/reminders` | Recordatorios abiertos de todos sus vehículos, para elegir sobre cuál avisar |
 | POST | `/customers/:id/contacts` | Aviso manual sin recordatorio (DEC-46): `{ vehicleId? }` → `{ waLink, message }` y guarda el historial. Si el cliente no tiene teléfono responde `CUSTOMER_PHONE_REQUIRED` (el teléfono se guarda antes con `PATCH /customers/:id`) |
@@ -573,14 +575,14 @@ Todas las escrituras de dinero o stock exigen `Idempotency-Key` y aceptan `id` U
 // POST /sales
 CreateSaleDto { id?: uuid; paymentMethod: 'CASH'|'YAPE'; occurredAt?: ISO8601; note?: string(≤500);
   lines: CreateSaleLineDto[] (1..50, productId único) }
-CreateSaleLineDto { productId: uuid; saleUnitId?: uuid; quantity: number > 0; unitPrice: number ≥ 0 (2 decimales) }
+CreateSaleLineDto { productId: uuid; quantity: number > 0; unitPrice: number ≥ 0 (2 decimales) }   // sin saleUnitId en R4
 
 // POST /maintenances (bloque nuevo) y POST /maintenances/:id/charge
 MaintenanceChargeDto { paymentMethod: 'CASH'|'YAPE'; totalAmount: number > 0 (2 decimales) }
 
 SaleResponse { id; source; status; paymentMethod; total: string; occurredAt; vehicleId|null;
   maintenanceId|null; lines: SaleLineResponse[]; voidedAt|null; voidReason|null }
-SaleLineResponse { id; kind; productId|null; washTypeId|null; saleUnitId|null; saleUnitLabelSnapshot|null;
+SaleLineResponse { id; kind; productId|null; washTypeId|null;   // saleUnitId y saleUnitLabelSnapshot: fuera de R4
   descriptionSnapshot; codeSnapshot|null; quantity: string; unitPrice: string; subtotal: string; movesStock }
 CreateSaleResult = SaleResponse & { warnings: StockWarning[] }   // mismo formato que mantenimiento
 
@@ -605,7 +607,7 @@ DashboardResponse {
 
 Montos como `string` decimal (igual que hoy `Decimal` serializado), nunca `float`.
 
-Errores nuevos: `INSUFFICIENT_STOCK` (422, ya existe), `SALE_NOT_FOUND`, `SALE_ALREADY_VOIDED`, `SALE_TOTAL_MISMATCH`, `WASH_PRICE_NOT_IN_TYPE`, `SALE_UNIT_NOT_IN_PRODUCT`, `PHONE_ALREADY_REGISTERED` (aviso, no error), `CATALOG_OPTION_NOT_ALLOWED`, `MAINTENANCE_ALREADY_CHARGED`, `DUPLICATE_PRODUCT_LINE`.
+Errores nuevos: `INSUFFICIENT_STOCK` (422, ya existe), `SALE_NOT_FOUND`, `SALE_ALREADY_VOIDED`, `SALE_TOTAL_MISMATCH`, `WASH_PRICE_NOT_IN_TYPE`, `SALE_UNIT_NOT_IN_PRODUCT` (fuera de R4), `PHONE_ALREADY_REGISTERED` (aviso, no error), `CATALOG_OPTION_NOT_ALLOWED`, `MAINTENANCE_ALREADY_CHARGED`, `DUPLICATE_PRODUCT_LINE`.
 
 ### 2.8 Estrategia de actualización del dashboard
 
@@ -638,7 +640,7 @@ Barra inferior de 5:
 | R1 | `StockLedger` + `Product.stockQuantity/isCounted` + `createdById` en movimientos + bloqueo en conteo/ingreso/ajuste | Invariante caché = suma de movimientos; bloqueo concurrente (integración Postgres); política de stock |
 | R2 | Catálogo según §2.2b: categorías de 2 niveles, viscosidad/presentación/imagen opcionales, facetas, filtros, búsqueda por vehículo, `make` opcional, siembra confirmada | Profundidad y ciclos de categorías; filtros y facetas; aislamiento entre negocios; siembra idempotente |
 | R3 | Recepción en lote + ajuste por cantidad física + alertas | Lote atómico (una línea inválida → nada); idempotencia; anterior/diferencia/resultante |
-| R4 | Ventas (`Sale`, `SaleLine`) + anulación | Total calculado en servidor; stock baja una vez; anulación revierte; idempotencia; 422 por stock |
+| R4 | Ventas de mostrador (`Sale`, `SaleLine`, `source = COUNTER`) + consultas + anulación **y su UI** (Vender, historial de ventas y anulación). Un método de pago por venta (DEC-30). Stock insuficiente: `BLOCK` fijo, sin leer `Business.insufficientStockPolicy`. **Fuera:** `ProductSaleUnit` y `saleUnitId`, `WASH` (R5), cobro de mantenimiento (R6), dashboard (R7), clientes (R8) y pago mixto. Ver §3.2e | Total calculado en servidor; stock baja una vez; anulación revierte; idempotencia; 422 por stock con rollback de toda la venta |
 | R5 | Lavados (`WashType`, `WashPriceOption`, `POST /washes`) | Precio debe pertenecer al tipo; se registra sin cliente ni placa |
 | R6 | Cobro de mantenimiento + anulación conjunta + (DEC-31) | Sin doble descuento ni doble ingreso; anular mantenimiento anula venta; anular venta no toca stock |
 | R7 | Dashboard + indicadores del piloto + throttler | Agregación por zona horaria (integración: venta 23:30 Lima cae en el día correcto); excluye anuladas; aislamiento en SQL crudo |
@@ -646,7 +648,7 @@ Barra inferior de 5:
 
 Se agrega una suite `test/integration` contra el Postgres de CI (ya existe en `ci.yml`) para lo que el fake no puede probar: bloqueos, SQL crudo, zonas horarias, índice único parcial.
 
-**Fase 4 — Frontend:** capa de datos (DEC-38) → navegación → catálogo visual → venta → lavado → recepción/ajuste → mantenimiento con cobro → clientes y Avisar desde cliente → dashboard con gráficos. Sin mocks: todo contra la API real.
+**Fase 4 — Frontend:** R3 (DEC-52) y R4 (§3.2e) incluyen su propia UI por decisión del usuario. El resto: capa de datos (DEC-38) → navegación → catálogo visual → venta → lavado → recepción/ajuste → mantenimiento con cobro → clientes y Avisar desde cliente → dashboard con gráficos. Sin mocks: todo contra la API real.
 
 **Fase 5 — Integración:** los recorridos del pedido (venta → stock → ingresos → dashboard; recepción → stock; mantenimiento → stock → recordatorio → ingreso; lavado → ingreso → dashboard; totales Yape/efectivo cuadran con la suma de ventas; cliente con dos vehículos → aviso del vehículo correcto sin reescribir nombre ni teléfono) probados en el negocio demo, en navegador a 390 px.
 
@@ -744,13 +746,25 @@ Registradas en `09-BACKLOG.md` §2. Las reglas pasaron a `03-BUSINESS-RULES.md` 
 | DEC-51 | Recepción y ajuste rechazados sobre productos inactivos (409 `PRODUCT_INACTIVE`, lote completo) |
 | DEC-52 | La UI forma parte de R3 |
 
+### 3.2e Aprobadas por el usuario para R4 (2026-09-26)
+
+Registradas en `09-BACKLOG.md` §2 (decisiones) y §3 (sección R4, ítems B-100, B-101 y B-130 a B-136).
+
+| ID | Decisión |
+|---|---|
+| DEC-30 | **Un solo método de pago por venta:** `CASH` o `YAPE` (BR-V6). El pago mixto queda fuera de R4 y pendiente como decisión futura (se preguntará al dueño, §3.4) |
+| — | **Alcance de R4:** API de ventas de mostrador (`POST /sales`, `GET /sales`, `GET /sales/:id`, `POST /sales/:id/void`) **y su UI**: Vender, historial de ventas y anulación |
+| — | **`ProductSaleUnit` fuera de R4:** `saleUnitId` no entra en el contrato; cada producto se vende en su propia unidad |
+| — | **Stock insuficiente en la venta:** `BLOCK` fijo (aplica DEC-26). La venta no lee `Business.insufficientStockPolicy` ni permite "confirmar igual". La limpieza de esa configuración queda para un corte posterior |
+
+Fuera de R4 además: lavados (R5), cobro de mantenimiento (R6), dashboard (R7) y clientes (R8).
+
 ### 3.3 Pendientes que todavía requieren decisión (del dueño o tuya)
 
-Numeración continúa `09-BACKLOG.md` §2. **Negritas = necesarias antes de empezar el corte indicado.**
+Numeración continúa `09-BACKLOG.md` §2. **Negritas = necesarias antes de empezar el corte indicado.** DEC-30 se cerró para R4 (§3.2e).
 
 | ID | Decisión | Recomendación | Quién | Antes de |
 |---|---|---|---|---|
-| DEC-30 | Pago mixto (parte Yape, parte efectivo) en una misma venta | Un método por venta; si ocurre, dos ventas. Preguntar al dueño | Dueño | R4 |
 | DEC-40 | Rate limit | Por usuario autenticado, más alto en GET; login con límite propio | Tú | R7 |
 
 
@@ -765,7 +779,7 @@ No bloquean el código; sí la carga real y algunos textos:
 - Combinaciones y presentaciones de refrigerante.
 - Compatibilidades de los filtros de aire 2001 y 0Y040 (y el nombre "envidia"), modelos exactos de los Kia/Hyundai, años de "Yaris moderno", y compatibilidades de los filtros de aceite.
 - Texto del mensaje de WhatsApp (P-13); días de anticipación (P-05); código de país y formato de los teléfonos existentes (P-01).
-- Si usa pago mixto (DEC-30) y si rebaja precios (DEC-29).
+- Si usa pago mixto (decisión futura; R4 usa un solo método por venta, DEC-30) y si rebaja precios (DEC-29).
 
 ---
 

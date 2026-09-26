@@ -10,6 +10,17 @@
 - **Migración de R3 aplicada en Supabase y Supabase alineado con `schema.prisma`** (detalle más abajo): 9 migraciones, `migrate status` al día y `migrate diff` sin diferencias.
 - **Baseline estable: `1588d85`.** Lo que sigue en esta sección y en la del 2026-09-25 como "sin commit" o "siguiente" ya no aplica para R3.
 
+### R4 definido en documentación (2026-09-26, sin código ni commit)
+
+- **Decisiones aprobadas por el usuario:**
+  - **DEC-30:** un solo método de pago por venta (`CASH` o `YAPE`). El pago mixto queda como decisión futura.
+  - **Alcance:** R4 incluye la API de ventas de mostrador (crear, consultar, anular) y su UI (Vender, historial de ventas y anulación).
+  - **`ProductSaleUnit`:** fuera de R4; `saleUnitId` no entra en el contrato.
+  - **Stock insuficiente:** la venta aplica `BLOCK` fijo (DEC-26). No lee `Business.insufficientStockPolicy` ni permite "confirmar igual".
+- **Fuera de R4:** lavados (R5), cobro de mantenimiento (R6), dashboard (R7), clientes (R8), pago mixto y la limpieza de `insufficientStockPolicy`.
+- **Documentación:** `docs/09-BACKLOG.md` v0.6 (R3 cerrado; sección R4 con B-100, B-101 y B-130 a B-136; DEC-24 resuelta y B-904 retirado) y `docs/10-OPERACION-REAL.md` (§2.1, §2.5, §2.6, §2.7, §2.10 y §3.2e nueva). **Sin commit.**
+- **R4 sin bloqueos y sin implementar:** el código empieza solo con autorización explícita del usuario. Antes, al prepararlo, el contrato va a `06-API.md` y las pantallas a `07-UI-UX.md`.
+
 ### Validación y migración de R3 (2026-09-26)
 
 - **Validación final de R3 cerrada contra la base local `brigith_test`** (Postgres embebido en el puerto 55432, 9 migraciones con `r3_inventory_receipts`, `migrate status` al día). **Supabase no se tocó. Sin migraciones nuevas, sin commit ni push.**
@@ -160,7 +171,7 @@ Datos de prueba que quedan en demo (no se borraron: la UI solo desactiva, y borr
 
 - Aprobados por el usuario: el mapa funcional y las decisiones DEC-26, DEC-27, DEC-29, DEC-31 y DEC-38 (`docs/10-OPERACION-REAL.md` §3.2c). DEC-05 queda resuelta por DEC-26/27.
 - **`src/inventory/stock-ledger.ts`** (`applyStockMovements`): es el único escritor de movimientos. Bloquea los productos con `FOR UPDATE` en orden de id, evalúa la política `BLOCK`/`WARN` antes de escribir y, en la misma transacción, inserta los movimientos (con `resultingBalance` y `createdById`) y actualiza `Product.stockQuantity`/`isCounted`. Lo usan `InventoryService` (conteo, ingreso y ajuste) y `MaintenancesService` (uso y anulación).
-- **DEC-26 en mantenimiento:** avisa y guarda aunque `Business.insufficientStockPolicy` sea `BLOCK`. El 422 queda para la venta (R4).
+- **DEC-26 en mantenimiento:** avisa y guarda aunque `Business.insufficientStockPolicy` sea `BLOCK`. El 422 queda para la venta (R4), que aplica `BLOCK` fijo sin leer esa configuración (decisión del 2026-09-26).
 - **Deadlock encontrado y corregido:** el mantenimiento insertaba los ítems (su FK toma un lock compartido sobre el producto) antes del `FOR UPDATE`. Ahora el stock se aplica primero, con el id del mantenimiento generado de antemano.
 - `GET /inventory/stock` y `GET /products?includeStock=true` leen la caché (se eliminó el N+1). `ProductsService` ya no depende de `InventoryService`.
 - Contrato: se agregaron `stockQuantity`/`isCounted` en `ProductResponse` y `resultingBalance`/`createdById` en `InventoryMovementResponse`. `openapi.json` y el cliente web están regenerados; no hay cambios incompatibles.
@@ -233,4 +244,5 @@ Datos de prueba que quedan en demo (no se borraron: la UI solo desactiva, y borr
     - `typecheck`, `lint` (solo el warning de siempre) y `build` OK. **No probado en navegador.**
   - ~~Prueba manual en navegador de toda la UI de R3 a 390 px~~: hecha el 2026-09-26 (ver "Estado al 2026-09-26"). Migración aplicada en Supabase y commit `1588d85` publicado (2026-09-26): **R3 cerrado.**
 3. Antes del piloto: rate limit (`429`, `Retry-After`), mensajes en inglés, `trust proxy` y decisiones DEC-01, DEC-03, DEC-10 (hosting), P-01 y P-13.
-4. Corte de limpieza: retirar `Business.insufficientStockPolicy` de Configuración y de la API (hoy no tiene efecto), y los hallazgos menores de UI.
+4. Corte de limpieza: retirar `Business.insufficientStockPolicy` de Configuración y de la API (hoy no tiene efecto, y la venta de R4 tampoco lo leerá: usa `BLOCK` fijo), y los hallazgos menores de UI.
+5. **R4 (ventas de mostrador + su UI):** definido en documentación el 2026-09-26 (ver "R4 definido en documentación"). Sin bloqueos; empieza solo con autorización explícita del usuario.

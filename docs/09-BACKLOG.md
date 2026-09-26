@@ -1,6 +1,6 @@
 # 09 — Backlog y registro de decisiones
 
-**Versión:** 0.5 · **Actualizado:** 2026-09-25 (bloqueos y decisiones de R3)
+**Versión:** 0.6 · **Actualizado:** 2026-09-26 (R3 cerrado; alcance y decisiones de R4)
 Etiquetas: ver `03-BUSINESS-RULES.md`. Prioridad: **M** Must · **S** Should · **C** Could.
 
 ## 1. Lo que bloquea el inicio del desarrollo
@@ -18,7 +18,8 @@ Los bloqueos 1 y 2 son del inicio del MVP. El MVP se construyó (`v1.0-mvp`) con
 
 | Corte | Bloqueos | Estado |
 |---|---|---|
-| R3 — Recepción en lote, ajuste por cantidad física y alertas | Ninguno. Decisiones cerradas el 2026-09-25: DEC-36, DEC-39 y DEC-48 a DEC-52 (§2) | **Sin bloqueos. Sin implementar**: el código de R3 empieza solo con autorización explícita del usuario |
+| R3 — Recepción en lote, ajuste por cantidad física y alertas | Ninguno. Decisiones cerradas el 2026-09-25: DEC-36, DEC-39 y DEC-48 a DEC-52 (§2) | **Cerrado** (2026-09-26): commit `1588d85` en `origin/main`, migración `20260925214438_r3_inventory_receipts` aplicada en Supabase, CI en verde |
+| R4 — Ventas de mostrador, consultas, anulación y su UI | Ninguno. Decisiones cerradas el 2026-09-26: DEC-30 y el alcance de R4 (§2) | **Sin bloqueos. Sin implementar**: el código de R4 empieza solo con autorización explícita del usuario |
 
 ## 2. Registro de decisiones
 
@@ -49,10 +50,10 @@ Los bloqueos 1 y 2 son del inicio del MVP. El MVP se construyó (`v1.0-mvp`) con
 | DEC-21 | Proceso de carga del stock inicial: conteo completo previo o progresivo | Pendiente (negocio) | Antes del piloto. No bloquea |
 | DEC-22 | Modelado de presentaciones, unidad de descuento y granel | Pendiente (P-07) | **Antes de C2/C3** |
 | DEC-23 | Ingreso de mercadería incluido en el MVP (sin entradas, el stock solo baja; C-18) | Técnica. **Consecuencia de DEC-04; puedes vetarla** | — |
-| DEC-24 | **Salidas por venta de producto.** El inventario ya las contempla (`SALE`, BR-P14). Falta decidir: (a) ¿el MVP incluye una salida solo de stock (producto y cantidad, sin precio ni pago) o se espera a la venta rápida de la Fase 2?; (b) ¿Brigith vende productos sin mantenimiento, y con qué frecuencia? *Recomendación:* incluir la salida solo de stock, porque no exige precios ni pagos y evita que el saldo pierda fiabilidad desde el primer día. Si se incluye, agrega un endpoint y un formulario, sin cambios de modelo. No es la venta rápida, que sigue en la Fase 2 | Pendiente (negocio). La pregunta (b) aún no está en Discovery | Antes de cerrar C3. No bloquea el inicio |
+| DEC-24 | **Salidas por venta de producto.** El inventario ya las contempla (`SALE`, BR-P14). Falta decidir: (a) ¿el MVP incluye una salida solo de stock (producto y cantidad, sin precio ni pago) o se espera a la venta rápida de la Fase 2?; (b) ¿Brigith vende productos sin mantenimiento, y con qué frecuencia? *Recomendación:* incluir la salida solo de stock, porque no exige precios ni pagos y evita que el saldo pierda fiabilidad desde el primer día. Si se incluye, agrega un endpoint y un formulario, sin cambios de modelo. No es la venta rápida, que sigue en la Fase 2 | **Resuelta por R4** (2026-09-26): la salida de stock por venta se registra con la venta de mostrador de R4 (`POST /sales`, un `SALE` por línea), con precio y método de pago. No se implementa una salida solo de stock sin precio; B-904 se retira | — |
 | DEC-25 | `username` único **globalmente** (no por negocio, a diferencia del resto de unicidades de `05-DATABASE.md` §1). `POST /auth/login` recibe `{ username, password }` sin negocio ni slug; el `businessId` se resuelve del usuario encontrado, nunca lo envía el cliente | **Aprobada** (por ti) | — |
 
-Las decisiones DEC-26 a DEC-47 están en `10-OPERACION-REAL.md` §3. Aquí se registran las de R3:
+Las decisiones DEC-26 a DEC-47 están en `10-OPERACION-REAL.md` §3. Aquí se registran las de R3 y las de R4 (DEC-30 se repite aquí porque la cierra R4):
 
 | ID | Decisión | Estado | Cuándo se necesita |
 |---|---|---|---|
@@ -63,6 +64,15 @@ Las decisiones DEC-26 a DEC-47 están en `10-OPERACION-REAL.md` §3. Aquí se re
 | DEC-50 | Alertas: agotados y negativos solo consideran productos con conteo; los que no tienen conteo van en `notCountedCount` (BR-P19) | **Aprobada** (2026-09-25) | — |
 | DEC-51 | Recepción y ajuste rechazados sobre productos inactivos: 409 `PRODUCT_INACTIVE`; en una recepción, se rechaza el lote completo (BR-P21) | **Aprobada** (2026-09-25) | — |
 | DEC-52 | La UI (Recibir, historial de recepciones, Ajustar y alertas) forma parte de R3 | **Aprobada** (2026-09-25) | — |
+
+Decisiones de R4, aprobadas por el usuario el 2026-09-26 (detalle en `10-OPERACION-REAL.md` §3.2e):
+
+| ID | Decisión | Estado | Cuándo se necesita |
+|---|---|---|---|
+| DEC-30 | Un solo método de pago por venta: `CASH` o `YAPE`. El pago mixto queda fuera de R4, como decisión futura | **Aprobada** (2026-09-26) | — |
+| — | Alcance de R4: API de ventas de mostrador (crear, consultar, anular) **y su UI** (Vender, historial de ventas y anulación) | **Aprobada** (2026-09-26) | — |
+| — | `ProductSaleUnit` (litro / balde completo) queda fuera de R4; `saleUnitId` no entra en el contrato | **Aprobada** (2026-09-26) | — |
+| — | Stock insuficiente en la venta: `BLOCK` fijo (aplica DEC-26). La venta no lee `Business.insufficientStockPolicy` ni permite "confirmar igual"; la limpieza de esa configuración queda para después | **Aprobada** (2026-09-26) | — |
 
 ## 3. Backlog por corte
 
@@ -141,21 +151,42 @@ Estado: `Listo` (implementable tras aprobar) · `Requiere DEC-22` · `Requiere d
 ### R3 — Recepción en lote, ajuste por cantidad física y alertas
 Diseño: `10-OPERACION-REAL.md` §2.5 y §2.7 · contrato: `06-API.md` §2 (Inventario, "Cambios de R3") · pantallas: `07-UI-UX.md` §3.6. Reemplaza el comportamiento de B-032 y B-033.
 
+**Estado:** cerrado el 2026-09-26 (commit `1588d85`, migración aplicada en Supabase, CI en verde).
+
 | ID | Ítem | Prio | Estado |
 |---|---|---|---|
-| B-120 | Modelo `InventoryReceipt` y migración aditiva | M | Listo (sin implementar) |
-| B-121 | `POST /inventory/receipts` en lote, atómico e idempotente | M | Listo (sin implementar) |
-| B-122 | `GET /inventory/receipts` y `GET /inventory/receipts/:id` | M | Listo (sin implementar) |
-| B-123 | Ajuste por cantidad física en el `StockLedger` y `POST /inventory/adjustments` | M | Listo (sin implementar) |
-| B-124 | `GET /inventory/alerts` | M | Listo (sin implementar) |
-| B-125 | Web: Recibir, historial de recepciones, Ajustar y stock que requiere atención | M | Hecho (2026-09-25, sin commit); prueba manual a 390 px OK (2026-09-26) |
-| B-126 | Pruebas: lote atómico, idempotencia, ajuste concurrente, invariante de la caché y aislamiento entre negocios | M | Listo (sin implementar) |
+| B-120 | Modelo `InventoryReceipt` y migración aditiva | M | Hecho (`1588d85`; migración aplicada en Supabase) |
+| B-121 | `POST /inventory/receipts` en lote, atómico e idempotente | M | Hecho (`1588d85`) |
+| B-122 | `GET /inventory/receipts` y `GET /inventory/receipts/:id` | M | Hecho (`1588d85`) |
+| B-123 | Ajuste por cantidad física en el `StockLedger` y `POST /inventory/adjustments` | M | Hecho (`1588d85`) |
+| B-124 | `GET /inventory/alerts` | M | Hecho (`1588d85`) |
+| B-125 | Web: Recibir, historial de recepciones, Ajustar y stock que requiere atención | M | Hecho (`1588d85`); prueba manual a 390 px OK (2026-09-26) |
+| B-126 | Pruebas: lote atómico, idempotencia, ajuste concurrente, invariante de la caché y aislamiento entre negocios | M | Hecho (`1588d85`) |
+
+### R4 — Ventas de mostrador, consultas, anulación y su UI
+Diseño: `10-OPERACION-REAL.md` §2.1, §2.3 (Dinero), §2.5 (Venta de productos), §2.7 y §2.10 · decisiones: §2 (DEC-30 y alcance de R4) y `10` §3.2e. Aplica DEC-26, DEC-27, DEC-29 y DEC-44. El contrato detallado va a `06-API.md` y las pantallas a `07-UI-UX.md` al preparar R4.
+
+**Estado:** sin bloqueos. Sin implementar: el código de R4 empieza solo con autorización explícita del usuario.
+
+| ID | Ítem | Prio | Estado |
+|---|---|---|---|
+| B-100 | Venta rápida con descuento de stock (venta de mostrador, `source = COUNTER`). Se implementa con B-130 a B-136 | M | Listo (sin implementar) |
+| B-101 | Métodos de pago Efectivo y Yape: **uno por venta** (`CASH` o `YAPE`, DEC-30) | M | Listo (sin implementar) |
+| B-130 | Modelo `Sale` y `SaleLine` (enums `PaymentMethod`, `SaleSource`, `SaleStatus`, `SaleLineKind`) con snapshots de descripción, código y precio; migración aditiva; ambos en `BUSINESS_SCOPED_MODELS` | M | Listo (sin implementar) |
+| B-131 | `POST /sales`: venta de mostrador atómica e idempotente, sin cliente ni placa (DEC-44). Un método de pago (DEC-30), precio aplicado editable por línea (DEC-29), total calculado en el servidor, un `SALE` por línea a través del `StockLedger` con `BLOCK` fijo: si un producto con conteo no alcanza, 422 `INSUFFICIENT_STOCK` y no se guarda nada (DEC-26); sin conteo, se vende con aviso (DEC-27). No lee `Business.insufficientStockPolicy` | M | Listo (sin implementar) |
+| B-132 | `GET /sales` (período, estado, método de pago, cursor) y `GET /sales/:id` con líneas | M | Listo (sin implementar) |
+| B-133 | `POST /sales/:id/void`: anulación con motivo; genera `SALE_VOID` de las líneas con stock; `SALE_ALREADY_VOIDED` si ya estaba anulada | M | Listo (sin implementar) |
+| B-134 | Web: **Vender** (catálogo y búsqueda, carrito con −/+, cobro con Efectivo / Yape y precio editable, 422 por stock con corrección de cantidad, confirmación con Deshacer) | M | Listo (sin implementar) |
+| B-135 | Web: **historial de ventas** con detalle y **anulación** con motivo | M | Listo (sin implementar) |
+| B-136 | Pruebas: total calculado en el servidor, el stock baja una sola vez, la anulación lo revierte, idempotencia, 422 con rollback de toda la venta, concurrencia contra Postgres real y aislamiento entre negocios | M | Listo (sin implementar) |
+
+**Fuera de R4:** `ProductSaleUnit` (formas de venta litro / balde completo; `saleUnitId` no entra en el contrato) · lavados, `source = WASH` (R5) · cobro de mantenimiento, `source = MAINTENANCE` y líneas `SERVICE` (R6) · dashboard (R7) · clientes y Avisar desde un cliente (R8) · pago mixto (decisión futura) · limpieza de `Business.insufficientStockPolicy` (corte de limpieza).
 
 ### Fase 2
+B-100 (venta rápida) y B-101 (métodos de pago) pasaron a R4 el 2026-09-26.
+
 | ID | Ítem | Prio | Estado |
 |---|---|---|---|
-| B-100 | Venta rápida con descuento de stock | M | Fase 2 (P-09) |
-| B-101 | Métodos de pago (Efectivo, Yape) | M | Fase 2 |
 | B-102 | Lavado rápido opcional | M | Fase 2 (P-10, P-11) |
 | B-103 | Cierre/resumen del día | M | Fase 2 (DEC-15) |
 
@@ -166,7 +197,7 @@ Diseño: `10-OPERACION-REAL.md` §2.5 y §2.7 · contrato: `06-API.md` §2 (Inve
 | B-901 | Aviso "¿marcar como compatible?" | DEC-06 |
 | B-902 | Alertas de stock mínimo | No aprobado |
 | B-903 | Roles adicionales | P-12 |
-| B-904 | Salida de stock por venta, sin precio ni pago | DEC-24 |
+| B-904 | ~~Salida de stock por venta, sin precio ni pago~~ **Retirado** (2026-09-26): lo cubre la venta de mostrador de R4 (B-131) | DEC-24 |
 
 ## 4. Explícitamente fuera del backlog
 
