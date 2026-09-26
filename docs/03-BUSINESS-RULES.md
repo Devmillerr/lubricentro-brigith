@@ -1,6 +1,6 @@
 # 03 — Reglas de negocio
 
-**Versión:** 0.4 · **Actualizado:** 2026-09-25 (reglas de R3: BR-P6, BR-P7b, BR-P10, BR-P19, BR-P21)
+**Versión:** 0.5 · **Actualizado:** 2026-09-26 (contrato de R4: BR-P21 y BR-V4)
 **Fuentes de verdad:** [`/research/BRIGITH-DISCOVERY.md`](../research/BRIGITH-DISCOVERY.md) y [`01-VISION.md`](01-VISION.md).
 
 ## Etiquetas (iguales en todos los documentos)
@@ -119,7 +119,7 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 | BR-P18 | Categorías iniciales: **Lubricante** y **Filtro** (lo confirmado en C-03). Las categorías tienen como máximo 2 niveles (categoría → subcategoría) y son datos editables desde Configuración (crear, renombrar, mover, ordenar, desactivar); no hay taxonomía fija. | [TÉCNICO] · árbol inicial: [DECISIÓN] DEC-37 |
 | BR-P19 | **Stock que requiere atención (R3):** agotados (saldo = 0), negativos (saldo < 0) y la cantidad de productos sin conteo inicial. Agotados y negativos solo consideran productos activos **con conteo**; los que no tienen conteo se cuentan aparte, porque su saldo no es confiable (BR-P8). No hay stock mínimo por producto. | [DECISIÓN] mapa funcional (DEC-28) · DEC-50 |
 | BR-P19b | Marca, viscosidad, presentación, código, precio e imagen son **opcionales** en todo producto. Se ofrecen como sugerencias (valores ya usados y confirmados por el dueño); nunca se inventan ni se exigen. Sin imagen se muestra un placeholder. | [DECISIÓN] R2 · DEC-34 |
-| BR-P21 | **Productos inactivos (R3):** no reciben recepciones ni ajustes. Si una recepción incluye un producto inactivo, se rechaza el lote completo. | [DECISIÓN] DEC-51 |
+| BR-P21 | **Productos inactivos (R3, ampliada en R4):** no reciben recepciones ni ajustes, y **no se pueden vender**. Si una recepción o una venta incluye un producto inactivo, se rechaza completa (409 `PRODUCT_INACTIVE`). La regla aplica al crear la venta: una venta ya registrada se puede anular aunque el producto se haya desactivado después, y su `SALE_VOID` se genera igual. | [DECISIÓN] DEC-51 · venta: alcance de R4 (2026-09-26) |
 
 ## BR-F — Compatibilidad de filtros
 
@@ -149,7 +149,7 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 | BR-V1 | Venta rápida: categorías → productos → carrito → pago → confirmar. Los productos se eligen del catálogo, no se escriben. No exige cliente ni placa. | [DECISIÓN] D-07, D-13, mapa funcional |
 | BR-V2 | Métodos de pago confirmados: **Yape** y **efectivo**. | [CONFIRMADO] C-17 |
 | BR-V3 | El cambio de aceite se cobra con **un único monto total** (producto + mano de obra). Los productos usados solo descuentan stock y no generan otro ingreso. Otros métodos de pago y ventas a crédito siguen sin definir. | Monto único: [CONFIRMADO] (`10-OPERACION-REAL.md` §0.2) · resto: [PENDIENTE] P-09 |
-| BR-V4 | Cada producto vendido genera un movimiento de stock `SALE` con el mismo mecanismo del MVP (BR-P3, BR-P14). | [TÉCNICO] |
+| BR-V4 | Cada producto vendido genera un movimiento de stock `SALE` con el mismo mecanismo del MVP (BR-P3, BR-P14). **Excepción:** un producto con `tracksStock = false` (BR-P16) se registra como línea de la venta (`movesStock = false`) pero **no** genera `SALE` ni se evalúa su saldo. | [TÉCNICO] · excepción: contrato de R4 (2026-09-26) |
 
 ## BR-L — Lavado (Fase 2)
 

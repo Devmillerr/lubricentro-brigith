@@ -1,6 +1,6 @@
 # 06 — API REST
 
-**Versión:** 0.4 · **Actualizado:** 2026-09-25 (contrato de R3 en §2, Inventario)
+**Versión:** 0.5 · **Actualizado:** 2026-09-26 (contrato de R4 en §2, Ventas)
 Etiquetas: ver `03-BUSINESS-RULES.md`. Todo lo de este documento es [TÉCNICO] salvo lo indicado. La documentación viva será Swagger/OpenAPI generada por NestJS en `/api/docs`; este documento fija el diseño.
 
 ## 1. Convenciones
@@ -11,7 +11,7 @@ Etiquetas: ver `03-BUSINESS-RULES.md`. Todo lo de este documento es [TÉCNICO] s
 | Formato | JSON, campos en `camelCase` |
 | Autenticación | `Authorization: Bearer <JWT>`. El negocio sale del token; nunca aparece en rutas ni cuerpos (BR-G3) |
 | Identificadores | UUID. En creaciones, el cliente puede enviar el `id` |
-| Idempotencia | `Idempotency-Key` **obligatoria** en `POST /maintenances`, `POST /maintenances/:id/void` y `POST /inventory/*`. Repetir la clave devuelve el resultado original |
+| Idempotencia | `Idempotency-Key` **obligatoria** en `POST /maintenances`, `POST /maintenances/:id/void`, `POST /inventory/*`, `POST /sales` y `POST /sales/:id/void` (R4). Repetir la clave devuelve el resultado original |
 | Paginación | `?limit=&cursor=` |
 | Errores | Problem details: `type`, `title`, `status`, `detail`, `code` estable, `errors[]` por campo |
 | Avisos | Las respuestas de escritura incluyen `warnings[]`. Los avisos no bloquean |
@@ -150,12 +150,177 @@ Si se ingresan próximo km y próxima fecha sin `dueRule` y el negocio no defini
 |---|---|---|
 | GET | `/pilot-indicators?from=&to=` | **Adopción:** mantenimientos activos. **Mantenimiento:** mantenimientos con próximo km/fecha y avisos abiertos. **Inventario:** movimientos por tipo y productos con conteo y movimientos. Solo lectura (BR-I1 a BR-I3) |
 
+### Ventas (R4: aprobado el 2026-09-26, sin implementar)
+
+Venta de mostrador: productos, un método de pago y confirmación, sin cliente ni placa (DEC-44). Diseño: `10-OPERACION-REAL.md` §2.1, §2.3, §2.5 y §2.7. Decisiones: DEC-26, DEC-27, DEC-29, DEC-30 y el alcance de R4 (`09-BACKLOG.md` §2 y §3, ítems B-100, B-101 y B-130 a B-136; `10` §3.2e). Las pantallas se documentan en `07-UI-UX.md`.
+
+**Fuera de R4:** formas de venta (`ProductSaleUnit`, `saleUnitId`), pago mixto, lavados (`source = WASH`, R5), cobro de mantenimiento (`source = MAINTENANCE`, líneas `SERVICE`, R6), dashboard (R7) y clientes o vehículos en la venta (R8). Tampoco hay `GET /payment-methods`: el método de pago es el enum `PaymentMethod` publicado en OpenAPI.
+
+#### Modelos y enums
+
+| Enum | Valores | En R4 |
+|---|---|---|
+| `PaymentMethod` | `CASH`, `YAPE` | Ambos. Un solo método por venta (DEC-30) |
+| `SaleSource` | `COUNTER`, `WASH`, `MAINTENANCE` | Solo se crea `COUNTER` |
+| `SaleStatus` | `ACTIVE`, `VOIDED` | Ambos |
+| `SaleLineKind` | `PRODUCT`, `WASH`, `SERVICE` | Solo se crea `PRODUCT` |
+
+`Sale` (una por venta; con `businessId`, aislada por negocio):
+
+| Campo | Tipo | En R4 |
+|---|---|---|
+| `id` | UUID | El cliente puede enviarlo (DEC-12) |
+| `source` | `SaleSource` | `COUNTER` |
+| `status` | `SaleStatus` | `ACTIVE` al crear; `VOIDED` al anular |
+| `paymentMethod` | `PaymentMethod` | Obligatorio |
+| `total` | decimal (10,2) | Suma de los subtotales de las líneas, calculada en el servidor |
+| `occurredAt` | fecha y hora | La enviada, o la hora del servidor |
+| `note` | texto, opcional | Hasta 500 caracteres |
+| `vehicleId`, `customerId`, `maintenanceId` | UUID, opcionales | Siempre `null` en R4 |
+| `createdById` | UUID | Usuario del token |
+| `voidedAt`, `voidedById`, `voidReason` | opcionales | Se llenan al anular |
+| `createdAt`, `updatedAt` | fecha y hora | Del servidor |
+
+`SaleLine` (con `businessId`):
+
+| Campo | Tipo | En R4 |
+|---|---|---|
+| `id`, `saleId` | UUID | — |
+| `kind` | `SaleLineKind` | `PRODUCT` |
+| `productId` | UUID | Obligatorio en R4 |
+| `washTypeId` | UUID, opcional | Siempre `null` en R4 |
+| `descriptionSnapshot` | texto | Nombre del producto al momento de la venta (BR-G6) |
+| `codeSnapshot` | texto, opcional | Código del producto al momento de la venta |
+| `quantity` | decimal (12,3) | En la unidad del producto (sin formas de venta) |
+| `unitPrice` | decimal (10,2) | Precio aplicado en esta venta |
+| `subtotal` | decimal (10,2) | `quantity × unitPrice`, redondeado half-up a 2 decimales |
+| `movesStock` | booleano | `true` si el producto controla stock; `false` si `tracksStock = false` |
+
+#### `POST /sales`
+
+Crea una venta completa en una sola transacción. Requiere `Idempotency-Key`.
+
+**Request (`CreateSaleDto`):**
+
+```ts
+{
+  id?: uuid;                       // DEC-12
+  paymentMethod: 'CASH' | 'YAPE';  // uno solo (DEC-30)
+  occurredAt?: ISO8601;            // si falta, la hora del servidor
+  note?: string;                   // ≤ 500
+  lines: [                         // de 1 a 50, sin productos repetidos
+    { productId: uuid; quantity: number /* > 0, hasta 3 decimales */; unitPrice: number /* ≥ 0, hasta 2 decimales */ }
+  ];
+}
+```
+
+**Validación (antes de tocar el stock):**
+
+- Campos desconocidos rechazados (§1), incluidos `saleUnitId`, `total`, `customerId` y `vehicleId`: 400.
+- `paymentMethod` fuera de `CASH | YAPE`, `lines` vacío o con más de 50, `quantity ≤ 0`, `unitPrice < 0` o con más decimales de los permitidos, `note` > 500: 400 con `errors[]` por campo (p. ej. `lines.0.quantity`).
+- Un producto repetido en `lines`: 400 `DUPLICATE_PRODUCT_LINE`.
+
+**Cálculo en el servidor:**
+
+- `subtotal` de cada línea = `quantity × unitPrice`, redondeado **half-up a 2 decimales** por línea.
+- `total` = suma de los `subtotal`. El cliente no envía el total: no hay error de total distinto.
+- **Precio editable (DEC-29):** `unitPrice` es el precio aplicado en esta venta. Puede diferir de `Product.salePrice` y sirve para vender un producto que todavía no tiene precio en el catálogo. Queda guardado en la línea; cambiar después el precio del catálogo no altera la venta (BR-V8). La venta no modifica `Product.salePrice`.
+
+**Productos y stock (una transacción; si algo falla, no se guarda nada):**
+
+- Producto inexistente o de otro negocio: 404 `PRODUCT_NOT_FOUND`; se rechaza la venta completa.
+- Producto inactivo: 409 `PRODUCT_INACTIVE`; se rechaza la venta completa.
+- Producto con `tracksStock = true`: la línea queda con `movesStock = true` y genera un movimiento `SALE` (`quantityDelta = −quantity`, `refType = 'Sale'`, `refId` = id de la venta) a través del `StockLedger`, con el producto bloqueado y el saldo en caché actualizado en la misma transacción.
+- Producto con `tracksStock = false`: la línea queda con `movesStock = false`, **sin** movimiento de stock y sin evaluar saldo.
+- **Stock insuficiente: `BLOCK` fijo (DEC-26).** Si un producto **con conteo inicial** quedaría con saldo negativo, responde **422 `INSUFFICIENT_STOCK`** con el producto, su saldo y la cantidad pedida, y **no se guarda nada**: ni la venta, ni las líneas, ni los movimientos. La venta no lee `Business.insufficientStockPolicy` y no existe la opción de "confirmar igual".
+- Producto **sin conteo inicial**: se vende y se registra el `SALE`, sin evaluar el saldo, con el aviso `PRODUCT_NOT_COUNTED` (DEC-27).
+
+**Idempotencia:** la misma `Idempotency-Key` con el mismo cuerpo devuelve la respuesta original sin crear otra venta. La misma clave con otro cuerpo: 409 `IDEMPOTENCY_KEY_REUSED`. Mientras la primera petición sigue en curso: 409 `IDEMPOTENCY_KEY_IN_PROGRESS`. Sin la cabecera: 400 `IDEMPOTENCY_KEY_REQUIRED`.
+
+**Response:** 201 `CreateSaleResult` = `SaleResponse` + `warnings[]`. Cada aviso tiene la misma forma que en mantenimiento: `{ code, message, productId }`. En R4 el único aviso es `PRODUCT_NOT_COUNTED`.
+
+```ts
+SaleResponse {
+  id; source; status; paymentMethod;
+  total: string;                 // decimal como texto, nunca float
+  occurredAt; note | null;
+  vehicleId: null; maintenanceId: null;   // siempre null en R4
+  createdById; createdAt;
+  voidedAt | null; voidReason | null;
+  lines: SaleLineResponse[];
+}
+SaleLineResponse {
+  id; kind;                      // PRODUCT en R4
+  productId; washTypeId: null;   // siempre null en R4
+  descriptionSnapshot; codeSnapshot | null;
+  quantity: string; unitPrice: string; subtotal: string;
+  movesStock: boolean;
+}
+```
+
+#### `GET /sales`
+
+`?from=&to=&source=&paymentMethod=&status=&limit=&cursor=`. Todos los filtros son opcionales.
+
+- `from` y `to` (ISO 8601) se comparan contra `occurredAt`: `from` **incluido** y `to` **excluido** (`from ≤ occurredAt < to`).
+- `source`: `COUNTER | WASH | MAINTENANCE` (en R4 solo existen ventas `COUNTER`).
+- `paymentMethod`: `CASH | YAPE`.
+- `status`: `ACTIVE | VOIDED`. Sin `status`, devuelve las dos.
+- Paginación por cursor (§1).
+- Orden: de la más reciente a la más antigua por `occurredAt`, con `id` como desempate estable.
+- Solo ventas del negocio autenticado.
+
+**Response:** 200 `SaleSummaryPage` `{ items, nextCursor }`. Cada elemento es la cabecera de la venta sin las líneas, más `lineCount`: `{ id, source, status, paymentMethod, total, occurredAt, note, vehicleId, maintenanceId, createdById, createdAt, voidedAt, voidReason, lineCount }`.
+
+#### `GET /sales/:id`
+
+Venta con sus líneas. **Response:** 200 `SaleResponse` (la misma forma que el `POST`, sin `warnings`).
+
+- 404 `SALE_NOT_FOUND` si no existe o es de otro negocio (aislamiento: nunca revela ventas ajenas).
+- 400 si `:id` no es UUID.
+
+#### `POST /sales/:id/void`
+
+Anula una venta. Requiere `Idempotency-Key`.
+
+**Request:** `{ reason: string }`. Obligatorio (BR-V7): vacío o solo espacios → 400; máximo 500 caracteres.
+
+**Efecto (una transacción):**
+
+- Por cada línea con `movesStock = true`, genera un movimiento `SALE_VOID` que devuelve la cantidad al stock (`quantityDelta = +quantity`, `refType = 'Sale'`, `refId` = id de la venta), a través del `StockLedger`. Las líneas con `movesStock = false` no generan movimientos.
+- **Producto desactivado después de la venta:** la venta se anula igual y su `SALE_VOID` se genera. La validación de producto inactivo (409 `PRODUCT_INACTIVE`) aplica al crear la venta, no al anularla (BR-P21).
+- La venta pasa a `VOIDED` y guarda `voidedAt`, `voidedById` y `voidReason`. Nada se borra ni se edita (BR-G5): la venta y sus movimientos originales quedan.
+
+**Idempotencia y anulación repetida:**
+
+- La misma `Idempotency-Key` con el mismo cuerpo devuelve la respuesta original, sin generar otro `SALE_VOID`.
+- Otra clave sobre una venta ya anulada: 409 `SALE_ALREADY_VOIDED`, sin cambios.
+- Errores de la cabecera: los mismos que en `POST /sales` (`IDEMPOTENCY_KEY_REQUIRED`, `IDEMPOTENCY_KEY_REUSED`, `IDEMPOTENCY_KEY_IN_PROGRESS`).
+
+**Response:** 200 `SaleResponse` con `status: VOIDED`, `voidedAt` y `voidReason`.
+
+Errores: 404 `SALE_NOT_FOUND` (inexistente o de otro negocio), 400 si `:id` no es UUID.
+
+#### Errores y avisos de R4
+
+| Código | Estado | Cuándo |
+|---|---|---|
+| `DUPLICATE_PRODUCT_LINE` | 400 | La venta repite un producto |
+| `PRODUCT_NOT_FOUND` | 404 | Un producto de la venta no existe o es de otro negocio. Rechaza la venta completa |
+| `SALE_NOT_FOUND` | 404 | La venta no existe o es de otro negocio (`GET /sales/:id`, `POST /sales/:id/void`) |
+| `PRODUCT_INACTIVE` | 409 | Un producto de la venta está inactivo. Rechaza la venta completa |
+| `SALE_ALREADY_VOIDED` | 409 | Se intenta anular una venta que ya está anulada |
+| `INSUFFICIENT_STOCK` | 422 | Un producto con conteo inicial quedaría con saldo negativo. Rollback completo (DEC-26) |
+| `PRODUCT_NOT_COUNTED` | aviso (201) | Un producto sin conteo inicial: se vende sin evaluar el saldo (DEC-27) |
+
+`SALE_TOTAL_MISMATCH` no forma parte de R4: el total lo calcula siempre el servidor.
+
 ## 3. Endpoints de la Fase 2 (solo diseño)
 
 | Ruta | Descripción |
 |---|---|
-| `POST /sales` | Venta rápida: líneas y pago. Genera movimientos de stock con el mismo mecanismo (BR-V4). Sin cliente ni placa obligatorios |
-| `GET /payment-methods` | Efectivo y Yape (C-17) |
+| ~~`POST /sales`~~ | Pasó a R4: contrato en §2, Ventas |
+| ~~`GET /payment-methods`~~ | Reemplazado por el diseño vigente (`10-OPERACION-REAL.md` §2.7): el método de pago es el enum `PaymentMethod` (`CASH`, `YAPE`); no hay endpoint |
 | `GET /wash-types`, `POST /wash-records` | Lavado rápido opcional al recibir o cobrar |
 | ~~`/daily-closes`~~ | Retirado: no hay cierre del día; el resumen lo da `GET /dashboard`. Diseño vigente de la Fase 2: `10-OPERACION-REAL.md` §2.7 |
 

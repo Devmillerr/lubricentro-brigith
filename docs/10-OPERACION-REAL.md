@@ -364,7 +364,7 @@ model Sale {                       // NUEVO
   source        SaleSource
   status        SaleStatus @default(ACTIVE)
   paymentMethod PaymentMethod
-  total         Decimal @db.Decimal(10, 2)   // = suma de subtotales (validado en servidor)
+  total         Decimal @db.Decimal(10, 2)   // = suma de subtotales, calculado en el servidor (el cliente no lo envía)
   occurredAt    DateTime @default(now())
   vehicleId     String?     // solo en el cobro de un mantenimiento (copiado del mantenimiento)
   customerId    String?     // opcional
@@ -388,8 +388,8 @@ model SaleLine {                   // NUEVO (con businessId: el dashboard agrega
   codeSnapshot      String?
   quantity          Decimal @db.Decimal(12, 3)   // en la forma de venta; stock descontado = quantity × factor (en R4, sin formas de venta: quantity en la unidad del producto)
   unitPrice         Decimal @db.Decimal(10, 2)  // precio aplicado
-  subtotal          Decimal @db.Decimal(10, 2)
-  movesStock        Boolean   // true solo en PRODUCT de mostrador; nunca en SERVICE
+  subtotal          Decimal @db.Decimal(10, 2)   // = quantity × unitPrice, redondeado half-up a 2 decimales por línea
+  movesStock        Boolean   // true solo en PRODUCT de mostrador; nunca en SERVICE. Excepción: false si el producto tiene tracksStock = false (la línea se registra, sin SALE)
   @@index([businessId, saleId])
   @@index([businessId, productId])
 }
@@ -537,10 +537,10 @@ Todas las escrituras de dinero o stock exigen `Idempotency-Key` y aceptan `id` U
 | PUT/DELETE | `/products/:id/image` | Depende de DEC-34 |
 | GET | `/inventory/receipts`, `/inventory/receipts/:id` | Historial con líneas |
 | GET | `/inventory/alerts` | `{ outOfStock[], negative[], notCountedCount }` |
-| POST | `/sales` | `{ id?, paymentMethod, occurredAt?, note?, lines: [{ productId, quantity, unitPrice }] }` → `SaleResponse` + `warnings`. Sin `saleUnitId` en R4 |
-| GET | `/sales` | `?from&to&source&paymentMethod&status&cursor&limit` |
+| POST | `/sales` | `{ id?, paymentMethod, occurredAt?, note?, lines: [{ productId, quantity, unitPrice }] }` → `SaleResponse` + `warnings`. Sin `saleUnitId` en R4. El total lo calcula el servidor: subtotal por línea = `quantity × unitPrice` redondeado half-up a 2 decimales; total = suma de subtotales. Un producto inactivo rechaza la venta completa (409 `PRODUCT_INACTIVE`). Un producto con `tracksStock = false` se registra como línea sin movimiento `SALE`. Contrato completo: `06-API.md` §2, Ventas |
+| GET | `/sales` | `?from&to&source&paymentMethod&status&cursor&limit`. `from` incluido y `to` excluido, comparados contra `occurredAt` |
 | GET | `/sales/:id` | Con líneas |
-| POST | `/sales/:id/void` | `{ reason }` |
+| POST | `/sales/:id/void` | `{ reason }`. Se puede anular aunque un producto se haya desactivado después de la venta: la validación de producto inactivo aplica al crear la venta, no al `SALE_VOID` |
 | GET | `/wash-types` | Con precios activos |
 | POST/PATCH | `/wash-types`, `/wash-types/:id`, `/wash-types/:id/prices` | Configuración (Configuración → Lavados) |
 | POST | `/washes` | `{ id?, washTypeId, priceOptionId, paymentMethod, occurredAt? }` → `SaleResponse` |
@@ -580,8 +580,8 @@ CreateSaleLineDto { productId: uuid; quantity: number > 0; unitPrice: number ≥
 // POST /maintenances (bloque nuevo) y POST /maintenances/:id/charge
 MaintenanceChargeDto { paymentMethod: 'CASH'|'YAPE'; totalAmount: number > 0 (2 decimales) }
 
-SaleResponse { id; source; status; paymentMethod; total: string; occurredAt; vehicleId|null;
-  maintenanceId|null; lines: SaleLineResponse[]; voidedAt|null; voidReason|null }
+SaleResponse { id; source; status; paymentMethod; total: string; occurredAt; note|null; vehicleId|null;
+  maintenanceId|null; createdById; createdAt; lines: SaleLineResponse[]; voidedAt|null; voidReason|null }   // alineado con 06-API.md (R4)
 SaleLineResponse { id; kind; productId|null; washTypeId|null;   // saleUnitId y saleUnitLabelSnapshot: fuera de R4
   descriptionSnapshot; codeSnapshot|null; quantity: string; unitPrice: string; subtotal: string; movesStock }
 CreateSaleResult = SaleResponse & { warnings: StockWarning[] }   // mismo formato que mantenimiento
@@ -607,7 +607,7 @@ DashboardResponse {
 
 Montos como `string` decimal (igual que hoy `Decimal` serializado), nunca `float`.
 
-Errores nuevos: `INSUFFICIENT_STOCK` (422, ya existe), `SALE_NOT_FOUND`, `SALE_ALREADY_VOIDED`, `SALE_TOTAL_MISMATCH`, `WASH_PRICE_NOT_IN_TYPE`, `SALE_UNIT_NOT_IN_PRODUCT` (fuera de R4), `PHONE_ALREADY_REGISTERED` (aviso, no error), `CATALOG_OPTION_NOT_ALLOWED`, `MAINTENANCE_ALREADY_CHARGED`, `DUPLICATE_PRODUCT_LINE`.
+Errores nuevos: `INSUFFICIENT_STOCK` (422, ya existe), `SALE_NOT_FOUND`, `SALE_ALREADY_VOIDED`, `WASH_PRICE_NOT_IN_TYPE`, `SALE_UNIT_NOT_IN_PRODUCT` (fuera de R4), `PHONE_ALREADY_REGISTERED` (aviso, no error), `CATALOG_OPTION_NOT_ALLOWED`, `MAINTENANCE_ALREADY_CHARGED`, `DUPLICATE_PRODUCT_LINE`.
 
 ### 2.8 Estrategia de actualización del dashboard
 
