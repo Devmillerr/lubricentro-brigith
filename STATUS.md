@@ -2,7 +2,15 @@
 
 **Actualizado:** 2026-09-26
 
-## Estado al 2026-09-26: R3 validado localmente (sin commit)
+## Estado al 2026-09-26: R3 cerrado
+
+- **R3 cerrado y publicado.** Commit `1588d85ad6fb6a0937314e777f604fa152ded7a2` "feat: termino la recepción, ajustes y alertas de inventario" (36 archivos, con la migración `20260925214438_r3_inventory_receipts`), con push a `origin/main` (`54f9488..1588d85`).
+- `HEAD` = `origin/main` = `1588d85`, verificado también con `git ls-remote`. Árbol de trabajo limpio antes de este cambio de `STATUS.md`.
+- **CI en verde** en GitHub Actions para `1588d85` (revisada por el usuario).
+- **Migración de R3 aplicada en Supabase y Supabase alineado con `schema.prisma`** (detalle más abajo): 9 migraciones, `migrate status` al día y `migrate diff` sin diferencias.
+- **Baseline estable: `1588d85`.** Lo que sigue en esta sección y en la del 2026-09-25 como "sin commit" o "siguiente" ya no aplica para R3.
+
+### Validación y migración de R3 (2026-09-26)
 
 - **Validación final de R3 cerrada contra la base local `brigith_test`** (Postgres embebido en el puerto 55432, 9 migraciones con `r3_inventory_receipts`, `migrate status` al día). **Supabase no se tocó. Sin migraciones nuevas, sin commit ni push.**
 - **Decisión del usuario aplicada:** `GET /inventory/alerts` excluye de `notCountedCount` los productos con `tracksStock = false` (el contador coincide con el filtro "Sin conteo"). Cubierto en `test/integration/inventory-alerts.int-spec.ts`.
@@ -21,7 +29,7 @@
   - `inventory_receipts` existe con sus 6 columnas, la PK, el índice `inventory_receipts_businessId_occurredAt_idx` y las dos FK (`businessId` → `businesses`, `createdById` → `users`, `ON DELETE RESTRICT ON UPDATE CASCADE`). 0 filas.
   - `migrate status`: "Database schema is up to date!". `migrate diff` contra `schema.prisma`: "No difference detected".
   - Sin cambios de datos ni del seed, sin cambios de código, sin regenerar OpenAPI ni el cliente, sin commit ni push.
-- **Siguiente:** solo preparar el commit final de R3, cuando el usuario lo pida.
+- **Siguiente (cumplido):** commit final `1588d85` y push a `origin/main`; CI verde.
 
 ## Estado al 2026-09-25
 
@@ -223,6 +231,6 @@ Datos de prueba que quedan en demo (no se borraron: la UI solo desactiva, y borr
     - **Stock que requiere atención** (`components/inventory/stock-alerts.tsx`), arriba de la lista de Inventario, con `GET /inventory/alerts`: negativos y agotados en grupos separados (5 filas y "Ver todos"), cada fila con enlace al inventario del producto. `notCountedCount` va aparte, con "Ver y contar", que activa el filtro "Sin conteo" y baja a la lista. Si no hay agotados ni negativos, lo dice. Si falla, muestra un error con reintento sin bloquear la lista.
     - **Hallazgo (corregido el 2026-09-26 por decisión del usuario):** `GET /inventory/alerts` no filtraba por `tracksStock`, así que `notCountedCount` incluye productos que no controlan stock (BR-P16). El filtro "Sin conteo" de la web sí los excluye, y los números pueden no coincidir. Hoy la siembra solo crea productos con `tracksStock: true`. Hay que decidir si es un bug de la API.
     - `typecheck`, `lint` (solo el warning de siempre) y `build` OK. **No probado en navegador.**
-  - ~~Prueba manual en navegador de toda la UI de R3 a 390 px~~: hecha el 2026-09-26 (ver "Estado al 2026-09-26"). Siguiente: aplicar `r3_inventory_receipts` en Supabase y el commit final, con autorización.
+  - ~~Prueba manual en navegador de toda la UI de R3 a 390 px~~: hecha el 2026-09-26 (ver "Estado al 2026-09-26"). Migración aplicada en Supabase y commit `1588d85` publicado (2026-09-26): **R3 cerrado.**
 3. Antes del piloto: rate limit (`429`, `Retry-After`), mensajes en inglés, `trust proxy` y decisiones DEC-01, DEC-03, DEC-10 (hosting), P-01 y P-13.
 4. Corte de limpieza: retirar `Business.insufficientStockPolicy` de Configuración y de la API (hoy no tiene efecto), y los hallazgos menores de UI.
