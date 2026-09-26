@@ -730,6 +730,20 @@ Lo que pide el mapa (§10) y dónde se consulta. Todo registro es inmutable o se
 | DEC-34 | R2 solo agrega `Product.imageKey` (nullable) y un placeholder visual. La subida y el almacenamiento (Supabase Storage) van en un corte posterior |
 | DEC-37 | Árbol inicial de 2 niveles, editable desde Configuración, sin enums. Se arma debajo de las categorías existentes, sin renombrarlas: Lubricante (Aceite auto, Aceite moto, Aceite 2 tiempos, Aceite de transmisión) · Filtro (Filtro de aire, Filtro de aceite) · Fluidos (Refrigerante, Líquido de freno, Limpiaparabrisas, Hidrolina) · Siliconas (Silicona, Silicona de empaque) |
 
+### 3.2d Aprobadas por el usuario para R3 (2026-09-25)
+
+Registradas en `09-BACKLOG.md` §2. Las reglas pasaron a `03-BUSINESS-RULES.md` (BR-P6, BR-P7b, BR-P10, BR-P19 y BR-P21), el contrato a `06-API.md` §2 y las pantallas a `07-UI-UX.md` §3.6.
+
+| ID | Decisión |
+|---|---|
+| DEC-36 | Recepción sin costo de compra ni proveedor; queda fuera de R3 |
+| DEC-39 | Motivos de ajuste: Conteo físico distinto, Producto dañado, Consumo interno, Otro, más texto libre; se guarda como texto |
+| DEC-48 | Sin conteo inicial no hay ajuste (409 `ADJUSTMENT_REQUIRES_COUNT`); el ajuste no marca `isCounted` |
+| DEC-49 | Cantidad física igual al saldo: 400 `NO_DIFFERENCE` |
+| DEC-50 | Agotados y negativos solo con productos con conteo; los que no tienen conteo van en `notCountedCount` |
+| DEC-51 | Recepción y ajuste rechazados sobre productos inactivos (409 `PRODUCT_INACTIVE`, lote completo) |
+| DEC-52 | La UI forma parte de R3 |
+
 ### 3.3 Pendientes que todavía requieren decisión (del dueño o tuya)
 
 Numeración continúa `09-BACKLOG.md` §2. **Negritas = necesarias antes de empezar el corte indicado.**
@@ -737,8 +751,6 @@ Numeración continúa `09-BACKLOG.md` §2. **Negritas = necesarias antes de empe
 | ID | Decisión | Recomendación | Quién | Antes de |
 |---|---|---|---|---|
 | DEC-30 | Pago mixto (parte Yape, parte efectivo) en una misma venta | Un método por venta; si ocurre, dos ventas. Preguntar al dueño | Dueño | R4 |
-| DEC-36 | Costo de compra y proveedor en la recepción | No por ahora (no se pidió; sin datos, P-16). El dashboard aclara que son ingresos, no ganancias | Tú | R3 |
-| DEC-39 | Motivos de ajuste como chips | Propuesta "Conteo físico distinto", "Producto dañado", "Consumo interno", "Otro", con texto libre; validar con el dueño | Dueño | R3 |
 | DEC-40 | Rate limit | Por usuario autenticado, más alto en GET; login con límite propio | Tú | R7 |
 
 

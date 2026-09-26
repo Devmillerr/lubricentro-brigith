@@ -20,12 +20,26 @@ export interface StockEntry {
   productId: string;
   type: InventoryMovementType;
   /**
-   * Con signo: entra +, sale − (BR-P3). Se ignora en `COUNT`, donde el
-   * delta sale de `countedQuantity − saldo` (BR-P7).
+   * Con signo: entra +, sale − (BR-P3). Se ignora en `COUNT` y en un
+   * `ADJUSTMENT` con `physicalQuantity`, donde el delta se calcula contra el
+   * saldo con la fila bloqueada (BR-P7, BR-P7b).
    */
   quantityDelta?: number;
   /** Solo en `COUNT`. */
   countedQuantity?: number;
+  /**
+   * Solo en `ADJUSTMENT` (R3, BR-P7b): la cantidad que hay en el estante. El
+   * delta es `physicalQuantity − saldo`. Exige producto activo (DEC-51) y con
+   * conteo (DEC-48), y una diferencia distinta de 0 (DEC-49). No marca
+   * `isCounted`. Se guarda en `countedQuantity`.
+   */
+  physicalQuantity?: number;
+  /**
+   * Rechaza con 409 `PRODUCT_INACTIVE` si el producto está inactivo (DEC-51).
+   * Se evalúa con la fila bloqueada. Lo usan la recepción en lote y, siempre,
+   * el ajuste por cantidad física.
+   */
+  requireActiveProduct?: boolean;
   reason?: string;
   refType?: string;
   refId?: string;
@@ -142,6 +156,9 @@ export async function applyStockMovements(
     };
 
     for (const entry of entries.filter((e) => e.productId === productId)) {
+      if (entry.requireActiveProduct || isPhysicalAdjustment(entry)) {
+        assertActive(product);
+      }
       const before = plan.finalBalance;
       let quantityDelta: Prisma.Decimal;
       let previousBalance: Prisma.Decimal | null = null;
@@ -151,6 +168,19 @@ export async function applyStockMovements(
         quantityDelta = new Prisma.Decimal(entry.countedQuantity ?? 0).minus(before);
         previousBalance = before;
         plan.isCounted = true;
+      } else if (isPhysicalAdjustment(entry)) {
+        assertCounted(plan.isCounted);
+        // Mismo cálculo que COUNT, sobre el saldo leído con la fila bloqueada.
+        quantityDelta = new Prisma.Decimal(entry.physicalQuantity).minus(before);
+        if (quantityDelta.isZero()) {
+          throw new ProblemException({
+            status: HttpStatus.BAD_REQUEST,
+            code: 'NO_DIFFERENCE',
+            title: 'La cantidad física es igual al saldo del sistema',
+            detail: `El sistema ya tiene ${before.toString()}: no hay nada que ajustar.`,
+          });
+        }
+        previousBalance = before;
       } else {
         quantityDelta = new Prisma.Decimal(entry.quantityDelta ?? 0);
         if (CONSUMPTION_TYPES.has(entry.type) && quantityDelta.isNegative()) {
@@ -224,7 +254,11 @@ export async function applyStockMovements(
             type: entry.type,
             quantityDelta: planned.quantityDelta,
             countedQuantity:
-              entry.type === InventoryMovementType.COUNT ? entry.countedQuantity : null,
+              entry.type === InventoryMovementType.COUNT
+                ? entry.countedQuantity
+                : isPhysicalAdjustment(entry)
+                  ? entry.physicalQuantity
+                  : null,
             previousBalance: planned.previousBalance,
             resultingBalance: planned.resultingBalance,
             reason: entry.reason,
@@ -244,4 +278,37 @@ export async function applyStockMovements(
   }
 
   return { movements, warnings };
+}
+
+function isPhysicalAdjustment(
+  entry: StockEntry,
+): entry is StockEntry & { physicalQuantity: number } {
+  return entry.type === InventoryMovementType.ADJUSTMENT && entry.physicalQuantity !== undefined;
+}
+
+/**
+ * Recepción y ajuste físico no operan sobre productos inactivos (DEC-51). Se
+ * evalúa antes de escribir, así el rechazo no deja nada a medias.
+ */
+function assertActive(product: { isActive: boolean }): void {
+  if (!product.isActive) {
+    throw new ProblemException({
+      status: HttpStatus.CONFLICT,
+      code: 'PRODUCT_INACTIVE',
+      title: 'El producto está inactivo',
+      detail: 'Reactívalo antes de mover su stock.',
+    });
+  }
+}
+
+/** Un ajuste por cantidad física exige conteo inicial (DEC-48). */
+function assertCounted(isCounted: boolean): void {
+  if (!isCounted) {
+    throw new ProblemException({
+      status: HttpStatus.CONFLICT,
+      code: 'ADJUSTMENT_REQUIRES_COUNT',
+      title: 'El producto no tiene conteo inicial',
+      detail: 'Registra un conteo antes de ajustar su stock.',
+    });
+  }
 }

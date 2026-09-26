@@ -94,6 +94,7 @@ export default function ProductInventoryPage() {
 
           <StockOperationForm
             productId={data.id}
+            productActive={data.isActive}
             stock={stock.data}
             onRegistered={(movement) => {
               setLastRegistered(movement.type);

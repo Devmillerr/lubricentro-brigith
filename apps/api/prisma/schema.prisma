@@ -63,6 +63,7 @@ model Business {
   products               Product[]
   productCompatibilities ProductCompatibility[]
   inventoryMovements     InventoryMovement[]
+  inventoryReceipts      InventoryReceipt[]
   maintenanceTypes       MaintenanceType[]
   maintenances           Maintenance[]
   reminders              Reminder[]
@@ -97,6 +98,7 @@ model User {
   voidedMaintenances       Maintenance[]
   reminderContacts         ReminderContact[]
   inventoryMovements       InventoryMovement[]
+  inventoryReceipts        InventoryReceipt[]
 
   @@map("users")
 }
@@ -403,6 +405,30 @@ model InventoryMovement {
 
   @@index([businessId, productId, occurredAt])
   @@map("inventory_movements")
+}
+
+/// Cabecera de una recepción de mercadería en lote (R3, BR-P6). Sus líneas
+/// son `InventoryMovement` de tipo `PURCHASE_IN` con
+/// `refType = 'InventoryReceipt'` y `refId = id`, igual que un mantenimiento
+/// enlaza sus movimientos (sin FK: `refType`/`refId` es polimórfico). Solo se
+/// insertan; no se editan ni se borran (BR-G5). Sin proveedor ni costo de
+/// compra (DEC-36).
+model InventoryReceipt {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  /// Cuándo llegó la mercadería; puede ser anterior al registro.
+  occurredAt DateTime @default(now())
+  note       String?
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([businessId, occurredAt])
+  @@map("inventory_receipts")
 }
 
 enum MaintenanceStatus {

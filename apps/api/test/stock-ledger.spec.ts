@@ -20,6 +20,7 @@ function setup() {
     unit: 'litro',
     stockQuantity: 0,
     isCounted: false,
+    isActive: true,
   });
   products.set('prod-b', {
     id: 'prod-b',
@@ -28,6 +29,16 @@ function setup() {
     unit: 'unidad',
     stockQuantity: 50,
     isCounted: true,
+    isActive: true,
+  });
+  products.set('prod-inactive', {
+    id: 'prod-inactive',
+    businessId: 'biz-a',
+    name: 'Filtro descontinuado',
+    unit: 'unidad',
+    stockQuantity: 4,
+    isCounted: true,
+    isActive: false,
   });
 
   const apply = (
@@ -237,5 +248,149 @@ describe('StockLedger', () => {
 
     expect(await apply([])).toEqual({ movements: [], warnings: [] });
     expect(movements.size).toBe(0);
+  });
+});
+
+const physicalAdjustment = (
+  physicalQuantity: number,
+  productId = 'prod-a',
+): Omit<StockEntry, 'occurredAt'> => ({
+  productId,
+  type: InventoryMovementType.ADJUSTMENT,
+  physicalQuantity,
+  reason: 'Conteo físico distinto',
+});
+
+describe('StockLedger: ajuste por cantidad física (R3, BR-P7b)', () => {
+  it('positivo: sube el saldo a lo que hay en el estante y guarda anterior, físico, diferencia y resultante', async () => {
+    const { apply, balance, sumOfMovements, products } = setup();
+    await apply([count(10)]);
+
+    const { movements, warnings } = await apply([physicalAdjustment(12.5)]);
+
+    const movement = movements[0]!;
+    expect(movement.type).toBe(InventoryMovementType.ADJUSTMENT);
+    expect(Number(movement.previousBalance)).toBe(10);
+    expect(Number(movement.countedQuantity)).toBe(12.5);
+    expect(Number(movement.quantityDelta)).toBe(2.5);
+    expect(Number(movement.resultingBalance)).toBe(12.5);
+    expect(movement.reason).toBe('Conteo físico distinto');
+    expect(movement.createdById).toBe('user-a');
+    expect(balance()).toBe(12.5);
+    expect(sumOfMovements()).toBe(12.5);
+    expect(products.get('prod-a')!.isCounted).toBe(true);
+    expect(warnings).toEqual([]);
+  });
+
+  it('negativo: baja el saldo a lo que hay en el estante', async () => {
+    const { apply, balance, sumOfMovements } = setup();
+    await apply([count(10)]);
+
+    const { movements, warnings } = await apply([physicalAdjustment(7)]);
+
+    const movement = movements[0]!;
+    expect(Number(movement.previousBalance)).toBe(10);
+    expect(Number(movement.countedQuantity)).toBe(7);
+    expect(Number(movement.quantityDelta)).toBe(-3);
+    expect(Number(movement.resultingBalance)).toBe(7);
+    expect(balance()).toBe(7);
+    expect(sumOfMovements()).toBe(7);
+    // Un ajuste corrige el estante: no es consumo, no pasa por la política.
+    expect(warnings).toEqual([]);
+  });
+
+  it('corrige un saldo negativo hasta 0', async () => {
+    const { apply, balance } = setup();
+    await apply([count(2)]);
+    await apply([
+      { productId: 'prod-a', type: InventoryMovementType.MAINTENANCE_USE, quantityDelta: -5 },
+    ]);
+
+    const { movements } = await apply([physicalAdjustment(0)]);
+
+    expect(Number(movements[0]!.previousBalance)).toBe(-3);
+    expect(Number(movements[0]!.quantityDelta)).toBe(3);
+    expect(balance()).toBe(0);
+  });
+
+  it('calcula la diferencia contra el saldo vigente al aplicarse, no contra uno anterior', async () => {
+    const { apply, balance } = setup();
+    await apply([count(10)]);
+    // Otra operación cambia el saldo entre que el usuario vio "10" y guardó.
+    await apply([
+      { productId: 'prod-a', type: InventoryMovementType.PURCHASE_IN, quantityDelta: 5 },
+    ]);
+
+    const { movements } = await apply([physicalAdjustment(12)]);
+
+    expect(Number(movements[0]!.previousBalance)).toBe(15);
+    expect(Number(movements[0]!.quantityDelta)).toBe(-3);
+    expect(balance()).toBe(12);
+  });
+
+  it('cantidad física igual al saldo: 400 NO_DIFFERENCE y no escribe nada (DEC-49)', async () => {
+    const { apply, balance, movements } = setup();
+    await apply([count(10)]);
+
+    await expect(apply([physicalAdjustment(10)])).rejects.toMatchObject({
+      code: 'NO_DIFFERENCE',
+      status: 400,
+    });
+
+    expect(balance()).toBe(10);
+    expect(movements.size).toBe(1);
+  });
+
+  it('producto sin conteo: 409 ADJUSTMENT_REQUIRES_COUNT, sin escribir ni marcar isCounted (DEC-48)', async () => {
+    const { apply, balance, movements, products } = setup();
+
+    await expect(apply([physicalAdjustment(5)])).rejects.toMatchObject({
+      code: 'ADJUSTMENT_REQUIRES_COUNT',
+      status: 409,
+    });
+
+    expect(balance()).toBe(0);
+    expect(movements.size).toBe(0);
+    expect(products.get('prod-a')!.isCounted).toBe(false);
+  });
+
+  it('producto inactivo: 409 PRODUCT_INACTIVE y no escribe nada (DEC-51)', async () => {
+    const { apply, balance, movements } = setup();
+
+    await expect(apply([physicalAdjustment(1, 'prod-inactive')])).rejects.toMatchObject({
+      code: 'PRODUCT_INACTIVE',
+      status: 409,
+    });
+
+    expect(balance('prod-inactive')).toBe(4);
+    expect(movements.size).toBe(0);
+  });
+
+  it('producto de otro negocio: PRODUCT_NOT_FOUND y no escribe nada', async () => {
+    const { apply, balance, movements } = setup();
+
+    await expect(apply([physicalAdjustment(1, 'prod-b')])).rejects.toMatchObject({
+      code: 'PRODUCT_NOT_FOUND',
+    });
+
+    expect(balance('prod-b')).toBe(50);
+    expect(movements.size).toBe(0);
+  });
+
+  it('el ajuste por delta sigue igual: sin conteo previo y sin countedQuantity', async () => {
+    const { apply, balance } = setup();
+
+    const { movements } = await apply([
+      {
+        productId: 'prod-a',
+        type: InventoryMovementType.ADJUSTMENT,
+        quantityDelta: 2,
+        reason: 'Otro',
+      },
+    ]);
+
+    expect(movements[0]!.countedQuantity).toBeNull();
+    expect(movements[0]!.previousBalance).toBeNull();
+    expect(balance()).toBe(2);
   });
 });

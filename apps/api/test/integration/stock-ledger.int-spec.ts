@@ -120,6 +120,74 @@ function applyInTx(
   );
 }
 
+function applyPhysicalInTx(tenant: Tenant, productId: string, physicalQuantity: number) {
+  return forBusiness(prisma, tenant.businessId).$transaction((tx) =>
+    applyStockMovements(tx, {
+      businessId: tenant.businessId,
+      createdById: tenant.userId,
+      policy: 'WARN',
+      entries: [
+        {
+          productId,
+          type: InventoryMovementType.ADJUSTMENT,
+          physicalQuantity,
+          reason: 'Conteo físico distinto',
+          occurredAt: new Date(),
+        },
+      ],
+    }),
+  );
+}
+
+/**
+ * Abre una transacción que aplica una entrada (y con ella toma el FOR UPDATE
+ * del producto) y **no confirma** hasta que se llame a `release()`. Sirve
+ * para forzar el intercalado: otra operación empieza mientras esta tiene el
+ * bloqueo y el saldo nuevo todavía no está confirmado.
+ */
+async function holdLockWithReceipt(tenant: Tenant, productId: string, quantityDelta: number) {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  let signalLocked!: () => void;
+  const locked = new Promise<void>((resolve) => (signalLocked = resolve));
+
+  const done = forBusiness(prisma, tenant.businessId).$transaction(
+    async (tx) => {
+      await applyStockMovements(tx, {
+        businessId: tenant.businessId,
+        createdById: tenant.userId,
+        policy: 'WARN',
+        entries: [
+          {
+            productId,
+            type: InventoryMovementType.PURCHASE_IN,
+            quantityDelta,
+            occurredAt: new Date(),
+          },
+        ],
+      });
+      signalLocked();
+      await released;
+    },
+    { timeout: 30_000 },
+  );
+  await locked;
+  return { release, done };
+}
+
+/** Espera hasta que alguna sesión esté bloqueada esperando un lock de fila. */
+async function waitForLockWaiter() {
+  for (let i = 0; i < 100; i++) {
+    const [row] = await prisma.$queryRaw<{ waiting: bigint }[]>(
+      Prisma.sql`SELECT COUNT(*) AS waiting FROM pg_stat_activity
+                 WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+    );
+    if (Number(row!.waiting) > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error('Ninguna sesión quedó esperando el bloqueo del producto');
+}
+
 let tenantA: Tenant;
 let tenantB: Tenant;
 
@@ -147,9 +215,11 @@ describe('StockLedger contra Postgres', () => {
     await applyInTx(tenantA, productId, InventoryMovementType.SALE, -4, 'BLOCK');
     const adjustment = await inventory.adjustment(tenantA.businessId, tenantA.userId, {
       productId,
-      quantityDelta: -1.5,
+      physicalQuantity: 24.5,
       reason: 'Merma',
     });
+    expect(Number(adjustment.previousBalance)).toBe(26);
+    expect(Number(adjustment.quantityDelta)).toBe(-1.5);
     expect(Number(adjustment.resultingBalance)).toBe(24.5);
 
     const stock = await stockOf(productId);
@@ -248,12 +318,9 @@ describe('StockLedger contra Postgres', () => {
             items: [{ productId, quantity: 2 }],
           }),
         ),
+        // Ajustes por delta directo al ledger: los físicos simultáneos se prueban abajo.
         ...Array.from({ length: 2 }, () =>
-          inventory.adjustment(tenantA.businessId, tenantA.userId, {
-            productId,
-            quantityDelta: -1,
-            reason: 'Concurrencia',
-          }),
+          applyInTx(tenantA, productId, InventoryMovementType.ADJUSTMENT, -1, 'WARN'),
         ),
       ];
       await Promise.all(operations);
@@ -307,6 +374,188 @@ describe('StockLedger contra Postgres', () => {
     });
   });
 
+  describe('concurrencia del ajuste por cantidad física (R3, BR-P7b)', () => {
+    it('espera el bloqueo y calcula la diferencia contra el saldo confirmado, no contra el que había al empezar', async () => {
+      const productId = await createProduct(tenantA, 10);
+
+      // T1 suma 5 y retiene el bloqueo sin confirmar.
+      const holder = await holdLockWithReceipt(tenantA, productId, 5);
+      // T2 empieza con el saldo confirmado todavía en 10 y queda esperando.
+      const adjustment = applyPhysicalInTx(tenantA, productId, 12);
+      await waitForLockWaiter();
+
+      holder.release();
+      await holder.done;
+      const { movements } = await adjustment;
+
+      // Con el bloqueo, T2 lee 15 (lo que dejó T1): 12 − 15 = −3. Si hubiera
+      // usado el 10 obsoleto, habría escrito +2 y el estante quedaría en 17.
+      const movement = movements[0]!;
+      expect(Number(movement.previousBalance)).toBe(15);
+      expect(Number(movement.countedQuantity)).toBe(12);
+      expect(Number(movement.quantityDelta)).toBe(-3);
+      expect(Number(movement.resultingBalance)).toBe(12);
+      expect(await stockOf(productId)).toMatchObject({
+        cached: 12,
+        sum: 12,
+        isCounted: true,
+        movements: 3,
+      });
+    });
+
+    it('si mientras esperaba el saldo llegó a lo físico: NO_DIFFERENCE sin escribir nada', async () => {
+      const productId = await createProduct(tenantA, 10);
+
+      const holder = await holdLockWithReceipt(tenantA, productId, 2);
+      const adjustment = applyPhysicalInTx(tenantA, productId, 12);
+      await waitForLockWaiter();
+
+      holder.release();
+      await holder.done;
+
+      // Contra el 10 obsoleto habría escrito +2 y dejado 14.
+      await expect(adjustment).rejects.toMatchObject({ code: 'NO_DIFFERENCE', status: 400 });
+      expect(await stockOf(productId)).toMatchObject({ cached: 12, sum: 12, movements: 2 });
+      const adjustments = await prisma.inventoryMovement.count({
+        where: { productId, type: InventoryMovementType.ADJUSTMENT },
+      });
+      expect(adjustments).toBe(0);
+    });
+
+    it('dos ajustes simultáneos a la misma cantidad física: uno escribe y el otro no tiene diferencia', async () => {
+      const productId = await createProduct(tenantA, 10);
+
+      const results = await Promise.allSettled([
+        applyPhysicalInTx(tenantA, productId, 20),
+        applyPhysicalInTx(tenantA, productId, 20),
+      ]);
+
+      // Sin bloqueo, los dos leerían 10 y cada uno sumaría +10: quedaría en 30.
+      const ok = results.filter((r) => r.status === 'fulfilled');
+      const rejected = results.filter((r) => r.status === 'rejected');
+      expect(ok).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0]!.reason).toMatchObject({ code: 'NO_DIFFERENCE' });
+      expect(await stockOf(productId)).toMatchObject({ cached: 20, sum: 20, movements: 2 });
+    });
+
+    it('ajustes físicos y entradas simultáneos mantienen caché = suma, y el ajuste parte del saldo del momento', async () => {
+      const productId = await createProduct(tenantA, 100);
+
+      const receipts = Array.from({ length: 4 }, () =>
+        inventory.receipt(tenantA.businessId, tenantA.userId, { productId, quantity: 3 }),
+      );
+      const adjustment = applyPhysicalInTx(tenantA, productId, 50);
+      const [{ movements }] = await Promise.all([adjustment, ...receipts]);
+
+      // El ajuste entró después de k entradas (0 ≤ k ≤ 4): partió de 100 + 3k,
+      // dejó 50, y las 4 − k restantes sumaron 3 cada una sobre ese 50.
+      const previous = Number(movements[0]!.previousBalance);
+      const receiptsBefore = (previous - 100) / 3;
+      expect(Number.isInteger(receiptsBefore)).toBe(true);
+      expect(receiptsBefore).toBeGreaterThanOrEqual(0);
+      expect(receiptsBefore).toBeLessThanOrEqual(4);
+      expect(Number(movements[0]!.resultingBalance)).toBe(50);
+
+      const expected = 50 + 3 * (4 - receiptsBefore);
+      expect(await stockOf(productId)).toMatchObject({
+        cached: expected,
+        sum: expected,
+        movements: 6,
+      });
+    });
+
+    it('un rechazo del ajuste deshace toda la operación, también el otro producto', async () => {
+      const counted = await createProduct(tenantA, 10);
+      const notCounted = await createProduct(tenantA);
+
+      await expect(
+        forBusiness(prisma, tenantA.businessId).$transaction((tx) =>
+          applyStockMovements(tx, {
+            businessId: tenantA.businessId,
+            createdById: tenantA.userId,
+            policy: 'WARN',
+            entries: [
+              {
+                productId: counted,
+                type: InventoryMovementType.ADJUSTMENT,
+                physicalQuantity: 7,
+                reason: 'Producto dañado',
+                occurredAt: new Date(),
+              },
+              {
+                productId: notCounted,
+                type: InventoryMovementType.ADJUSTMENT,
+                physicalQuantity: 3,
+                reason: 'Otro',
+                occurredAt: new Date(),
+              },
+            ],
+          }),
+        ),
+      ).rejects.toMatchObject({ code: 'ADJUSTMENT_REQUIRES_COUNT', status: 409 });
+
+      expect(await stockOf(counted)).toMatchObject({ cached: 10, sum: 10, movements: 1 });
+      expect(await stockOf(notCounted)).toMatchObject({
+        cached: 0,
+        sum: 0,
+        isCounted: false,
+        movements: 0,
+      });
+    });
+
+    it('POST de ajuste (servicio) sin conteo: ADJUSTMENT_REQUIRES_COUNT y el producto sigue sin conteo', async () => {
+      const productId = await createProduct(tenantA);
+      await applyInTx(tenantA, productId, InventoryMovementType.PURCHASE_IN, 4, 'WARN');
+
+      await expect(
+        inventory.adjustment(tenantA.businessId, tenantA.userId, {
+          productId,
+          physicalQuantity: 2,
+          reason: 'Conteo físico distinto',
+        }),
+      ).rejects.toMatchObject({ code: 'ADJUSTMENT_REQUIRES_COUNT', status: 409 });
+
+      expect(await stockOf(productId)).toMatchObject({
+        cached: 4,
+        sum: 4,
+        movements: 1,
+        isCounted: false,
+      });
+    });
+
+    it('POST de ajuste (servicio) con conteo: no cambia isCounted y guarda la cantidad física', async () => {
+      const productId = await createProduct(tenantA, 10);
+
+      const movement = await inventory.adjustment(tenantA.businessId, tenantA.userId, {
+        productId,
+        physicalQuantity: 7,
+        reason: 'Producto dañado',
+      });
+
+      expect(movement).toMatchObject({
+        type: InventoryMovementType.ADJUSTMENT,
+        reason: 'Producto dañado',
+        createdById: tenantA.userId,
+      });
+      expect(Number(movement.countedQuantity)).toBe(7);
+      expect(Number(movement.previousBalance)).toBe(10);
+      expect(Number(movement.quantityDelta)).toBe(-3);
+      expect(await stockOf(productId)).toMatchObject({ cached: 7, sum: 7, isCounted: true });
+    });
+
+    it('producto inactivo: PRODUCT_INACTIVE sin movimientos ni cambio de saldo', async () => {
+      const productId = await createProduct(tenantA, 10);
+      await prisma.product.update({ where: { id: productId }, data: { isActive: false } });
+
+      await expect(applyPhysicalInTx(tenantA, productId, 4)).rejects.toMatchObject({
+        code: 'PRODUCT_INACTIVE',
+        status: 409,
+      });
+      expect(await stockOf(productId)).toMatchObject({ cached: 10, sum: 10, movements: 1 });
+    });
+  });
+
   describe('idempotencia (caso 8)', () => {
     it('la misma clave, en paralelo y repetida después, registra un solo movimiento', async () => {
       const productId = await createProduct(tenantA, 1);
@@ -343,6 +592,13 @@ describe('StockLedger contra Postgres', () => {
       ).rejects.toMatchObject({ code: 'PRODUCT_NOT_FOUND' });
       await expect(
         applyInTx(tenantB, productId, InventoryMovementType.SALE, -1, 'WARN'),
+      ).rejects.toMatchObject({ code: 'PRODUCT_NOT_FOUND' });
+      await expect(
+        inventory.adjustment(tenantB.businessId, tenantB.userId, {
+          productId,
+          physicalQuantity: 3,
+          reason: 'Otro',
+        }),
       ).rejects.toMatchObject({ code: 'PRODUCT_NOT_FOUND' });
       await expect(inventory.getStock(tenantB.businessId, productId)).rejects.toMatchObject({
         code: 'PRODUCT_NOT_FOUND',

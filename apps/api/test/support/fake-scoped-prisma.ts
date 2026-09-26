@@ -60,6 +60,13 @@ function fieldMatches(value: unknown, condition: unknown): boolean {
     if ('not' in condition) {
       return value !== condition.not;
     }
+    // Comparaciones numéricas (Decimal real o number del fake coercen con Number()).
+    if ('lte' in condition || 'lt' in condition) {
+      if (value === null || value === undefined) return false;
+      const n = Number(value);
+      const { lte, lt } = condition as { lte?: unknown; lt?: unknown };
+      return (lte === undefined || n <= Number(lte)) && (lt === undefined || n < Number(lt));
+    }
   }
   return value === condition;
 }
@@ -96,20 +103,41 @@ function resolveIncludes(
 }
 
 /** Compartida por `findMany` y `findFirst`: Prisma también ordena antes de tomar la primera fila. */
+type OrderBy = Record<string, 'asc' | 'desc'> | Record<string, 'asc' | 'desc'>[];
+
 function applyOrderBy(
   rows: Record<string, unknown>[],
-  orderBy?: Record<string, 'asc' | 'desc'>,
+  orderBy?: OrderBy,
 ): Record<string, unknown>[] {
-  const orderByEntry = orderBy && Object.entries(orderBy)[0];
-  if (!orderByEntry) return rows;
+  // Como Prisma: un objeto o una lista de objetos; en la lista, los siguientes desempatan.
+  const entries = (Array.isArray(orderBy) ? orderBy : orderBy ? [orderBy] : []).flatMap((o) =>
+    Object.entries(o),
+  );
+  if (entries.length === 0) return rows;
 
-  const [field, direction] = orderByEntry;
   return [...rows].sort((a, b) => {
-    const av = toComparable(a[field]);
-    const bv = toComparable(b[field]);
-    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-    return direction === 'desc' ? -cmp : cmp;
+    for (const [field, direction] of entries) {
+      const av = toComparable(a[field]);
+      const bv = toComparable(b[field]);
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      if (cmp !== 0) return direction === 'desc' ? -cmp : cmp;
+    }
+    return 0;
   });
+}
+
+/** `groupBy({ by, where, _count: { _all: true } })`: lo único que usan los servicios. */
+function runGroupBy(store: Store, args: { by: string[]; where?: WhereClause }) {
+  const groups = new Map<string, { keys: Record<string, unknown>; count: number }>();
+  for (const record of store.values()) {
+    if (!matchesWhere(record, args.where)) continue;
+    const keys = Object.fromEntries(args.by.map((field) => [field, record[field]]));
+    const groupKey = JSON.stringify(keys);
+    const group = groups.get(groupKey) ?? { keys, count: 0 };
+    group.count += 1;
+    groups.set(groupKey, group);
+  }
+  return [...groups.values()].map(({ keys, count }) => ({ ...keys, _count: { _all: count } }));
 }
 
 function runFindMany(
@@ -119,7 +147,7 @@ function runFindMany(
     cursor?: { id: string };
     skip?: number;
     take?: number;
-    orderBy?: Record<string, 'asc' | 'desc'>;
+    orderBy?: OrderBy;
     include?: Record<string, boolean>;
   },
   stores: Map<string, Store>,
@@ -163,6 +191,10 @@ function runOp(
     }
     case 'findMany':
       return runFindMany(store, args, stores);
+    case 'groupBy':
+      return runGroupBy(store, args as never);
+    case 'count':
+      return [...store.values()].filter((r) => matchesWhere(r, args.where)).length;
     case 'create': {
       const id = (args.data?.id as string) ?? `id-${store.size + 1}`;
       const record: Record<string, unknown> = { isActive: true, ...args.data, id };
@@ -266,6 +298,20 @@ export function buildFakeScopedPrisma(
               operation: 'findMany',
               args,
               query: (a: unknown) => runOp(store, 'findMany', a as never, [], stores),
+            }),
+          count: (args: Record<string, unknown> = {}) =>
+            operations({
+              model,
+              operation: 'count',
+              args,
+              query: (a: unknown) => runOp(store, 'count', a as never, [], stores),
+            }),
+          groupBy: (args: Record<string, unknown>) =>
+            operations({
+              model,
+              operation: 'groupBy',
+              args,
+              query: (a: unknown) => runOp(store, 'groupBy', a as never, [], stores),
             }),
           create: (args: Record<string, unknown>) =>
             operations({

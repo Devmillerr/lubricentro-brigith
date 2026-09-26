@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Headers, HttpStatus, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -9,6 +20,7 @@ import {
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AccessTokenPayload } from '../auth/types/jwt-payload';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { ProblemException } from '../common/exceptions/problem.exception';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { CreateAdjustmentDto } from './dto/create-adjustment.dto';
@@ -26,6 +38,9 @@ import {
 import {
   InventoryMovementPageResponse,
   InventoryMovementResponse,
+  InventoryReceiptResponse,
+  InventoryReceiptSummaryPageResponse,
+  StockAlertsResponse,
   StockViewResponse,
 } from './dto/inventory.response';
 
@@ -45,6 +60,13 @@ export class InventoryController {
   @Get('stock')
   getStock(@CurrentUser() user: AccessTokenPayload, @Query() query: StockQueryDto) {
     return this.inventoryService.getStock(user.businessId, query.productId);
+  }
+
+  /** Stock que requiere atención (R3, BR-P19): agotados, negativos y sin conteo. */
+  @ApiOkResponse({ type: StockAlertsResponse })
+  @Get('alerts')
+  getAlerts(@CurrentUser() user: AccessTokenPayload) {
+    return this.inventoryService.getAlerts(user.businessId);
   }
 
   @ApiOkResponse({ type: InventoryMovementPageResponse })
@@ -80,11 +102,35 @@ export class InventoryController {
     return result.body;
   }
 
-  @ApiCreatedResponse({ type: InventoryMovementResponse })
+  /** Historial de recepciones, de la más reciente a la más antigua (R3). */
+  @ApiOkResponse({ type: InventoryReceiptSummaryPageResponse })
+  @ApiErrors({ 400: VALIDATION_ERRORS })
+  @Get('receipts')
+  listReceipts(@CurrentUser() user: AccessTokenPayload, @Query() query: PaginationQueryDto) {
+    return this.inventoryService.listReceipts(user.businessId, query);
+  }
+
+  /** Recepción con sus líneas `PURCHASE_IN`, ordenadas por `productId` (R3). */
+  @ApiOkResponse({ type: InventoryReceiptResponse })
+  @ApiErrors({ 400: VALIDATION_ERRORS, 404: ['RECEIPT_NOT_FOUND'] })
+  @Get('receipts/:id')
+  async getReceipt(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const { receipt, lines } = await this.inventoryService.getReceipt(user.businessId, id);
+    return { ...receipt, lines };
+  }
+
+  /**
+   * Recepción en lote (R3, BR-P6): todo o nada. Las líneas se devuelven en el
+   * orden enviado.
+   */
+  @ApiCreatedResponse({ type: InventoryReceiptResponse })
   @ApiErrors({
-    400: [...VALIDATION_ERRORS, ...IDEMPOTENCY_ERRORS[400]],
+    400: [...VALIDATION_ERRORS, 'DUPLICATE_PRODUCT_LINE', ...IDEMPOTENCY_ERRORS[400]],
     404: ['PRODUCT_NOT_FOUND'],
-    409: [...IDEMPOTENCY_ERRORS[409]],
+    409: ['PRODUCT_INACTIVE', ...IDEMPOTENCY_ERRORS[409]],
   })
   @Post('receipts')
   @ApiHeader({ name: 'Idempotency-Key', required: true })
@@ -98,19 +144,28 @@ export class InventoryController {
       key: this.requireIdempotencyKey(idempotencyKey),
       endpoint: 'inventory/receipts',
       requestHash: this.idempotency.hashRequest(dto),
-      handler: async () => ({
-        status: HttpStatus.CREATED,
-        body: await this.inventoryService.receipt(user.businessId, user.sub, dto),
-      }),
+      handler: async () => {
+        const { receipt, lines } = await this.inventoryService.createReceiptBatch(
+          user.businessId,
+          user.sub,
+          dto,
+        );
+        return { status: HttpStatus.CREATED, body: { ...receipt, lines } };
+      },
     });
     return result.body;
   }
 
+  /**
+   * Ajuste por cantidad física (R3, BR-P7b). Responde el movimiento
+   * `ADJUSTMENT` con `previousBalance`, `quantityDelta`, `resultingBalance`
+   * y `countedQuantity` (= la cantidad física enviada).
+   */
   @ApiCreatedResponse({ type: InventoryMovementResponse })
   @ApiErrors({
-    400: [...VALIDATION_ERRORS, ...IDEMPOTENCY_ERRORS[400]],
+    400: [...VALIDATION_ERRORS, 'NO_DIFFERENCE', ...IDEMPOTENCY_ERRORS[400]],
     404: ['PRODUCT_NOT_FOUND'],
-    409: [...IDEMPOTENCY_ERRORS[409]],
+    409: ['ADJUSTMENT_REQUIRES_COUNT', 'PRODUCT_INACTIVE', ...IDEMPOTENCY_ERRORS[409]],
   })
   @Post('adjustments')
   @ApiHeader({ name: 'Idempotency-Key', required: true })

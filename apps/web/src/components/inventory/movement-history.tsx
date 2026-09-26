@@ -124,6 +124,15 @@ function MovementRow({ movement }: { movement: InventoryMovement }) {
             {formatQuantity(movement.previousBalance)}
           </span>
         )}
+      {/* Ajuste por cantidad física (BR-P7b); los ajustes anteriores a R3 no la tienen. */}
+      {movement.type === 'ADJUSTMENT' &&
+        movement.countedQuantity !== null &&
+        movement.previousBalance !== null && (
+          <span className="text-sm text-[var(--muted-foreground)]">
+            En el estante {formatQuantity(movement.countedQuantity)} · el sistema decía{' '}
+            {formatQuantity(movement.previousBalance)}
+          </span>
+        )}
       {reason && <span className="text-sm">{reason}</span>}
     </li>
   );

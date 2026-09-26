@@ -1,6 +1,6 @@
 # 07 — UI/UX
 
-**Versión:** 0.3 · **Actualizado:** 2026-09-21
+**Versión:** 0.4 · **Actualizado:** 2026-09-25 (Inventario de R3 en §3.6)
 Etiquetas: ver `03-BUSINESS-RULES.md`. Este documento describe **flujos y pantallas**, no diseño visual. Los flujos son [TÉCNICO] y se validan con Brigith antes de cerrar el diseño (guía en Discovery §5). Mobile-first [DECISIÓN] D-01.
 
 ## 1. Principios
@@ -72,6 +72,20 @@ Tres acciones sobre un producto, todas con un formulario corto:
 Historial de movimientos por producto, de solo lectura.
 
 **Carga del stock inicial:** lista de productos con un indicador "sin conteo inicial" y el botón **Contar** en cada fila, para poder hacerlo de una vez o producto por producto. Qué proceso sigue Brigith es [DECISIÓN PENDIENTE] DEC-21; la pantalla sirve para ambos.
+
+#### Cambios de R3 (aprobados el 2026-09-25, sin implementar)
+
+La UI forma parte de R3 (DEC-52). **Ingreso** y **Ajuste** cambian así; **Contar** queda igual:
+
+| Acción | Campos | Uso |
+|---|---|---|
+| **Recibir** (reemplaza Ingreso) | Varios productos: buscador del catálogo con chips de categoría y filtro rápido "Aceites auto/moto"; por línea, cantidad con −/+ o teclado (admite decimales); fecha y nota opcionales | Reposición de mercadería en una sola operación (BR-P6). **Guardar recepción** guarda todo o nada. Solo se ofrecen productos activos (BR-P21) |
+| **Ajustar** (reemplaza Ajuste) | Muestra "El sistema dice: N". Se ingresa **lo que hay en el estante**, se elige el motivo con chips (Conteo físico distinto · Producto dañado · Consumo interno · Otro) y se puede agregar texto. Antes de guardar se ve la diferencia | Correcciones cuando el sistema no coincide con el estante (BR-P7b, BR-P10). Solo en productos activos con conteo: sin conteo, la pantalla ofrece **Contar**. Si la cantidad es igual al saldo, no hay nada que guardar |
+
+- **Historial de recepciones:** lista (fecha, cantidad de productos, nota) y detalle con sus líneas.
+- **Implementado (2026-09-25, sin commit): Recibir e historial de recepciones.** Rutas `/inventario/recepciones`, `/inventario/recepciones/nueva` y `/inventario/recepciones/[id]`, con acceso desde la cabecera de Inventario. El filtro rápido son dos chips, "Aceite auto" y "Aceite moto", que aparecen solo si existen esas categorías. La pestaña **Ingreso** del inventario de un producto se mantiene, pero abre Recibir con ese producto ya agregado (`?producto=`), en vez de registrar un ingreso de una línea (decisión del usuario, 2026-09-25). **Ajustar** y **Stock que requiere atención** también están implementados (2026-09-25, sin commit). Ajustar es la pestaña "Ajuste" del inventario del producto. Las alertas van arriba de la lista de Inventario, y "Ver y contar" activa el filtro "Sin conteo".
+- **Stock que requiere atención**, en Inventario: agotados y negativos (solo productos con conteo) y cuántos productos siguen sin conteo inicial, con acceso a Contar (BR-P19). Es una lista, no un gráfico, y no hay stock mínimo.
+- Los errores se validan en el formulario antes de enviar (líneas vacías, cantidades ≤ 0, productos repetidos), para no mostrar los mensajes de validación de la API, que hoy están en inglés.
 
 ### 3.7 Configuración
 Plantilla de WhatsApp con vista previa, días de anticipación, regla por defecto cuando hay km y fecha, política de stock insuficiente y código de país. Todos los valores abiertos aparecen vacíos o marcados como provisionales.

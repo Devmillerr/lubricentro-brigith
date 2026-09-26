@@ -1,6 +1,6 @@
 # 06 — API REST
 
-**Versión:** 0.3 · **Actualizado:** 2026-09-21
+**Versión:** 0.4 · **Actualizado:** 2026-09-25 (contrato de R3 en §2, Inventario)
 Etiquetas: ver `03-BUSINESS-RULES.md`. Todo lo de este documento es [TÉCNICO] salvo lo indicado. La documentación viva será Swagger/OpenAPI generada por NestJS en `/api/docs`; este documento fija el diseño.
 
 ## 1. Convenciones
@@ -85,10 +85,33 @@ No existe ningún endpoint ni efecto lateral que cree compatibilidades a partir 
 | GET | `/inventory/stock?productId=` | Saldo por producto, con `isCounted` (BR-P8). Lee la caché de `Product` (R1) |
 | GET | `/inventory/movements?productId=&type=` | Historial de movimientos |
 | POST | `/inventory/counts` | `{ productId, countedQuantity, occurredAt? }`. Conteo físico; sirve como stock inicial (BR-P7). Guarda la diferencia contra el saldo |
-| POST | `/inventory/receipts` | `{ productId, quantity, occurredAt? }`. Ingreso de mercadería (BR-P6) |
-| POST | `/inventory/adjustments` | `{ productId, quantityDelta, reason }`. Motivo obligatorio (BR-P10) |
+| POST | `/inventory/receipts` | ~~`{ productId, quantity, occurredAt? }`~~. Reemplazado el 2026-09-25 por el contrato de R3 de abajo (ya implementado) |
+| POST | `/inventory/adjustments` | ~~`{ productId, quantityDelta, reason }`~~. Reemplazado el 2026-09-25 por el contrato de R3 de abajo (ya implementado) |
 
 No existen endpoints para editar ni borrar movimientos (BR-G5).
+
+#### Cambios de R3 (aprobados el 2026-09-25, sin implementar)
+
+Recepción en lote, ajuste por cantidad física y alertas de stock. Los dos `POST` son **cambios incompatibles**. El único cliente es `apps/web`, así que la API y la web se despliegan juntas. Las escrituras siguen exigiendo `Idempotency-Key` y aceptan un `id` UUID generado por el cliente (DEC-12).
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| POST | `/inventory/receipts` | `{ id?, occurredAt?, note? (≤500), lines: [{ productId, quantity > 0 }] }`, de 1 a 100 líneas y sin productos repetidos. Crea una cabecera `InventoryReceipt` y un `PURCHASE_IN` por línea en una transacción: si una línea es inválida, no se guarda nada (BR-P6). Sin proveedor ni costo (DEC-36). **Implementado (2026-09-25).** Responde 201 `InventoryReceiptResponse`: `{ id, businessId, occurredAt, note, createdById, createdAt, lines }`, con `lines` = los `InventoryMovementResponse` (`PURCHASE_IN`, `refType: "InventoryReceipt"`, `refId` = id de la recepción) en el orden enviado |
+| GET | `/inventory/receipts?limit=&cursor=` | Historial de recepciones, de la más reciente a la más antigua por `occurredAt`, con `id` como desempate estable. **Implementado (2026-09-25).** Responde 200 `InventoryReceiptSummaryPage` `{ items, nextCursor }`; cada elemento es la cabecera `{ id, businessId, occurredAt, note, createdById, createdAt, lineCount }`, sin las líneas (forma aprobada por el usuario). Dos consultas por página: cabeceras y un conteo agrupado de líneas |
+| GET | `/inventory/receipts/:id` | Recepción con sus líneas (producto, cantidad, saldo resultante). **Implementado (2026-09-25).** Responde 200 `InventoryReceiptResponse`, la misma forma que el `POST` (aprobada por el usuario), con `lines` = sus `PURCHASE_IN` ordenados por `productId` (el orden de envío no se guarda). 404 `RECEIPT_NOT_FOUND` si no existe o es de otro negocio; 400 si `:id` no es UUID |
+| POST | `/inventory/adjustments` | `{ productId, physicalQuantity ≥ 0, reason }`. La diferencia se calcula en el servidor con el producto bloqueado (BR-P7b). Responde `{ previousBalance, quantityDelta, resultingBalance, reason, createdById, occurredAt }`. **Implementado (2026-09-25).** Responde 201 `InventoryMovementResponse`, el movimiento `ADJUSTMENT` completo: trae esos campos, más `countedQuantity` (la cantidad física enviada), `id`, `productId` y `type`. `reason` es obligatorio (sin texto → 400, máx. 500). Sin `id` ni `occurredAt` del cliente: `occurredAt` es la hora del servidor. Errores: 400 `NO_DIFFERENCE`, 404 `PRODUCT_NOT_FOUND` (inexistente o de otro negocio), 409 `ADJUSTMENT_REQUIRES_COUNT` y 409 `PRODUCT_INACTIVE`. El ajuste no marca `isCounted` |
+| GET | `/inventory/alerts` | `{ outOfStock[], negative[], notCountedCount }`. Solo productos activos. `outOfStock` (saldo = 0) y `negative` (saldo < 0) solo incluyen productos con conteo; los que no tienen conteo solo suman en `notCountedCount` (BR-P19). Lee la caché de `Product`. **Implementado (2026-09-25).** Responde 200 `StockAlertsResponse`. Cada elemento de `outOfStock` y `negative` es `{ productId, name, unit, balance }` (forma aprobada por el usuario), ordenado por nombre y sin paginar. Hace dos consultas: la lista de productos con saldo ≤ 0 y el conteo de los que no tienen conteo inicial. Solo cubre el negocio autenticado. Sin stock mínimo |
+
+Errores de R3:
+
+| Código | Estado | Cuándo |
+|---|---|---|
+| `DUPLICATE_PRODUCT_LINE` | 400 | La recepción repite un producto |
+| `NO_DIFFERENCE` | 400 | La cantidad física del ajuste es igual al saldo del sistema (DEC-49) |
+| `PRODUCT_NOT_FOUND` | 404 | El producto no existe o es de otro negocio. En una recepción, rechaza el lote completo |
+| `RECEIPT_NOT_FOUND` | 404 | La recepción no existe o es de otro negocio |
+| `ADJUSTMENT_REQUIRES_COUNT` | 409 | El producto no tiene conteo inicial; se pide un `POST /inventory/counts` antes (DEC-48) |
+| `PRODUCT_INACTIVE` | 409 | Recepción o ajuste sobre un producto inactivo. En una recepción, rechaza el lote completo (DEC-51) |
 
 ### Mantenimientos
 | Método | Ruta | Descripción |

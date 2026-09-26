@@ -1,6 +1,6 @@
 # 03 — Reglas de negocio
 
-**Versión:** 0.3 · **Actualizado:** 2026-09-21
+**Versión:** 0.4 · **Actualizado:** 2026-09-25 (reglas de R3: BR-P6, BR-P7b, BR-P10, BR-P19, BR-P21)
 **Fuentes de verdad:** [`/research/BRIGITH-DISCOVERY.md`](../research/BRIGITH-DISCOVERY.md) y [`01-VISION.md`](01-VISION.md).
 
 ## Etiquetas (iguales en todos los documentos)
@@ -103,11 +103,12 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 | BR-P3 | Todo cambio de stock es un movimiento (`InventoryMovement`). El saldo de un producto es la suma de sus movimientos. Los movimientos no se editan ni se borran (BR-G5). | [TÉCNICO] |
 | BR-P4 | Tipos de movimiento con punto de entrada en el MVP: `COUNT` (conteo físico, incluido el inicial), `PURCHASE_IN` (ingreso de mercadería), `MAINTENANCE_USE`, `MAINTENANCE_VOID` (reverso) y `ADJUSTMENT` (ajuste manual). El modelo define además `SALE` y `SALE_VOID` (salidas por venta de producto); su punto de entrada se decide en DEC-24 (BR-P14). | [TÉCNICO] |
 | BR-P5 | Cada producto usado en un mantenimiento con control de stock genera un movimiento `MAINTENANCE_USE` en la misma operación que guarda el mantenimiento (BR-M10). | [DECISIÓN] D-13 / DEC-04 |
-| BR-P6 | **Ingreso de mercadería** entra en el MVP: sin entradas el stock solo bajaría, y los aceites se reponen semanalmente. Solo registra producto, cantidad y fecha; no modela proveedores. | [TÉCNICO] (consecuencia de DEC-04; C-18) · qué otros productos se reponen: [PENDIENTE] P-16 |
+| BR-P6 | **Ingreso de mercadería** entra en el MVP: sin entradas el stock solo bajaría, y los aceites se reponen semanalmente. Solo registra producto, cantidad y fecha; no modela proveedores ni costo de compra. **Desde R3 se registra como una recepción en lote:** una cabecera con fecha y nota opcional, y una o más líneas (producto, cantidad > 0, sin productos repetidos), cada una un `PURCHASE_IN`. Es atómica: si una línea es inválida, no se guarda nada. | [TÉCNICO] (consecuencia de DEC-04; C-18) · sin proveedor ni costo: [DECISIÓN] DEC-36 · lote: [TÉCNICO] R3 · qué otros productos se reponen: [PENDIENTE] P-16 |
 | BR-P7 | **Stock inicial:** se carga con un `COUNT` por producto. Un `COUNT` registra la cantidad contada; el sistema guarda la diferencia contra el saldo calculado. Sirve igual para el conteo inicial y para recontar después. | [TÉCNICO] |
+| BR-P7b | **Ajuste por cantidad física (R3):** el usuario ingresa la cantidad que hay en el estante, no la diferencia. El sistema calcula la diferencia contra el saldo, con el producto bloqueado, y guarda el saldo anterior, la diferencia, el resultante, el motivo, el usuario y la fecha. Solo se permite en productos **con conteo inicial**: sin conteo se rechaza y se pide un `COUNT` antes (el ajuste no marca el producto como contado). Si la cantidad física es igual al saldo, se rechaza porque no hay nada que ajustar. Un ajuste nunca cuenta como venta. El `COUNT` sigue siendo la operación sin motivo para el conteo inicial y los recuentos (BR-P7). | [DECISIÓN] DEC-48, DEC-49 · [TÉCNICO] |
 | BR-P8 | Un producto sin ningún `COUNT` está **sin conteo inicial**: sus movimientos se registran, pero su saldo no es confiable y no se evalúa stock insuficiente hasta el primer conteo. | [TÉCNICO] |
 | BR-P9 | Anular un mantenimiento genera un movimiento `MAINTENANCE_VOID` por producto, con la cantidad opuesta. | [TÉCNICO] |
-| BR-P10 | Los ajustes manuales (`ADJUSTMENT`) exigen un motivo escrito. | [TÉCNICO] |
+| BR-P10 | Los ajustes manuales (`ADJUSTMENT`) exigen un motivo escrito. La UI ofrece los motivos **Conteo físico distinto**, **Producto dañado**, **Consumo interno** y **Otro**, más texto libre. El motivo se guarda como texto, sin catálogo cerrado. | [TÉCNICO] · motivos: [DECISIÓN] DEC-39 |
 | BR-P11 | **Stock insuficiente en productos con conteo inicial:** la **venta** se bloquea si el producto no alcanza (422 con producto, saldo y cantidad pedida). El **mantenimiento** continúa y avisa aunque el saldo quede negativo: el producto ya se usó. | [DECISIÓN] DEC-26 |
 | BR-P12 | **Productos sin conteo inicial:** se pueden vender y usar; la operación avisa que su stock no es confiable (BR-P8). | [DECISIÓN] DEC-27 |
 | BR-P13 | **Proceso de carga del stock inicial** (conteo completo antes de empezar, o conteo progresivo producto por producto, quién lo hace y cuándo). El sistema soporta ambos sin cambios. | [DECISIÓN PENDIENTE] DEC-21 |
@@ -116,7 +117,9 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 | BR-P16 | Por defecto un producto controla stock. Puede marcarse sin control de stock. | [TÉCNICO] |
 | BR-P17 | Los precios de venta son opcionales en el catálogo. Ningún precio se asume. | [PENDIENTE] P-07 |
 | BR-P18 | Categorías iniciales: **Lubricante** y **Filtro** (lo confirmado en C-03). Las categorías tienen como máximo 2 niveles (categoría → subcategoría) y son datos editables desde Configuración (crear, renombrar, mover, ordenar, desactivar); no hay taxonomía fija. | [TÉCNICO] · árbol inicial: [DECISIÓN] DEC-37 |
+| BR-P19 | **Stock que requiere atención (R3):** agotados (saldo = 0), negativos (saldo < 0) y la cantidad de productos sin conteo inicial. Agotados y negativos solo consideran productos activos **con conteo**; los que no tienen conteo se cuentan aparte, porque su saldo no es confiable (BR-P8). No hay stock mínimo por producto. | [DECISIÓN] mapa funcional (DEC-28) · DEC-50 |
 | BR-P19b | Marca, viscosidad, presentación, código, precio e imagen son **opcionales** en todo producto. Se ofrecen como sugerencias (valores ya usados y confirmados por el dueño); nunca se inventan ni se exigen. Sin imagen se muestra un placeholder. | [DECISIÓN] R2 · DEC-34 |
+| BR-P21 | **Productos inactivos (R3):** no reciben recepciones ni ajustes. Si una recepción incluye un producto inactivo, se rechaza el lote completo. | [DECISIÓN] DEC-51 |
 
 ## BR-F — Compatibilidad de filtros
 

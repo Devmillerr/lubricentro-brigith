@@ -1,6 +1,6 @@
 # 09 — Backlog y registro de decisiones
 
-**Versión:** 0.4 · **Actualizado:** 2026-09-21
+**Versión:** 0.5 · **Actualizado:** 2026-09-25 (bloqueos y decisiones de R3)
 Etiquetas: ver `03-BUSINESS-RULES.md`. Prioridad: **M** Must · **S** Should · **C** Could.
 
 ## 1. Lo que bloquea el inicio del desarrollo
@@ -11,6 +11,14 @@ Etiquetas: ver `03-BUSINESS-RULES.md`. Prioridad: **M** Must · **S** Should · 
 | 2 | **DEC-22:** cómo se modelan y descuentan los productos (presentaciones, unidad, litro o granel) | Solo los cortes C2 (catálogo) y C3 (inventario) en lo que toca `Product.unit`. **No bloquea C0 ni C1** | Transcribir C-10 (productos y presentaciones) y decidir con Brigith (P-07) |
 
 Nada más bloquea el inicio. Las demás decisiones pendientes son configuración o proceso y se necesitan antes del piloto, no antes de programar (§2).
+
+Los bloqueos 1 y 2 son del inicio del MVP. El MVP se construyó (`v1.0-mvp`) con el modelo provisional de DEC-22 (ver `STATUS.md`).
+
+**Cortes de operación real (`10-OPERACION-REAL.md` §2.10):**
+
+| Corte | Bloqueos | Estado |
+|---|---|---|
+| R3 — Recepción en lote, ajuste por cantidad física y alertas | Ninguno. Decisiones cerradas el 2026-09-25: DEC-36, DEC-39 y DEC-48 a DEC-52 (§2) | **Sin bloqueos. Sin implementar**: el código de R3 empieza solo con autorización explícita del usuario |
 
 ## 2. Registro de decisiones
 
@@ -43,6 +51,18 @@ Nada más bloquea el inicio. Las demás decisiones pendientes son configuración
 | DEC-23 | Ingreso de mercadería incluido en el MVP (sin entradas, el stock solo baja; C-18) | Técnica. **Consecuencia de DEC-04; puedes vetarla** | — |
 | DEC-24 | **Salidas por venta de producto.** El inventario ya las contempla (`SALE`, BR-P14). Falta decidir: (a) ¿el MVP incluye una salida solo de stock (producto y cantidad, sin precio ni pago) o se espera a la venta rápida de la Fase 2?; (b) ¿Brigith vende productos sin mantenimiento, y con qué frecuencia? *Recomendación:* incluir la salida solo de stock, porque no exige precios ni pagos y evita que el saldo pierda fiabilidad desde el primer día. Si se incluye, agrega un endpoint y un formulario, sin cambios de modelo. No es la venta rápida, que sigue en la Fase 2 | Pendiente (negocio). La pregunta (b) aún no está en Discovery | Antes de cerrar C3. No bloquea el inicio |
 | DEC-25 | `username` único **globalmente** (no por negocio, a diferencia del resto de unicidades de `05-DATABASE.md` §1). `POST /auth/login` recibe `{ username, password }` sin negocio ni slug; el `businessId` se resuelve del usuario encontrado, nunca lo envía el cliente | **Aprobada** (por ti) | — |
+
+Las decisiones DEC-26 a DEC-47 están en `10-OPERACION-REAL.md` §3. Aquí se registran las de R3:
+
+| ID | Decisión | Estado | Cuándo se necesita |
+|---|---|---|---|
+| DEC-36 | Recepción sin costo de compra ni proveedor. Queda fuera de R3 | **Aprobada** (2026-09-25) | — |
+| DEC-39 | Motivos de ajuste como chips: Conteo físico distinto, Producto dañado, Consumo interno, Otro, más texto libre; el motivo se guarda como texto (BR-P10) | **Aprobada** (2026-09-25) | — |
+| DEC-48 | No se ajusta un producto sin conteo inicial: 409 `ADJUSTMENT_REQUIRES_COUNT`; se pide un `COUNT` antes. El ajuste no marca `isCounted` (BR-P7b) | **Aprobada** (2026-09-25) | — |
+| DEC-49 | Ajuste con cantidad física igual al saldo: 400 `NO_DIFFERENCE` (BR-P7b) | **Aprobada** (2026-09-25) | — |
+| DEC-50 | Alertas: agotados y negativos solo consideran productos con conteo; los que no tienen conteo van en `notCountedCount` (BR-P19) | **Aprobada** (2026-09-25) | — |
+| DEC-51 | Recepción y ajuste rechazados sobre productos inactivos: 409 `PRODUCT_INACTIVE`; en una recepción, se rechaza el lote completo (BR-P21) | **Aprobada** (2026-09-25) | — |
+| DEC-52 | La UI (Recibir, historial de recepciones, Ajustar y alertas) forma parte de R3 | **Aprobada** (2026-09-25) | — |
 
 ## 3. Backlog por corte
 
@@ -117,6 +137,19 @@ Estado: `Listo` (implementable tras aprobar) · `Requiere DEC-22` · `Requiere d
 | B-061 | Importación de clientes y vehículos | C | Requiere dato (P-01) |
 | B-062 | Medición de tiempos y toques | S | Listo |
 | B-063 | Acuerdo de umbrales de éxito (BR-I4) | M | Config abierta |
+
+### R3 — Recepción en lote, ajuste por cantidad física y alertas
+Diseño: `10-OPERACION-REAL.md` §2.5 y §2.7 · contrato: `06-API.md` §2 (Inventario, "Cambios de R3") · pantallas: `07-UI-UX.md` §3.6. Reemplaza el comportamiento de B-032 y B-033.
+
+| ID | Ítem | Prio | Estado |
+|---|---|---|---|
+| B-120 | Modelo `InventoryReceipt` y migración aditiva | M | Listo (sin implementar) |
+| B-121 | `POST /inventory/receipts` en lote, atómico e idempotente | M | Listo (sin implementar) |
+| B-122 | `GET /inventory/receipts` y `GET /inventory/receipts/:id` | M | Listo (sin implementar) |
+| B-123 | Ajuste por cantidad física en el `StockLedger` y `POST /inventory/adjustments` | M | Listo (sin implementar) |
+| B-124 | `GET /inventory/alerts` | M | Listo (sin implementar) |
+| B-125 | Web: Recibir, historial de recepciones, Ajustar y stock que requiere atención | M | Hecho (2026-09-25, sin commit); prueba manual a 390 px OK (2026-09-26) |
+| B-126 | Pruebas: lote atómico, idempotencia, ajuste concurrente, invariante de la caché y aislamiento entre negocios | M | Listo (sin implementar) |
 
 ### Fase 2
 | ID | Ítem | Prio | Estado |

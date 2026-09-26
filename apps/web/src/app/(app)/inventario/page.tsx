@@ -1,8 +1,9 @@
 'use client';
 
-import { ChevronRight, Search } from 'lucide-react';
+import { ChevronRight, History, PackagePlus, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { StockAlerts } from '@/components/inventory/stock-alerts';
 import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge, PageHeader } from '@/components/ui/page-header';
@@ -50,7 +51,29 @@ export default function InventoryPage() {
   if (catalog.status === 'loading') return <LoadingState label="Cargando inventario…" />;
 
   const header = (
-    <PageHeader title="Inventario" back={{ href: '/productos', label: 'Productos' }} />
+    <PageHeader
+      title="Inventario"
+      back={{ href: '/productos', label: 'Productos' }}
+      action={
+        <div className="flex gap-2">
+          <Link
+            href="/inventario/recepciones"
+            aria-label="Recepciones"
+            className={buttonVariants({
+              variant: 'outline',
+              className: 'w-11 px-0 sm:w-auto sm:px-4',
+            })}
+          >
+            <History className="size-4 sm:mr-1" aria-hidden />
+            <span className="hidden sm:inline">Recepciones</span>
+          </Link>
+          <Link href="/inventario/recepciones/nueva" className={buttonVariants()}>
+            <PackagePlus className="mr-1 size-4" aria-hidden />
+            Recibir
+          </Link>
+        </div>
+      }
+    />
   );
 
   if (catalog.status === 'error') {
@@ -83,6 +106,22 @@ export default function InventoryPage() {
   return (
     <div className="flex flex-col gap-5">
       {header}
+
+      {catalog.data.products.length > 0 && (
+        <StockAlerts
+          onShowNotCounted={() => {
+            setSearch('');
+            setFilter('not-counted');
+            document
+              .getElementById('inventory-products')
+              ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }}
+        />
+      )}
+
+      <h3 id="inventory-products" className="scroll-mt-20 text-lg font-semibold">
+        Productos
+      </h3>
 
       <div className="relative">
         <Search

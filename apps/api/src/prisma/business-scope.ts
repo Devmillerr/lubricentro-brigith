@@ -21,6 +21,7 @@ const BUSINESS_SCOPED_MODELS = new Set([
   'Product',
   'ProductCompatibility',
   'InventoryMovement',
+  'InventoryReceipt',
   'MaintenanceType',
   'Maintenance',
   'Reminder',
