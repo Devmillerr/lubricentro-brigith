@@ -60,12 +60,23 @@ function fieldMatches(value: unknown, condition: unknown): boolean {
     if ('not' in condition) {
       return value !== condition.not;
     }
-    // Comparaciones numéricas (Decimal real o number del fake coercen con Number()).
-    if ('lte' in condition || 'lt' in condition) {
+    // Comparaciones numéricas y de fechas (Decimal real, number del fake y Date
+    // coercen con Number()).
+    if ('lte' in condition || 'lt' in condition || 'gte' in condition || 'gt' in condition) {
       if (value === null || value === undefined) return false;
       const n = Number(value);
-      const { lte, lt } = condition as { lte?: unknown; lt?: unknown };
-      return (lte === undefined || n <= Number(lte)) && (lt === undefined || n < Number(lt));
+      const { lte, lt, gte, gt } = condition as {
+        lte?: unknown;
+        lt?: unknown;
+        gte?: unknown;
+        gt?: unknown;
+      };
+      return (
+        (lte === undefined || n <= Number(lte)) &&
+        (lt === undefined || n < Number(lt)) &&
+        (gte === undefined || n >= Number(gte)) &&
+        (gt === undefined || n > Number(gt))
+      );
     }
   }
   return value === condition;
@@ -226,6 +237,16 @@ function runOp(
       }
       return record;
     }
+    case 'updateMany': {
+      // Como Prisma: actualiza todas las que coinciden y devuelve cuántas.
+      const records = [...store.values()].filter((r) => matchesWhere(r, args.where));
+      for (const record of records) {
+        for (const [field, value] of Object.entries(args.data ?? {})) {
+          if (value !== undefined) record[field] = value;
+        }
+      }
+      return { count: records.length };
+    }
     case 'delete': {
       const record = [...store.values()].find((r) => matchesWhere(r, args.where));
       if (!record) throw new Error('registro no encontrado para delete');
@@ -327,6 +348,13 @@ export function buildFakeScopedPrisma(
               operation: 'update',
               args,
               query: (a: unknown) => runOp(store, 'update', a as never, [], stores),
+            }),
+          updateMany: (args: Record<string, unknown>) =>
+            operations({
+              model,
+              operation: 'updateMany',
+              args,
+              query: (a: unknown) => runOp(store, 'updateMany', a as never, [], stores),
             }),
           delete: (args: Record<string, unknown>) =>
             operations({

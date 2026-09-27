@@ -1,6 +1,6 @@
 # 07 — UI/UX
 
-**Versión:** 0.4 · **Actualizado:** 2026-09-25 (Inventario de R3 en §3.6)
+**Versión:** 0.5 · **Actualizado:** 2026-09-26 (Inventario de R3 en §3.6; Lavado de R5 en §3.9)
 Etiquetas: ver `03-BUSINESS-RULES.md`. Este documento describe **flujos y pantallas**, no diseño visual. Los flujos son [TÉCNICO] y se validan con Brigith antes de cerrar el diseño (guía en Discovery §5). Mobile-first [DECISIÓN] D-01.
 
 ## 1. Principios
@@ -93,12 +93,44 @@ Plantilla de WhatsApp con vista previa, días de anticipación, regla por defect
 ### 3.8 Resumen del piloto
 Pantalla de solo lectura con los tres indicadores aprobados: adopción, mantenimiento e inventario (BR-I1 a BR-I3), por período.
 
+### 3.9 Lavado (R5: implementado el 2026-09-26, sin commit)
+
+La UI forma parte de R5 (DEC-60). Sigue el patrón actual del frontend: sin TanStack Query ni cambios de arquitectura. Diseño: `10-OPERACION-REAL.md` §2.5 (flujo del mapa) y §0.3 (tipos y precios). Contrato: `06-API.md` §2, Lavados.
+
+| Pantalla | Contenido |
+|---|---|
+| **Lavado** | Tarjetas grandes con los tipos activos. Si el tipo tiene dos precios (moto lineal S/8 · S/10; camioneta S/30 · S/40), el dueño toca uno; si tiene uno, el paso se salta. Los montos no llevan etiqueta inventada (§0.3). Solo muestra los tipos activos con **al menos un precio activo**: un tipo activo sin precio (hoy Minibán, Combi y Moto carguera, `prices: []`) no aparece, ni como botón deshabilitado; se resuelve en la UI, sin cambiar la API (decisión del usuario, 2026-09-26). Nota opcional. Confirmación con tipo, monto, pago y fecha, y **Nuevo lavado** / **Volver al inicio**. Si el tipo o el precio se desactivó mientras tanto (409), avisa y recarga la lista. Ruta `/lavado`, desde el botón **Lavado** de Inicio Después, **Efectivo** / **Yape** y **Confirmar** (`POST /washes`, idempotente). **No pide cliente ni placa, ni como campo opcional** (DEC-44, BR-L2) |
+| **Lavados** (historial) | El historial genérico de ventas (`/ventas`, B-135) filtrado por `source=WASH` (`/ventas?source=WASH`, `GET /sales?source=WASH`), con monto, fuente, método de pago, fecha, nota y estado. Chips Todas / Mostrador / Lavado. No es una pantalla aparte (DEC-68). El nombre del tipo no sale en la lista porque `SaleSummaryResponse` no trae las líneas: se ve en el detalle |
+| **Detalle** | El detalle genérico de venta (`/ventas/:id`, `GET /sales/:id`, B-135) y acción **Anular**. En un lavado, el título es el nombre del tipo (`descriptionSnapshot`) |
+| **Anular** | Pide el motivo, siempre obligatorio (BR-V7, DEC-59), y usa `POST /sales/:id/void`. No se usa "Deshacer" para una venta: el término es **Anular** |
+| **Configuración → Tipos de lavado** | `/configuracion/lavados`. Crear, renombrar, ordenar (subir/bajar) y desactivar/reactivar tipos; agregar, editar (monto y etiqueta; etiqueta vacía = sin etiqueta) y desactivar/reactivar precios (DEC-56, DEC-63). Lista con `GET /wash-types?includeInactive=true`: muestra todos, también los inactivos y los que no tienen precio (marcados "Sin precio: no se cobra"), para agregarles precio. La pantalla **Lavado** solo pide los activos (DEC-64) |
+
+- Sin estados de lavado, cola ni Kanban (BR-L1).
+- El momento real del cobro y quién cobra (BR-L7, P-11) quedan **fuera de R5**: la pantalla registra el lavado cuando se confirma y no asume otro momento.
+- El historial, el detalle y la anulación de ventas son pantallas genéricas (B-135), implementadas el 2026-09-26 junto con R5 (con autorización del usuario): `/ventas` y `/ventas/:id`, en **Más → Ventas**. R5 las reutiliza con `source=WASH` y no crea pantallas duplicadas (DEC-68). La pantalla **Vender** (B-134) sigue sin implementar.
+
+### 3.10 Vender (R4, B-134: implementado el 2026-09-26, sin commit)
+
+Venta de mostrador (`source = COUNTER`), sin cliente, placa, lavado ni mantenimiento (DEC-44). Ruta `/ventas/nueva`, desde **Vender** en Inicio y en el historial de ventas. Diseño: `10-OPERACION-REAL.md` §2.5 (Venta de productos). Contrato: `06-API.md` §2, Ventas.
+
+| Parte | Contenido |
+|---|---|
+| **Productos** | El mismo buscador de Recibir: texto, chips de categoría y filtro rápido de aceites; solo productos activos, con su saldo. Cada toque suma 1 |
+| **Líneas** | Cantidad con −/+ o teclado (hasta 3 decimales, en la unidad del producto), precio aplicado editable (DEC-29; se precarga el del catálogo y, si no tiene, se escribe), subtotal y quitar. Sin formas de venta (`ProductSaleUnit`, fuera de R4) |
+| **Total** | Vista previa con el mismo redondeo half-up por línea que la API. El total cobrado es el que devuelve `POST /sales` |
+| **Pago** | **Efectivo** / **Yape**, uno solo (DEC-30). Nota opcional (≤ 500) |
+| **Cobrar S/ X** | `POST /sales` con `Idempotency-Key` (la misma operación reintentada reusa la clave). El botón se deshabilita mientras cobra |
+| **Errores** | 422 `INSUFFICIENT_STOCK` (`BLOCK`, DEC-26): marca la línea con saldo y cantidad pedida, avisa "No se cobró nada" y deja corregir la cantidad o quitar el producto; no hay "confirmar igual". 409 `PRODUCT_INACTIVE` y 404 `PRODUCT_NOT_FOUND` marcan la línea. La venta nunca se muestra como cobrada si la API no la confirmó |
+| **Confirmación** | Líneas, total, pago, fecha, nota y avisos `PRODUCT_NOT_COUNTED` ("se cobró igual", DEC-27). **Nueva venta**, **Ver detalle** y **Volver al inicio** |
+
+**Sin "Deshacer":** `10` §2.5 proponía "Confirmación con Deshacer", pero anular una venta exige motivo (BR-V7). Se resolvió así: la confirmación no ofrece Deshacer; para revertir, **Anular** con motivo desde el detalle (`/ventas/:id`, B-135).
+
 ## 4. Flujos de la Fase 2 (solo diseño)
 
 | Flujo | Pasos | Notas |
 |---|---|---|
 | Venta rápida | Producto → cantidad → pago (Yape o efectivo) | Sin placa ni cliente. Descuenta stock |
-| Lavado | Tipo → precio → pago | Opcional, al recibir o cobrar. Sin estados. Placa opcional |
+| Lavado | Tipo → precio → pago → confirmar | Pasó a R5: ver §3.9. Flujo propio, sin estados, sin cliente ni placa (DEC-44; DEC-33 retirada) |
 | Cierre del día | Resumen del día | Conteos manuales: [DECISIÓN PENDIENTE] DEC-15 |
 
 ## 5. Estados y errores

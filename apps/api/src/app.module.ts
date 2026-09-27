@@ -14,7 +14,9 @@ import { PilotModule } from './pilot/pilot.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductsModule } from './products/products.module';
 import { RemindersModule } from './reminders/reminders.module';
+import { SalesModule } from './sales/sales.module';
 import { VehiclesModule } from './vehicles/vehicles.module';
+import { WashesModule } from './washes/washes.module';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { VehiclesModule } from './vehicles/vehicles.module';
     ProductsModule,
     InventoryModule,
     MaintenancesModule,
+    SalesModule,
+    WashesModule,
     RemindersModule,
     PilotModule,
   ],

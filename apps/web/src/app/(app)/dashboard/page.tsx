@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, ChartColumn, Users } from 'lucide-react';
+import { Bell, ChartColumn, Droplets, ShoppingCart, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { Figure } from '@/components/pilot/indicators-view';
@@ -41,6 +41,17 @@ export default function DashboardPage() {
       </section>
 
       <PlateSearch />
+
+      <section className="grid grid-cols-2 gap-3">
+        <Link href="/ventas/nueva" className={buttonVariants({ size: 'lg' })}>
+          <ShoppingCart className="mr-2 size-5" aria-hidden />
+          Vender
+        </Link>
+        <Link href="/lavado" className={buttonVariants({ size: 'lg' })}>
+          <Droplets className="mr-2 size-5" aria-hidden />
+          Lavado
+        </Link>
+      </section>
 
       <section className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between gap-3">

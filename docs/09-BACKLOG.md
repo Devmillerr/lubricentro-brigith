@@ -1,6 +1,6 @@
 # 09 — Backlog y registro de decisiones
 
-**Versión:** 0.6 · **Actualizado:** 2026-09-26 (R3 cerrado; alcance y decisiones de R4)
+**Versión:** 0.7 · **Actualizado:** 2026-09-26 (R3 cerrado; R4 (API, Vender e historial) y R5 implementados sin commit)
 Etiquetas: ver `03-BUSINESS-RULES.md`. Prioridad: **M** Must · **S** Should · **C** Could.
 
 ## 1. Lo que bloquea el inicio del desarrollo
@@ -19,7 +19,8 @@ Los bloqueos 1 y 2 son del inicio del MVP. El MVP se construyó (`v1.0-mvp`) con
 | Corte | Bloqueos | Estado |
 |---|---|---|
 | R3 — Recepción en lote, ajuste por cantidad física y alertas | Ninguno. Decisiones cerradas el 2026-09-25: DEC-36, DEC-39 y DEC-48 a DEC-52 (§2) | **Cerrado** (2026-09-26): commit `1588d85` en `origin/main`, migración `20260925214438_r3_inventory_receipts` aplicada en Supabase, CI en verde |
-| R4 — Ventas de mostrador, consultas, anulación y su UI | Ninguno. Decisiones cerradas el 2026-09-26: DEC-30 y el alcance de R4 (§2) | **Sin bloqueos. Sin implementar**: el código de R4 empieza solo con autorización explícita del usuario |
+| R4 — Ventas de mostrador, consultas, anulación y su UI | Ninguno. Decisiones cerradas el 2026-09-26: DEC-30 y el alcance de R4 (§2) | **API implementada, sin commit** (B-130 a B-133 y B-136; migración `20260926175402_r4_sales` solo en la base local `brigith_test`, no en Supabase). Historial, detalle y anulación genéricos (B-135) y **Vender (B-134)** hechos sin commit. API y UI implementadas; falta commit y aplicar la migración en Supabase |
+| R5 — Lavados, su configuración y su UI | Ninguno. Contrato cerrado el 2026-09-26 (DEC-63 a DEC-67) y reparto con B-135 decidido (DEC-68). B-147 depende de B-135 (hecho). Se apoya en R4, que sigue sin commit | **Implementado, sin commit** (B-140 a B-149): API, seed local y UI (Lavado, Configuración → Tipos de lavado; historial por `/ventas?source=WASH`, DEC-68). Migración y seed solo en `brigith_test`, no en Supabase (DEC-62) |
 
 ## 2. Registro de decisiones
 
@@ -73,6 +74,27 @@ Decisiones de R4, aprobadas por el usuario el 2026-09-26 (detalle en `10-OPERACI
 | — | Alcance de R4: API de ventas de mostrador (crear, consultar, anular) **y su UI** (Vender, historial de ventas y anulación) | **Aprobada** (2026-09-26) | — |
 | — | `ProductSaleUnit` (litro / balde completo) queda fuera de R4; `saleUnitId` no entra en el contrato | **Aprobada** (2026-09-26) | — |
 | — | Stock insuficiente en la venta: `BLOCK` fijo (aplica DEC-26). La venta no lee `Business.insufficientStockPolicy` ni permite "confirmar igual"; la limpieza de esa configuración queda para después | **Aprobada** (2026-09-26) | — |
+
+Decisiones de R5, aprobadas por el usuario el 2026-09-26 (detalle en `10-OPERACION-REAL.md` §3.2f):
+
+| ID | Decisión | Estado | Cuándo se necesita |
+|---|---|---|---|
+| DEC-53 | Sin tabla `Wash`: un lavado es una `Sale` `source = WASH` con una sola `SaleLine` `WASH` (`washTypeId` obligatorio, `productId = null`, `movesStock = false`). Historial, detalle y anulación por `/sales` | **Aprobada** (2026-09-26) | — |
+| DEC-54 | El lavado no mueve stock: sin `StockLedger` al crearlo ni al anularlo | **Aprobada** (2026-09-26) | — |
+| DEC-55 | Precio siempre de una `WashPriceOption` activa, sin monto libre. 409 `WASH_TYPE_INACTIVE` y 409 `WASH_PRICE_INACTIVE` | **Aprobada** (2026-09-26) | — |
+| DEC-56 | Configuración de `WashType` y `WashPriceOption` en R5 (crear, editar, desactivar; `sortOrder` e `isActive`) | **Aprobada** (2026-09-26) | — |
+| DEC-57 | `note` opcional en `POST /washes`, hasta 500, misma semántica que `Sale.note` | **Aprobada** (2026-09-26) | — |
+| DEC-58 | `Sale.occurredAt` = momento real del cobro, enviable; sin `performedAt` en la venta | **Aprobada** (2026-09-26) | — |
+| DEC-59 | Anulación por `POST /sales/:id/void`, siempre con motivo, sin endpoint propio y sin stock. Término: "Anular" | **Aprobada** (2026-09-26) | — |
+| DEC-60 | La UI entra en R5 (lavado, historial, detalle, anulación, tipos y precios), con el patrón actual del frontend y sin TanStack Query | **Aprobada** (2026-09-26) | — |
+| DEC-61 | Helper interno mínimo y compartido para escribir `Sale` y líneas (mostrador y lavado), sin cambiar el contrato de R4 | **Aprobada** (2026-09-26) | — |
+| DEC-62 | Seed de tipos y precios preparado en código; migración y seed en Supabase solo con autorización explícita posterior | **Aprobada** (2026-09-26) | — |
+| DEC-63 | Editar y desactivar un precio con `PATCH /wash-types/:id/prices/:priceId` (`amount`, `label`, `sortOrder`, `isActive`); sin borrado físico; el `priceId` debe ser del tipo y del negocio actuales | **Aprobada** (2026-09-26) | — |
+| DEC-64 | `GET /wash-types?includeInactive=`: por defecto solo tipos y precios activos (flujo de cobro); con `true`, también los inactivos (Configuración). Mismo patrón que `/product-categories` | **Aprobada** (2026-09-26) | — |
+| DEC-65 | Errores: 404 `WASH_TYPE_NOT_FOUND`, 404 `WASH_PRICE_NOT_FOUND`, 409 `WASH_TYPE_ALREADY_EXISTS`, 409 `WASH_PRICE_NOT_IN_TYPE` (además de 409 `WASH_TYPE_INACTIVE` y `WASH_PRICE_INACTIVE`, DEC-55) | **Aprobada** (2026-09-26) | — |
+| DEC-66 | Validaciones: `amount` > 0; `name` obligatorio, `trim`, ≤ 100; `label` opcional, `trim`, ≤ 100; `sortOrder` entero ≥ 0. Sin otras restricciones | **Aprobada** (2026-09-26) | — |
+| DEC-67 | `descriptionSnapshot` de la línea `WASH` = exactamente el `name` del `WashType` al cobrar, sin prefijos; conserva el nombre histórico | **Aprobada** (2026-09-26) | — |
+| DEC-68 | R5 reutiliza el historial, detalle y anulación genéricos de ventas (B-135), filtrando `source=WASH`; sin pantallas duplicadas de historial de lavados | **Aprobada** (2026-09-26) | — |
 
 ## 3. Backlog por corte
 
@@ -166,28 +188,50 @@ Diseño: `10-OPERACION-REAL.md` §2.5 y §2.7 · contrato: `06-API.md` §2 (Inve
 ### R4 — Ventas de mostrador, consultas, anulación y su UI
 Diseño: `10-OPERACION-REAL.md` §2.1, §2.3 (Dinero), §2.5 (Venta de productos), §2.7 y §2.10 · decisiones: §2 (DEC-30 y alcance de R4) y `10` §3.2e. Aplica DEC-26, DEC-27, DEC-29 y DEC-44. El contrato detallado va a `06-API.md` y las pantallas a `07-UI-UX.md` al preparar R4.
 
-**Estado:** sin bloqueos. Sin implementar: el código de R4 empieza solo con autorización explícita del usuario.
+**Estado:** sin bloqueos. API implementada y validada localmente, **sin commit**; migración solo en `brigith_test`, no en Supabase. Historial, detalle y anulación genéricos (B-135) hechos sin commit, adelantados con R5 (2026-09-26). **Vender (B-134) hecho sin commit** (2026-09-26). R4 queda implementado localmente; no se cierra hasta el commit y la migración en Supabase.
 
 | ID | Ítem | Prio | Estado |
 |---|---|---|---|
-| B-100 | Venta rápida con descuento de stock (venta de mostrador, `source = COUNTER`). Se implementa con B-130 a B-136 | M | Listo (sin implementar) |
-| B-101 | Métodos de pago Efectivo y Yape: **uno por venta** (`CASH` o `YAPE`, DEC-30) | M | Listo (sin implementar) |
-| B-130 | Modelo `Sale` y `SaleLine` (enums `PaymentMethod`, `SaleSource`, `SaleStatus`, `SaleLineKind`) con snapshots de descripción, código y precio; migración aditiva; ambos en `BUSINESS_SCOPED_MODELS` | M | Listo (sin implementar) |
-| B-131 | `POST /sales`: venta de mostrador atómica e idempotente, sin cliente ni placa (DEC-44). Un método de pago (DEC-30), precio aplicado editable por línea (DEC-29), total calculado en el servidor, un `SALE` por línea a través del `StockLedger` con `BLOCK` fijo: si un producto con conteo no alcanza, 422 `INSUFFICIENT_STOCK` y no se guarda nada (DEC-26); sin conteo, se vende con aviso (DEC-27). No lee `Business.insufficientStockPolicy` | M | Listo (sin implementar) |
-| B-132 | `GET /sales` (período, estado, método de pago, cursor) y `GET /sales/:id` con líneas | M | Listo (sin implementar) |
-| B-133 | `POST /sales/:id/void`: anulación con motivo; genera `SALE_VOID` de las líneas con stock; `SALE_ALREADY_VOIDED` si ya estaba anulada | M | Listo (sin implementar) |
-| B-134 | Web: **Vender** (catálogo y búsqueda, carrito con −/+, cobro con Efectivo / Yape y precio editable, 422 por stock con corrección de cantidad, confirmación con Deshacer) | M | Listo (sin implementar) |
-| B-135 | Web: **historial de ventas** con detalle y **anulación** con motivo | M | Listo (sin implementar) |
-| B-136 | Pruebas: total calculado en el servidor, el stock baja una sola vez, la anulación lo revierte, idempotencia, 422 con rollback de toda la venta, concurrencia contra Postgres real y aislamiento entre negocios | M | Listo (sin implementar) |
+| B-100 | Venta rápida con descuento de stock (venta de mostrador, `source = COUNTER`). Se implementa con B-130 a B-136 | M | API y UI hechas (sin commit) |
+| B-101 | Métodos de pago Efectivo y Yape: **uno por venta** (`CASH` o `YAPE`, DEC-30) | M | API y UI hechas (sin commit) |
+| B-130 | Modelo `Sale` y `SaleLine` (enums `PaymentMethod`, `SaleSource`, `SaleStatus`, `SaleLineKind`) con snapshots de descripción, código y precio; migración aditiva; ambos en `BUSINESS_SCOPED_MODELS` | M | Hecho (sin commit; migración solo local) |
+| B-131 | `POST /sales`: venta de mostrador atómica e idempotente, sin cliente ni placa (DEC-44). Un método de pago (DEC-30), precio aplicado editable por línea (DEC-29), total calculado en el servidor, un `SALE` por línea a través del `StockLedger` con `BLOCK` fijo: si un producto con conteo no alcanza, 422 `INSUFFICIENT_STOCK` y no se guarda nada (DEC-26); sin conteo, se vende con aviso (DEC-27). No lee `Business.insufficientStockPolicy` | M | Hecho (sin commit) |
+| B-132 | `GET /sales` (período, estado, método de pago, cursor) y `GET /sales/:id` con líneas | M | Hecho (sin commit) |
+| B-133 | `POST /sales/:id/void`: anulación con motivo; genera `SALE_VOID` de las líneas con stock; `SALE_ALREADY_VOIDED` si ya estaba anulada | M | Hecho (sin commit) |
+| B-134 | Web: **Vender** (catálogo y búsqueda, carrito con −/+, cobro con Efectivo / Yape y precio editable, 422 por stock con corrección de cantidad, confirmación con Deshacer) | M | Hecho (sin commit): `/ventas/nueva`. Sin "Deshacer": se anula con motivo desde el detalle (B-135) |
+| B-135 | Web: **historial de ventas** con detalle y **anulación** con motivo. Genérico para todas las fuentes: R5 lo reutiliza con `source=WASH` (DEC-68) | M | Hecho (sin commit, 2026-09-26, adelantado con R5 con autorización del usuario): `/ventas` y `/ventas/[id]` |
+| B-136 | Pruebas: total calculado en el servidor, el stock baja una sola vez, la anulación lo revierte, idempotencia, 422 con rollback de toda la venta, concurrencia contra Postgres real y aislamiento entre negocios | M | Hecho (sin commit): unitarias, e2e e integración contra Postgres (T3, T4, bloqueos del ledger, aislamiento) |
 
 **Fuera de R4:** `ProductSaleUnit` (formas de venta litro / balde completo; `saleUnitId` no entra en el contrato) · lavados, `source = WASH` (R5) · cobro de mantenimiento, `source = MAINTENANCE` y líneas `SERVICE` (R6) · dashboard (R7) · clientes y Avisar desde un cliente (R8) · pago mixto (decisión futura) · limpieza de `Business.insufficientStockPolicy` (corte de limpieza).
 
-### Fase 2
-B-100 (venta rápida) y B-101 (métodos de pago) pasaron a R4 el 2026-09-26.
+### R5 — Lavados, su configuración y su UI
+Diseño: `10-OPERACION-REAL.md` §0.3, §2.3, §2.5, §2.7 y §3.2f · contrato: `06-API.md` §2, Lavados · pantallas: `07-UI-UX.md` §3.9 · decisiones: DEC-53 a DEC-68 (§2). Aplica DEC-30, DEC-44 y BR-V7.
+
+**Estado:** implementado el 2026-09-26, **sin commit** (B-140 a B-149). El historial de lavados no es una pantalla propia: reutiliza el historial genérico de ventas `/ventas?source=WASH`, con su detalle y anulación (B-135, DEC-68). Migración y seed solo en `brigith_test`; nada en Supabase sin autorización explícita (DEC-62).
+
+**Mejora futura (registrada, no implementada):** mostrar el nombre del tipo de lavado en cada fila del historial. `GET /sales` (`SaleSummaryResponse`) no trae las líneas, así que requiere un cambio de backend; hoy el nombre se ve en el detalle.
 
 | ID | Ítem | Prio | Estado |
 |---|---|---|---|
-| B-102 | Lavado rápido opcional | M | Fase 2 (P-10, P-11) |
+| B-102 | Lavado rápido (antes "opcional", Fase 2). Se implementa con B-140 a B-149 | M | Implementado (sin commit) |
+| B-140 | Modelos `WashType` y `WashPriceOption`, FK de `SaleLine.washTypeId` hacia `WashType`, ambos en `BUSINESS_SCOPED_MODELS`; migración aditiva aplicada solo en `brigith_test` | M | Hecho (sin commit): `20260927023545_r5_washes`, solo en `brigith_test`, no en Supabase |
+| B-141 | API de configuración: `GET /wash-types?includeInactive=`, `POST /wash-types`, `PATCH /wash-types/:id`, `POST /wash-types/:id/prices` y `PATCH /wash-types/:id/prices/:priceId` (DEC-56, DEC-63 a DEC-66) | M | Hecho (sin commit): `src/washes/`, unitarias y e2e; sin `POST /washes` |
+| B-142 | Helper interno compartido `writeSale` (cabecera, líneas, total y snapshots) en `sales.service.ts`, usado por la venta de mostrador (DEC-61) | M | Hecho (sin commit); R4 sin cambios de comportamiento |
+| B-143 | `POST /washes`: una `Sale` `WASH` con una línea `WASH`, precio de la opción activa (DEC-55), `note` (DEC-57), `occurredAt` (DEC-58), idempotente, sin `StockLedger` (DEC-54), errores de DEC-65 y `descriptionSnapshot` según DEC-67 | M | Hecho (sin commit): `src/washes/washes.service.ts` y `washes.controller.ts`; unitarias, e2e e integración |
+| B-144 | Lavados por `/sales`: `GET /sales?source=WASH`, `GET /sales/:id` y `POST /sales/:id/void` sin `SALE_VOID` (DEC-59). Sin cambios de código previstos; se cubre con pruebas | M | Cubierto por las pruebas de B-143 (sin commit), sin cambios en `/sales` |
+| B-145 | Seed de los tipos y precios de §0.3 en código; se prueba en local. Supabase solo con autorización (DEC-62) | M | Hecho (sin commit): `prisma/seed-washes.ts`, 9 tipos (Minibán, Combi y Moto carguera activos sin precio) y 8 montos; probado en `brigith_test` con `test/integration/seed-washes.int-spec.ts`. No aplicado en Supabase |
+| B-146 | Web: **Lavado** (tipo → precio → Efectivo / Yape → Confirmar), sin cliente ni placa | M | Hecho (sin commit): `/lavado`; oculta los tipos sin precio activo |
+| B-147 | Web: lavados en el historial, detalle y **Anular** con motivo, **reutilizando** las pantallas genéricas de ventas de B-135 con el filtro `source=WASH`; sin pantallas duplicadas (DEC-68) | M | Hecho (sin commit): `/ventas?source=WASH` y `/ventas/[id]` |
+| B-148 | Web: **Configuración → Tipos de lavado** (tipos y precios, orden, activo/inactivo) | M | Hecho (sin commit): `/configuracion/lavados` |
+| B-149 | Pruebas: precio de la opción, 409 por tipo o precio inactivo, ningún `InventoryMovement` al crear ni al anular, idempotencia, rollback y aislamiento entre negocios (unitarias, e2e e integración Postgres) | M | Hecho (sin commit): `wash-types.*`, `washes.*` y `integration/washes.int-spec.ts` |
+
+**Fuera de R5:** momento real del cobro y quién cobra (BR-L7, P-11) · dashboard, gráficos e indicadores, incluido BR-I1 con lavados (R7) · cobro de mantenimiento (R6) · estados, cola o Kanban de lavado (BR-L1) · cliente o placa en el lavado (DEC-44).
+
+### Fase 2
+B-100 (venta rápida) y B-101 (métodos de pago) pasaron a R4 el 2026-09-26; B-102 (lavado) pasó a R5.
+
+| ID | Ítem | Prio | Estado |
+|---|---|---|---|
 | B-103 | Cierre/resumen del día | M | Fase 2 (DEC-15) |
 
 ### Sin aprobar (no entran hasta decidir)

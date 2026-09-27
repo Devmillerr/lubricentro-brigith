@@ -114,9 +114,14 @@ export async function applyStockMovements(
     createdById: string;
     policy: StockPolicy;
     entries: StockEntry[];
+    /**
+     * Campo de `errors[]` en el 422 `INSUFFICIENT_STOCK` de `BLOCK`. Por
+     * defecto `items` (el cuerpo del mantenimiento); la venta usa `lines`.
+     */
+    insufficientStockField?: string;
   },
 ): Promise<StockLedgerResult> {
-  const { businessId, createdById, policy, entries } = params;
+  const { businessId, createdById, policy, entries, insufficientStockField = 'items' } = params;
   if (entries.length === 0) {
     return { movements: [], warnings: [] };
   }
@@ -225,7 +230,7 @@ export async function applyStockMovements(
           detail: `El producto ${plan.productId} quedaría con saldo negativo.`,
           errors: [
             {
-              field: 'items',
+              field: insufficientStockField,
               message: `Saldo actual ${balance}, cantidad pedida ${requestedQuantity}`,
             },
           ],

@@ -1,4 +1,4 @@
-import { ChevronRight, ChartColumn, Settings, Users, type LucideIcon } from 'lucide-react';
+import { ChevronRight, ChartColumn, Receipt, Settings, Users, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { Badge, PageHeader } from '@/components/ui/page-header';
 
@@ -8,6 +8,12 @@ const SECTIONS: { label: string; description: string; icon: LucideIcon; href: st
     description: 'Clientes y sus vehículos',
     icon: Users,
     href: '/clientes',
+  },
+  {
+    label: 'Ventas',
+    description: 'Historial de cobros y lavados; detalle y anulación',
+    icon: Receipt,
+    href: '/ventas',
   },
   {
     label: 'Configuración',

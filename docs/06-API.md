@@ -1,6 +1,6 @@
 # 06 — API REST
 
-**Versión:** 0.5 · **Actualizado:** 2026-09-26 (contrato de R4 en §2, Ventas)
+**Versión:** 0.6 · **Actualizado:** 2026-09-26 (contrato de R4 en §2, Ventas; diseño de R5 en §2, Lavados)
 Etiquetas: ver `03-BUSINESS-RULES.md`. Todo lo de este documento es [TÉCNICO] salvo lo indicado. La documentación viva será Swagger/OpenAPI generada por NestJS en `/api/docs`; este documento fija el diseño.
 
 ## 1. Convenciones
@@ -150,7 +150,7 @@ Si se ingresan próximo km y próxima fecha sin `dueRule` y el negocio no defini
 |---|---|---|
 | GET | `/pilot-indicators?from=&to=` | **Adopción:** mantenimientos activos. **Mantenimiento:** mantenimientos con próximo km/fecha y avisos abiertos. **Inventario:** movimientos por tipo y productos con conteo y movimientos. Solo lectura (BR-I1 a BR-I3) |
 
-### Ventas (R4: aprobado el 2026-09-26, sin implementar)
+### Ventas (R4: aprobado el 2026-09-26; API y UI implementadas sin commit)
 
 Venta de mostrador: productos, un método de pago y confirmación, sin cliente ni placa (DEC-44). Diseño: `10-OPERACION-REAL.md` §2.1, §2.3, §2.5 y §2.7. Decisiones: DEC-26, DEC-27, DEC-29, DEC-30 y el alcance de R4 (`09-BACKLOG.md` §2 y §3, ítems B-100, B-101 y B-130 a B-136; `10` §3.2e). Las pantallas se documentan en `07-UI-UX.md`.
 
@@ -244,14 +244,14 @@ SaleResponse {
   id; source; status; paymentMethod;
   total: string;                 // decimal como texto, nunca float
   occurredAt; note | null;
-  vehicleId: null; maintenanceId: null;   // siempre null en R4
+  vehicleId | null; maintenanceId | null;   // null en mostrador y lavado; solo el cobro de mantenimiento (R6) los llena
   createdById; createdAt;
   voidedAt | null; voidReason | null;
   lines: SaleLineResponse[];
 }
 SaleLineResponse {
-  id; kind;                      // PRODUCT en R4
-  productId; washTypeId: null;   // siempre null en R4
+  id; kind;                           // PRODUCT en mostrador (COUNTER); WASH en lavado (R5)
+  productId | null; washTypeId | null;   // PRODUCT: productId y washTypeId null; WASH (R5): washTypeId y productId null
   descriptionSnapshot; codeSnapshot | null;
   quantity: string; unitPrice: string; subtotal: string;
   movesStock: boolean;
@@ -263,7 +263,7 @@ SaleLineResponse {
 `?from=&to=&source=&paymentMethod=&status=&limit=&cursor=`. Todos los filtros son opcionales.
 
 - `from` y `to` (ISO 8601) se comparan contra `occurredAt`: `from` **incluido** y `to` **excluido** (`from ≤ occurredAt < to`).
-- `source`: `COUNTER | WASH | MAINTENANCE` (en R4 solo existen ventas `COUNTER`).
+- `source`: `COUNTER | WASH | MAINTENANCE` (R4 crea `COUNTER`; R5 agrega `WASH`; `MAINTENANCE` llega con R6).
 - `paymentMethod`: `CASH | YAPE`.
 - `status`: `ACTIVE | VOIDED`. Sin `status`, devuelve las dos.
 - Paginación por cursor (§1).
@@ -315,13 +315,119 @@ Errores: 404 `SALE_NOT_FOUND` (inexistente o de otro negocio), 400 si `:id` no e
 
 `SALE_TOTAL_MISMATCH` no forma parte de R4: el total lo calcula siempre el servidor.
 
+### Lavados (R5: decisiones cerradas el 2026-09-26; API implementada sin commit, UI pendiente)
+
+Registro rápido de un lavado: tipo, precio (de sus opciones), pago y confirmación, sin cliente ni placa (BR-L2, DEC-44). Diseño: `10-OPERACION-REAL.md` §0.3, §2.3, §2.5 y §2.7. Decisiones: DEC-53 a DEC-68 (`09-BACKLOG.md` §2; `10` §3.2f).
+
+**No hay tabla `Wash` (DEC-53).** Un lavado es una `Sale` con `source = WASH` y **una sola** `SaleLine` con:
+
+| Campo | Valor en un lavado |
+|---|---|
+| `kind` | `WASH` |
+| `washTypeId` | Obligatorio: el tipo elegido |
+| `productId` | `null` |
+| `movesStock` | `false` |
+| `unitPrice`, `subtotal` | El `amount` de la opción de precio elegida (DEC-55) |
+| `descriptionSnapshot` | Exactamente el `name` del `WashType` al momento del cobro, sin prefijos (si el tipo se llama "Lavado Auto", queda "Lavado Auto"). Conserva el nombre histórico aunque el tipo se edite después (BR-G6, DEC-67) |
+
+El lavado **no mueve stock (DEC-54):** no pasa por el `StockLedger` y no genera `InventoryMovement`, ni al crearlo ni al anularlo.
+
+#### Modelos nuevos
+
+`WashType` (con `businessId`): `id`, `name` (único por negocio), `imageKey?` (sin subida, igual que `Product.imageKey`; DEC-34), `sortOrder`, `isActive`, `createdAt`, `updatedAt`.
+
+`WashPriceOption` (con `businessId`): `id`, `washTypeId`, `amount` decimal (10,2), `label?` (nulo: el dueño elige el monto al ver el vehículo, sin criterio escrito, §0.3), `sortOrder`, `isActive`, `createdAt`, `updatedAt`.
+
+`SaleLine.washTypeId` pasa a tener FK hacia `WashType`. Los dos modelos entran en `BUSINESS_SCOPED_MODELS`.
+
+#### `POST /washes`
+
+Crea el lavado en una transacción, todo o nada. Requiere `Idempotency-Key` (misma semántica que `POST /sales`; se registra con `endpoint = "washes"`).
+
+**Implementado (B-143, 2026-09-26, sin commit):** `src/washes/washes.service.ts` escribe con el helper `writeSale` de R4 (DEC-61). Orden de las validaciones dentro de la transacción: tipo (404), precio (404), precio del tipo (409 `WASH_PRICE_NOT_IN_TYPE`), tipo activo (409 `WASH_TYPE_INACTIVE`), precio activo (409 `WASH_PRICE_INACTIVE`). La línea lleva `quantity = 1`. Un `id` repetido falla con el error genérico de la base, igual que `POST /sales` (T4).
+
+**Request (`CreateWashDto`):**
+
+```ts
+{
+  id?: uuid;                       // DEC-12
+  washTypeId: uuid;
+  priceOptionId: uuid;             // el precio siempre sale de una opción activa; no hay monto libre (DEC-55)
+  paymentMethod: 'CASH' | 'YAPE';  // uno solo (DEC-30)
+  occurredAt?: ISO8601;            // momento real del cobro; si falta, la hora del servidor (DEC-58)
+  note?: string;                   // ≤ 500, misma semántica que Sale.note (DEC-57)
+}
+```
+
+- Campos desconocidos rechazados (§1), incluidos `amount`, `unitPrice`, `total`, `customerId`, `vehicleId` y `plate`: 400.
+- Tipo inexistente o de otro negocio: 404 `WASH_TYPE_NOT_FOUND`. Opción de precio inexistente o de otro negocio: 404 `WASH_PRICE_NOT_FOUND` (DEC-65).
+- Tipo de lavado inactivo: 409 `WASH_TYPE_INACTIVE`. Opción de precio inactiva: 409 `WASH_PRICE_INACTIVE` (DEC-55).
+- La opción de precio debe pertenecer al tipo: 409 `WASH_PRICE_NOT_IN_TYPE` (`10` §2.7, DEC-65).
+- El total lo calcula el servidor: `total` = `subtotal` = `amount` de la opción.
+- No existe `performedAt` en una venta: `occurredAt` es la fecha del cobro (DEC-58).
+
+**Response:** 201 `SaleResponse` (la misma forma que `GET /sales/:id`, sin `warnings`: un lavado no toca el stock).
+
+**Consultas y anulación (DEC-59):** no hay endpoints propios. Historial: `GET /sales?source=WASH`; detalle: `GET /sales/:id`; anulación: `POST /sales/:id/void` con motivo obligatorio (BR-V7). La anulación de un lavado no genera `SALE_VOID` porque su línea tiene `movesStock = false`. En la web, R5 reutiliza el historial, el detalle y la anulación genéricos de ventas (B-135), filtrando `source=WASH`; no hay pantallas propias de historial de lavados (DEC-68).
+
+#### Configuración: tipos y precios (DEC-56)
+
+Crear, editar y desactivar tipos y opciones de precio, con `sortOrder` e `isActive` como en `/product-categories`. Sin borrado físico (DEC-17). Como la configuración de categorías, no pide `Idempotency-Key`.
+
+**Implementado (B-141, 2026-09-26, sin commit):** `src/washes/`. `GET` devuelve `WashTypeWithPricesResponse[]` (el tipo más `prices`); `POST`/`PATCH /wash-types` devuelven `WashTypeResponse` (`id`, `name`, `imageKey`, `sortOrder`, `isActive`, `createdAt`, `updatedAt`); las rutas de precios devuelven `WashPriceOptionResponse` (`id`, `washTypeId`, `amount` como string, `label`, `sortOrder`, `isActive`, `createdAt`, `updatedAt`). Sin `businessId`. Orden: tipos por `sortOrder`, `name` e `id`; precios por `sortOrder`, `amount` e `id`. `name`, `label` e `imageKey` se guardan con `trim`; `label` o `imageKey` vacíos quedan en `null`. Topes técnicos para no llegar a un 500: `amount` con hasta 2 decimales y ≤ 99 999 999,99 (Decimal(10,2)), `sortOrder` ≤ 2 147 483 647 (Int) e `imageKey` ≤ 255.
+
+| Método | Ruta | Uso |
+|---|---|---|
+| GET | `/wash-types?includeInactive=` | Tipos con sus opciones de precio, ordenados por `sortOrder` (`10` §2.7). Por defecto solo tipos activos, cada uno con sus precios activos: es lo que usa el flujo de cobro. Con `includeInactive=true` devuelve también los tipos y precios inactivos, con su `isActive`, para Configuración (DEC-64) |
+| POST | `/wash-types` | `{ id?, name, imageKey?, sortOrder? }`. Crear tipo; nace activo (`isActive` no se acepta: 400) |
+| PATCH | `/wash-types/:id` | `{ name?, imageKey? (null = sin imagen), sortOrder?, isActive? }`. Editar o desactivar (`isActive: false`) y reactivar (`true`) |
+| POST | `/wash-types/:id/prices` | `{ id?, amount, label?, sortOrder? }`. Agregar una opción de precio al tipo |
+| PATCH | `/wash-types/:id/prices/:priceId` | `{ amount?, label? (null = sin etiqueta), sortOrder?, isActive? }`. Editar, desactivar (`isActive: false`) o reactivar (`true`) una opción de precio. El `priceId` debe pertenecer al `:id` y al negocio actual (DEC-63) |
+
+`includeInactive` sigue el patrón de `/product-categories?includeInactive=`. La pantalla de cobro nunca lo envía: solo ve tipos y precios activos.
+
+Ni los tipos ni los precios se borran físicamente (DEC-17). Desactivar o editar un tipo o un precio no altera los lavados ya registrados (snapshots, BR-G6).
+
+**Validaciones (DEC-66):**
+
+| Campo | Regla |
+|---|---|
+| `name` | Obligatorio al crear, con `trim`, no vacío, máximo 100 caracteres. Único por negocio |
+| `label` | Opcional, con `trim`, máximo 100 caracteres |
+| `amount` | Mayor que 0 |
+| `sortOrder` | Entero no negativo |
+
+No hay otras restricciones.
+
+**Errores de la configuración (DEC-65):**
+
+| Código | Estado | Cuándo |
+|---|---|---|
+| `WASH_TYPE_NOT_FOUND` | 404 | El tipo (`:id`) no existe o es de otro negocio |
+| `WASH_PRICE_NOT_FOUND` | 404 | La opción de precio (`:priceId`) no existe o es de otro negocio |
+| `WASH_TYPE_ALREADY_EXISTS` | 409 | Otro tipo del negocio ya tiene ese `name` (crear o renombrar), como `PRODUCT_CATEGORY_ALREADY_EXISTS` |
+| `WASH_PRICE_NOT_IN_TYPE` | 409 | El `:priceId` es del negocio pero pertenece a otro tipo |
+
+#### Errores de R5
+
+| Código | Estado | Dónde |
+|---|---|---|
+| `WASH_TYPE_NOT_FOUND` | 404 | `POST /washes`, `PATCH /wash-types/:id`, rutas `/wash-types/:id/prices` |
+| `WASH_PRICE_NOT_FOUND` | 404 | `POST /washes`, `PATCH /wash-types/:id/prices/:priceId` |
+| `WASH_TYPE_ALREADY_EXISTS` | 409 | `POST /wash-types`, `PATCH /wash-types/:id` |
+| `WASH_PRICE_NOT_IN_TYPE` | 409 | `POST /washes`, `PATCH /wash-types/:id/prices/:priceId` |
+| `WASH_TYPE_INACTIVE` | 409 | `POST /washes` (DEC-55) |
+| `WASH_PRICE_INACTIVE` | 409 | `POST /washes` (DEC-55) |
+
+Los cinco puntos que estaban "Por definir" se cerraron con el usuario el 2026-09-26 (DEC-63 a DEC-67).
+
 ## 3. Endpoints de la Fase 2 (solo diseño)
 
 | Ruta | Descripción |
 |---|---|
 | ~~`POST /sales`~~ | Pasó a R4: contrato en §2, Ventas |
 | ~~`GET /payment-methods`~~ | Reemplazado por el diseño vigente (`10-OPERACION-REAL.md` §2.7): el método de pago es el enum `PaymentMethod` (`CASH`, `YAPE`); no hay endpoint |
-| `GET /wash-types`, `POST /wash-records` | Lavado rápido opcional al recibir o cobrar |
+| ~~`GET /wash-types`, `POST /wash-records`~~ | Reemplazado por R5 (§2, Lavados): `POST /washes` crea una `Sale` con `source = WASH`; no hay `WashRecord`. El lavado es un flujo propio, no un paso de otra operación |
 | ~~`/daily-closes`~~ | Retirado: no hay cierre del día; el resumen lo da `GET /dashboard`. Diseño vigente de la Fase 2: `10-OPERACION-REAL.md` §2.7 |
 
 ## 4. Reglas transversales

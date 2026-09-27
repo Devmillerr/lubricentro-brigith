@@ -44,15 +44,18 @@ function quickCategories(categories: ProductCategory[]): ProductCategory[] {
  * viscosidad o vehículo), chips de categoría y filtro rápido de aceites.
  * Solo ofrece productos activos (BR-P21). La lista aparece al buscar o
  * elegir un chip, para que la pantalla no arranque con todo el catálogo.
- * Tocar un producto ya agregado le suma 1.
+ * Tocar un producto ya agregado le suma 1. También lo usa Vender (B-134).
  */
 export function ReceiptProductPicker({
   quantities,
   onAdd,
+  searchLabel = 'Buscar producto recibido por nombre, marca, código o viscosidad',
 }: {
   /** Cantidad escrita por producto ya agregado, para marcarlo en la lista. */
   quantities: Map<string, string>;
   onAdd: (product: ProductWithStock) => void;
+  /** Etiqueta accesible del buscador. */
+  searchLabel?: string;
 }) {
   const [search, setSearch] = useState('');
   const [topId, setTopId] = useState('');
@@ -148,7 +151,7 @@ export function ReceiptProductPicker({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Nombre, marca, código o viscosidad"
-          aria-label="Buscar producto recibido por nombre, marca, código o viscosidad"
+          aria-label={searchLabel}
           className="pl-9"
         />
       </div>

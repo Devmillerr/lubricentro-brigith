@@ -1,6 +1,6 @@
 # 03 — Reglas de negocio
 
-**Versión:** 0.5 · **Actualizado:** 2026-09-26 (contrato de R4: BR-P21 y BR-V4)
+**Versión:** 0.6 · **Actualizado:** 2026-09-26 (contrato de R4: BR-P21 y BR-V4; decisiones de R5: BR-L7, BR-L9 y BR-L10)
 **Fuentes de verdad:** [`/research/BRIGITH-DISCOVERY.md`](../research/BRIGITH-DISCOVERY.md) y [`01-VISION.md`](01-VISION.md).
 
 ## Etiquetas (iguales en todos los documentos)
@@ -160,6 +160,8 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 | BR-L3 | No hay cierre del día: el dashboard "Hoy" hace de resumen. | [DECISIÓN] mapa funcional (reemplaza D-14 en este punto) |
 | BR-L4 | Sin conteos manuales de cierre (consecuencia de BR-L3). | [DECISIÓN] mapa funcional · resuelve DEC-15 |
 | BR-L5 | Volumen aproximado: 10 a 15 lavados diarios. | [CONFIRMADO] C-13 |
-| BR-L6 | Tipos y precios: moto lineal S/8 o S/10 · mototaxi S/15 · Tico S/15 · auto S/15 · camioneta S/30 o S/40 · furgón S/30. Con dos montos, el dueño elige uno al ver el vehículo; el sistema no aplica criterio. | [CONFIRMADO] C-12 y `10-OPERACION-REAL.md` §0.3 |
-| BR-L7 | Momento real del cobro y quién cobra. | [PENDIENTE] P-11 |
+| BR-L6 | Tipos y precios: moto lineal S/8 o S/10 · mototaxi S/15 · Tico S/15 · auto S/15 · camioneta S/30 o S/40 · furgón S/30. Con dos montos, el dueño elige uno al ver el vehículo; el sistema no aplica criterio. Minibán, combi y moto carguera también son tipos del negocio, pero todavía **sin precio** [PENDIENTE]: se siembran activos y sin opciones de precio, y no se pueden cobrar hasta que el dueño defina su monto. | [CONFIRMADO] C-12 y `10-OPERACION-REAL.md` §0.3 (precios); tipos sin precio agregados por el usuario el 2026-09-26 |
+| BR-L7 | Momento real del cobro y quién cobra. **Fuera de R5:** el lavado se registra cuando se confirma, con `occurredAt` enviable (DEC-58), sin asumir otro momento. | [PENDIENTE] P-11 |
 | BR-L8 | Se atiende por orden de llegada; no se asume un módulo de citas ni de turnos. | [CONFIRMADO] C-19 · [HIPÓTESIS] H-11 |
+| BR-L9 | Un lavado es una venta (`Sale` con `source = WASH` y una línea `WASH`) y **no mueve stock**, ni al registrarlo ni al anularlo. Se anula como cualquier venta, con motivo obligatorio (BR-V7). | [DECISIÓN] DEC-53, DEC-54, DEC-59 (R5) |
+| BR-L10 | El precio de un lavado siempre sale de una opción de precio activa de su tipo; no se escribe un monto libre. Un tipo o una opción inactivos no se pueden cobrar. | [DECISIÓN] DEC-55 (R5) |

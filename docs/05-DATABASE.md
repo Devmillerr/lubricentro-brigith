@@ -172,8 +172,9 @@ Un solo recordatorio abierto (`PENDING`/`CONTACTED`) por `(businessId, vehicleId
 |---|---|
 | Sale, SaleLine | Venta con líneas de producto o servicio. Cliente y vehículo opcionales |
 | PaymentMethod, Payment | Métodos sembrados: **Efectivo** y **Yape** (C-17). Otros: P-09 |
-| WashType | Tipos de lavado y precio por tipo de vehículo. Valores: P-10 |
-| WashRecord | Registro rápido opcional. Sin estados (BR-L1). Placa opcional |
+| WashType | **R5.** Tipo de lavado (moto lineal, auto, camioneta…): `name` único por negocio, `imageKey?`, `sortOrder`, `isActive`. Sin precio propio: los precios son sus `WashPriceOption`. Valores confirmados en `10-OPERACION-REAL.md` §0.3 (BR-L6). **Modelo creado (B-140, sin commit):** tabla `wash_types`, único `(businessId, name)`, índice `(businessId, sortOrder)`; migración `20260927023545_r5_washes` solo en `brigith_test` |
+| WashPriceOption | **R5.** Opción de precio de un tipo: `washTypeId`, `amount` (10,2), `label?`, `sortOrder`, `isActive`. Un tipo tiene una o dos opciones y el dueño elige una al cobrar, sin criterio escrito (§0.3). **Modelo creado (B-140, sin commit):** tabla `wash_price_options`, FK a `wash_types` y `businesses` (`RESTRICT`), índice `(businessId, washTypeId, sortOrder)`. `sale_lines.washTypeId` ya tiene FK hacia `wash_types` |
+| ~~WashRecord~~ | **Retirada (R5, DEC-53):** no hay tabla de lavado. Un lavado es una `Sale` con `source = WASH` y una `SaleLine` `WASH` (`washTypeId`, `productId` nulo, `movesStock = false`). Sin estados (BR-L1), sin cliente ni placa (DEC-44) |
 | DailyClose | Resumen del día. Conteos manuales: DEC-15 |
 
 Los movimientos de venta usan `InventoryMovement` con los tipos `SALE` y `SALE_VOID`, ya definidos en el MVP (BR-P14). Las tablas de arriba solo agregan el documento de venta (precio, pago); el libro de inventario no cambia.
@@ -195,6 +196,7 @@ Los movimientos de venta usan `InventoryMovement` con los tipos `SALE` y `SALE_V
 - Migraciones versionadas con Prisma.
 - Semilla de Brigith: negocio, usuario dueño, categorías Lubricante y Filtro, tipo "Cambio de aceite". Semilla del negocio "demo" para pruebas (BR-G7).
 - **No se siembra** ningún intervalo de mantenimiento, plantilla de mensaje, precio, producto, código de filtro ni compatibilidad.
+- **R5 (B-145, sin commit):** `prisma/seed-washes.ts` siembra en brigith los 9 tipos de lavado de `10-OPERACION-REAL.md` §0.3 con sus 8 montos confirmados (Moto lineal S/8 y S/10, Tico S/15, Auto S/15, Mototaxi S/15, Camioneta S/30 y S/40, Furgón S/30), sin etiquetas ni imagen. Minibán, Combi y Moto carguera quedan activos y sin precio. Idempotente: crea el tipo solo si no existe y sus precios solo si el tipo no tiene ninguno, así que no pisa cambios hechos desde la app. En Supabase solo con autorización (DEC-62).
 - Carga de productos, clientes y vehículos reales: depende de P-01, P-07 y P-08.
 
 ## 7. Cómo se cierran los puntos abiertos sin rehacer el modelo

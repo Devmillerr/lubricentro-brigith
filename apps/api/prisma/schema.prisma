@@ -64,6 +64,10 @@ model Business {
   productCompatibilities ProductCompatibility[]
   inventoryMovements     InventoryMovement[]
   inventoryReceipts      InventoryReceipt[]
+  sales                  Sale[]
+  saleLines              SaleLine[]
+  washTypes              WashType[]
+  washPriceOptions       WashPriceOption[]
   maintenanceTypes       MaintenanceType[]
   maintenances           Maintenance[]
   reminders              Reminder[]
@@ -99,6 +103,8 @@ model User {
   reminderContacts         ReminderContact[]
   inventoryMovements       InventoryMovement[]
   inventoryReceipts        InventoryReceipt[]
+  createdSales             Sale[]                 @relation("SaleCreatedBy")
+  voidedSales              Sale[]                 @relation("SaleVoidedBy")
 
   @@map("users")
 }
@@ -169,6 +175,8 @@ model Customer {
   updatedAt DateTime @updatedAt
 
   vehicles Vehicle[]
+  /// Siempre vacío en R4: la venta de mostrador no pide cliente (DEC-44).
+  sales    Sale[]
 
   @@index([businessId, phone])
   @@map("customers")
@@ -236,6 +244,8 @@ model Vehicle {
 
   maintenances Maintenance[]
   reminders    Reminder[]
+  /// Solo el cobro de un mantenimiento (R6) llena `Sale.vehicleId`.
+  sales        Sale[]
 
   @@unique([businessId, plateNormalized])
   @@map("vehicles")
@@ -320,6 +330,7 @@ model Product {
   compatibilities    ProductCompatibility[]
   inventoryMovements InventoryMovement[]
   maintenanceItems   MaintenanceItem[]
+  saleLines          SaleLine[]
 
   @@unique([businessId, code])
   @@index([businessId, categoryId, isActive])
@@ -431,6 +442,174 @@ model InventoryReceipt {
   @@map("inventory_receipts")
 }
 
+// ---------------------------------------------------------------------------
+// Ventas (R4, 06-API.md §2 "Ventas", 10-OPERACION-REAL.md §2.3). Todo ingreso
+// es una `Sale` (BR-V5). En R4 solo existe la venta de mostrador
+// (`COUNTER`, líneas `PRODUCT`); lavado (R5) y cobro de mantenimiento (R6)
+// usan los mismos modelos más adelante.
+// ---------------------------------------------------------------------------
+
+/// Un solo método por venta (DEC-30, BR-V6). Pago mixto: decisión futura.
+enum PaymentMethod {
+  CASH
+  YAPE
+}
+
+enum SaleSource {
+  COUNTER
+  WASH
+  MAINTENANCE
+}
+
+enum SaleStatus {
+  ACTIVE
+  VOIDED
+}
+
+enum SaleLineKind {
+  PRODUCT
+  WASH
+  SERVICE
+}
+
+model Sale {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  source        SaleSource
+  status        SaleStatus    @default(ACTIVE)
+  paymentMethod PaymentMethod
+  /// Suma de los subtotales de las líneas, calculada en el servidor (el
+  /// cliente no la envía).
+  total         Decimal       @db.Decimal(10, 2)
+  /// Cuándo se vendió; puede ser anterior al registro.
+  occurredAt    DateTime      @default(now())
+  note          String?
+
+  /// Fuera de R4 (siempre nulos): existen para que el contrato no cambie en
+  /// R5/R6. `vehicleId` solo lo llena el cobro de un mantenimiento (R6).
+  vehicleId     String?
+  vehicle       Vehicle?     @relation(fields: [vehicleId], references: [id])
+  customerId    String?
+  customer      Customer?    @relation(fields: [customerId], references: [id])
+  /// 1:1 con el mantenimiento cobrado (R6).
+  maintenanceId String?      @unique
+  maintenance   Maintenance? @relation(fields: [maintenanceId], references: [id])
+
+  createdById String
+  createdBy   User   @relation("SaleCreatedBy", fields: [createdById], references: [id])
+
+  /// Al anular (BR-V7): el motivo es obligatorio.
+  voidedAt   DateTime?
+  voidedById String?
+  voidedBy   User?     @relation("SaleVoidedBy", fields: [voidedById], references: [id])
+  voidReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines SaleLine[]
+
+  @@index([businessId, occurredAt])
+  @@index([businessId, status, occurredAt])
+  @@map("sales")
+}
+
+/// Línea de una venta, con `businessId` propio porque el dashboard (R7)
+/// agrega por línea. No mueve stock por sí misma: el movimiento `SALE` lo crea
+/// el StockLedger, enlazado a la venta por `refType = 'Sale'`/`refId` (BR-V5).
+model SaleLine {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  saleId String
+  sale   Sale   @relation(fields: [saleId], references: [id])
+
+  kind SaleLineKind
+
+  /// Obligatorio en las líneas `PRODUCT` (las únicas de R4).
+  productId  String?
+  product    Product?  @relation(fields: [productId], references: [id])
+  /// Obligatorio en las líneas `WASH` (R5, DEC-53). Siempre nulo en R4.
+  washTypeId String?
+  washType   WashType? @relation(fields: [washTypeId], references: [id])
+
+  /// Snapshots al momento de la venta (BR-G6, BR-V8): cambiar el catálogo no
+  /// altera ventas pasadas.
+  descriptionSnapshot String
+  codeSnapshot        String?
+
+  /// En la unidad del producto (sin formas de venta en R4).
+  quantity   Decimal @db.Decimal(12, 3)
+  /// Precio aplicado en esta venta (DEC-29).
+  unitPrice  Decimal @db.Decimal(10, 2)
+  /// quantity × unitPrice, redondeado half-up a 2 decimales.
+  subtotal   Decimal @db.Decimal(10, 2)
+  /// `false` si el producto no controla stock (`tracksStock = false`, BR-V4).
+  movesStock Boolean
+
+  @@index([businessId, saleId])
+  @@index([businessId, productId])
+  @@map("sale_lines")
+}
+
+// ---------------------------------------------------------------------------
+// Lavados (R5, 06-API.md §2 "Lavados", DEC-53 a DEC-68). No hay tabla de
+// lavado: un lavado es una `Sale` `WASH` con una `SaleLine` `WASH`. Estos dos
+// modelos son solo la configuración de tipos y precios.
+// ---------------------------------------------------------------------------
+
+/// Tipo de lavado (moto lineal, auto, camioneta...). Sin borrado físico
+/// (DEC-17): se desactiva con `isActive`.
+model WashType {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  /// Único por negocio (DEC-65: `WASH_TYPE_ALREADY_EXISTS`).
+  name      String
+  /// Opcional. Sin subida (DEC-34), igual que `Product.imageKey`.
+  imageKey  String?
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  priceOptions WashPriceOption[]
+  saleLines    SaleLine[]
+
+  @@unique([businessId, name])
+  @@index([businessId, sortOrder])
+  @@map("wash_types")
+}
+
+/// Opción de precio de un tipo de lavado. El cobro siempre sale de una opción
+/// activa, sin monto libre (DEC-55). Sin borrado físico (DEC-63).
+model WashPriceOption {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  washTypeId String
+  washType   WashType @relation(fields: [washTypeId], references: [id])
+
+  amount    Decimal @db.Decimal(10, 2)
+  /// Nulo: el dueño elige el monto al ver el vehículo, sin criterio escrito
+  /// (10-OPERACION-REAL.md §0.3).
+  label     String?
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, washTypeId, sortOrder])
+  @@map("wash_price_options")
+}
+
 enum MaintenanceStatus {
   ACTIVE
   VOIDED
@@ -499,6 +678,8 @@ model Maintenance {
 
   items     MaintenanceItem[]
   reminders Reminder[]
+  /// Cobro del mantenimiento (R6), 1:1. Siempre nulo en R4.
+  sale      Sale?
 
   @@index([businessId, vehicleId, performedAt])
   @@map("maintenances")

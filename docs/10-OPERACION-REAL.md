@@ -54,6 +54,11 @@ Resuelve P-09 en lo que toca al cambio de aceite, BR-V3 (esa parte) y DEC-32.
 | Auto | S/15 | Precio único | [CONFIRMADO] |
 | Camioneta | S/30 o S/40 | Depende del tamaño y de dónde viene el vehículo (las camionetas de mina pueden llegar con bastante barro). Lo decide el dueño al ver el vehículo | [CONFIRMADO] |
 | Furgón | S/30 | Precio único | [CONFIRMADO] |
+| Minibán | Sin precio | Por definir | [PENDIENTE] tipo confirmado por el usuario el 2026-09-26; precio por definir |
+| Combi | Sin precio | Por definir | [PENDIENTE] tipo confirmado por el usuario el 2026-09-26; precio por definir |
+| Moto carguera | Sin precio | Por definir | [PENDIENTE] tipo confirmado por el usuario el 2026-09-26; precio por definir |
+
+Minibán, Combi y Moto carguera entran al catálogo **activos y sin opciones de precio** (decisión del usuario, 2026-09-26). No se inventa ningún monto: mientras no tengan precio no se pueden cobrar (`POST /washes` exige una opción activa, DEC-55). El precio se agrega desde Configuración → Tipos de lavado cuando el dueño lo defina.
 
 Consecuencia de diseño: el sistema **no** calcula el precio a partir de tamaño ni procedencia. Muestra los dos montos y el dueño toca uno. Los montos no llevan etiqueta ("chica/grande", "con barro"): sería un criterio inventado.
 
@@ -462,7 +467,7 @@ Filtros (tarjeta)
 
 **Venta de productos** (mostrador, sin cliente ni placa)
 Flujo del mapa: Inicio → Vender → categorías → productos → carrito → pago → confirmar.
-1. Inicio → **Vender**. 2. Elegir categoría y tocar productos (o buscarlos); cada toque suma 1, con −/+ en la barra del carrito. La cantidad admite decimales en la unidad del producto (p. ej. litros). Elegir **Litro** o **Balde completo** (formas de venta, `ProductSaleUnit`) queda **fuera de R4**: en R4 cada producto se vende en su propia unidad. 3. Barra fija: "3 productos · S/ 120.00 → Cobrar". 4. Pantalla de cobro: líneas con precio aplicado (editable si DEC-29 lo permite; si el producto aún no tiene precio en el catálogo, el dueño escribe el monto que cobra en esa venta, sin tener que completar el catálogo), total, dos botones grandes **Efectivo** / **Yape** para elegir el pago y **Confirmar**. 5. `POST /sales` (idempotente) → `SALE` por línea con `movesStock` → saldo en caché baja → invalidación → dashboard actualizado. 6. Confirmación con **Deshacer** (anula) durante unos segundos.
+1. Inicio → **Vender**. 2. Elegir categoría y tocar productos (o buscarlos); cada toque suma 1, con −/+ en la barra del carrito. La cantidad admite decimales en la unidad del producto (p. ej. litros). Elegir **Litro** o **Balde completo** (formas de venta, `ProductSaleUnit`) queda **fuera de R4**: en R4 cada producto se vende en su propia unidad. 3. Barra fija: "3 productos · S/ 120.00 → Cobrar". 4. Pantalla de cobro: líneas con precio aplicado (editable si DEC-29 lo permite; si el producto aún no tiene precio en el catálogo, el dueño escribe el monto que cobra en esa venta, sin tener que completar el catálogo), total, dos botones grandes **Efectivo** / **Yape** para elegir el pago y **Confirmar**. 5. `POST /sales` (idempotente) → `SALE` por línea con `movesStock` → saldo en caché baja → invalidación → dashboard actualizado. 6. Confirmación con la venta cobrada, **Nueva venta**, **Ver detalle** y **Volver al inicio**. Sin **Deshacer**: anular exige motivo (BR-V7), así que se anula con **Anular** desde el detalle (implementado así en B-134, 2026-09-26; `07-UI-UX.md` §3.10).
 - Stock insuficiente (DEC-26/27; decisión de R4 del 2026-09-26): la venta aplica **`BLOCK` fijo** y **no** lee `Business.insufficientStockPolicy`. Si un producto **con conteo** no alcanza, el servidor responde 422 `INSUFFICIENT_STOCK` con producto, saldo y cantidad, y **no se guarda nada** de la venta. La UI permite corregir la cantidad o quitar el producto; **no hay "confirmar igual"**. Un producto **sin conteo** se vende con aviso de stock no confiable.
 
 **Recepción de mercadería** (lote)
@@ -476,7 +481,7 @@ Flujo del mapa: Inicio → Vender → categorías → productos → carrito → 
 1. Buscar por placa/vehículo (lookup existente) **o por cliente** → elegir uno de sus vehículos; **sin vehículo** solo si se aprueba DEC-31. 2. Tipo. 3. Productos usados con el selector visual del catálogo (compatibles primero); descuentan stock y **no** generan ingreso. 4. Km actual opcional. 5. Próximo: chips **Por fecha / Por km / Ambos / Ninguno**, solo cuando corresponda a ese vehículo; nada se prellena ni es obligatorio (BR-M3). 6. **Cobro** opcional: un solo campo **Total cobrado** + Efectivo/Yape ([CONFIRMADO] monto único, §0.2; sin desglose). 7. Guardar → mantenimiento + stock + recordatorio + venta, en una transacción. 8. Si el vehículo tiene cliente con teléfono, la confirmación ofrece **Avisar por WhatsApp** más adelante desde el recordatorio; si no tiene cliente, ofrece **Asignar cliente** (buscar o "+ Agregar cliente", §2.11).
 
 **Lavado** (flujo del mapa: Lavado → tipo → precio → pago → confirmar; sin cola, sin estados)
-1. Inicio → **Lavado**. 2. Tarjetas grandes: Moto lineal · Tico · Auto · Camioneta · Mototaxi · Furgón. 3. Si el tipo tiene 2 precios (moto lineal S/8 · S/10; camioneta S/30 · S/40), el dueño toca uno según lo que ve; si tiene uno, se salta ([CONFIRMADO] §0.3). No se pide el motivo del precio. 4. **Efectivo** / **Yape**. 5. **Confirmar** → guardado. No se pide cliente ni placa, ni como campo opcional (DEC-44). Lista "Lavados de hoy" debajo con Deshacer.
+1. Inicio → **Lavado**. 2. Tarjetas grandes: Moto lineal · Tico · Auto · Mototaxi · Camioneta · Furgón (solo los tipos con al menos un precio activo: Minibán, Combi y Moto carguera, activos pero sin precio, §0.3, no aparecen hasta que se les agregue precio en Configuración → Tipos de lavado). 3. Si el tipo tiene 2 precios (moto lineal S/8 · S/10; camioneta S/30 · S/40), el dueño toca uno según lo que ve; si tiene uno, se salta ([CONFIRMADO] §0.3). No se pide el motivo del precio. 4. **Efectivo** / **Yape**. 5. **Confirmar** → guardado. No se pide cliente ni placa, ni como campo opcional (DEC-44). Lista "Lavados de hoy" debajo; cada lavado se puede **Anular** con motivo obligatorio (`POST /sales/:id/void`, BR-V7, DEC-59).
 
 **Clientes y Avisar por WhatsApp:** ver §2.11.
 
@@ -543,7 +548,7 @@ Todas las escrituras de dinero o stock exigen `Idempotency-Key` y aceptan `id` U
 | POST | `/sales/:id/void` | `{ reason }`. Se puede anular aunque un producto se haya desactivado después de la venta: la validación de producto inactivo aplica al crear la venta, no al `SALE_VOID` |
 | GET | `/wash-types` | Con precios activos |
 | POST/PATCH | `/wash-types`, `/wash-types/:id`, `/wash-types/:id/prices` | Configuración (Configuración → Lavados) |
-| POST | `/washes` | `{ id?, washTypeId, priceOptionId, paymentMethod, occurredAt? }` → `SaleResponse` |
+| POST | `/washes` | `{ id?, washTypeId, priceOptionId, paymentMethod, occurredAt?, note? }` → `SaleResponse`. Sin monto libre: el precio sale de la opción activa (DEC-55). Historial, detalle y anulación por `/sales` (DEC-59). Contrato: `06-API.md` §2, Lavados |
 | POST | `/maintenances/:id/charge` | `{ paymentMethod, totalAmount }` → `SaleResponse` (una línea SERVICE) |
 | PUT | `/products/:id/sale-units` | `[{ label, factor, salePrice? }]` (formas de venta: litro/balde). **Fuera de R4** |
 | POST | `/customers/with-vehicles` | `{ name, phone?, vehicles?: [{ plate, vehicleModelId? }] }` → cliente + vehículos en una transacción (alta desde Avisar) |
@@ -587,7 +592,7 @@ SaleLineResponse { id; kind; productId|null; washTypeId|null;   // saleUnitId y 
 CreateSaleResult = SaleResponse & { warnings: StockWarning[] }   // mismo formato que mantenimiento
 
 // POST /washes
-CreateWashDto { id?: uuid; washTypeId: uuid; priceOptionId: uuid; paymentMethod; occurredAt?: ISO8601 }
+CreateWashDto { id?: uuid; washTypeId: uuid; priceOptionId: uuid; paymentMethod; occurredAt?: ISO8601; note?: string /* ≤ 500 */ }
 
 // GET /dashboard
 DashboardResponse {
@@ -641,7 +646,7 @@ Barra inferior de 5:
 | R2 | Catálogo según §2.2b: categorías de 2 niveles, viscosidad/presentación/imagen opcionales, facetas, filtros, búsqueda por vehículo, `make` opcional, siembra confirmada | Profundidad y ciclos de categorías; filtros y facetas; aislamiento entre negocios; siembra idempotente |
 | R3 | Recepción en lote + ajuste por cantidad física + alertas | Lote atómico (una línea inválida → nada); idempotencia; anterior/diferencia/resultante |
 | R4 | Ventas de mostrador (`Sale`, `SaleLine`, `source = COUNTER`) + consultas + anulación **y su UI** (Vender, historial de ventas y anulación). Un método de pago por venta (DEC-30). Stock insuficiente: `BLOCK` fijo, sin leer `Business.insufficientStockPolicy`. **Fuera:** `ProductSaleUnit` y `saleUnitId`, `WASH` (R5), cobro de mantenimiento (R6), dashboard (R7), clientes (R8) y pago mixto. Ver §3.2e | Total calculado en servidor; stock baja una vez; anulación revierte; idempotencia; 422 por stock con rollback de toda la venta |
-| R5 | Lavados (`WashType`, `WashPriceOption`, `POST /washes`) | Precio debe pertenecer al tipo; se registra sin cliente ni placa |
+| R5 | Lavados: `WashType` y `WashPriceOption` con su configuración (crear, editar, desactivar), `POST /washes` (una `Sale` `WASH` con una línea `WASH`, sin stock), historial, detalle y anulación por `/sales`, **y su UI**. Helper interno compartido para escribir la venta. **Fuera:** BR-L7/P-11, dashboard e indicadores (R7). Ver §3.2f | Precio de una opción activa del tipo; 409 por tipo o precio inactivo; ningún `InventoryMovement` al crear ni al anular; idempotencia; aislamiento entre negocios |
 | R6 | Cobro de mantenimiento + anulación conjunta + (DEC-31) | Sin doble descuento ni doble ingreso; anular mantenimiento anula venta; anular venta no toca stock |
 | R7 | Dashboard + indicadores del piloto + throttler | Agregación por zona horaria (integración: venta 23:30 Lima cae en el día correcto); excluye anuladas; aislamiento en SQL crudo |
 | R8 | Clientes + Avisar (independiente del dinero; puede adelantarse): búsqueda por placa, alta de cliente con vehículos, avisar desde un cliente (DEC-41–47) | Búsqueda por placa normalizada; no duplica cliente con el mismo teléfono (aviso); mensaje generado con cliente/placa/próximo km-fecha del vehículo elegido; aislamiento entre negocios |
@@ -758,6 +763,31 @@ Registradas en `09-BACKLOG.md` §2 (decisiones) y §3 (sección R4, ítems B-100
 | — | **Stock insuficiente en la venta:** `BLOCK` fijo (aplica DEC-26). La venta no lee `Business.insufficientStockPolicy` ni permite "confirmar igual". La limpieza de esa configuración queda para un corte posterior |
 
 Fuera de R4 además: lavados (R5), cobro de mantenimiento (R6), dashboard (R7) y clientes (R8).
+
+### 3.2f Aprobadas por el usuario para R5 (2026-09-26)
+
+Registradas en `09-BACKLOG.md` §2 (DEC-53 a DEC-68) y §3 (sección R5). Contrato en `06-API.md` §2, Lavados; pantallas en `07-UI-UX.md` §3.9.
+
+| ID | Decisión |
+|---|---|
+| DEC-53 | **Sin tabla `Wash`:** un lavado es una `Sale` con `source = WASH` y una sola `SaleLine` `kind = WASH`, con `washTypeId` obligatorio, `productId = null` y `movesStock = false` |
+| DEC-54 | **El lavado no mueve stock:** no pasa por el `StockLedger`, ni al crearlo ni al anularlo |
+| DEC-55 | **Precio siempre de una `WashPriceOption` activa:** no hay monto libre. Tipo inactivo: 409 `WASH_TYPE_INACTIVE`; precio inactivo: 409 `WASH_PRICE_INACTIVE` |
+| DEC-56 | **Configuración en R5:** crear, editar y desactivar `WashType` y `WashPriceOption`, con `sortOrder` e `isActive` según los patrones del proyecto |
+| DEC-57 | **`note` opcional** en `POST /washes`, hasta 500 caracteres, con la misma semántica que `Sale.note` |
+| DEC-58 | **`Sale.occurredAt`** es el momento real del cobro y se puede enviar; no hay `performedAt` en la venta |
+| DEC-59 | **Anulación por `POST /sales/:id/void`**, siempre con motivo; sin endpoint propio para lavados; funciona sin movimientos de stock. El término es "Anular" |
+| DEC-60 | **La UI entra en R5:** elegir tipo y precio, cobrar, historial, detalle, anulación con motivo y administración de tipos y precios. Sin TanStack Query ni cambios de arquitectura del frontend |
+| DEC-61 | **Helper interno mínimo y compartido** para escribir `Sale` y sus líneas, usado por mostrador y lavado. Sin refactor grande ni cambios al contrato de R4 |
+| DEC-62 | **Supabase:** el seed de tipos y precios (§0.3) queda preparado en código; ni la migración de R5 ni el seed se aplican en Supabase sin autorización explícita posterior |
+| DEC-63 | **Editar y desactivar un precio** con `PATCH /wash-types/:id/prices/:priceId` (`amount`, `label`, `sortOrder`, `isActive`). Sin borrado físico. El precio debe pertenecer al tipo y al negocio actuales |
+| DEC-64 | **`GET /wash-types?includeInactive=`:** por defecto solo tipos y precios activos (cobro); con `true`, también los inactivos (Configuración) |
+| DEC-65 | **Errores:** 404 `WASH_TYPE_NOT_FOUND`, 404 `WASH_PRICE_NOT_FOUND`, 409 `WASH_TYPE_ALREADY_EXISTS`, 409 `WASH_PRICE_NOT_IN_TYPE`, además de los 409 de DEC-55 |
+| DEC-66 | **Validaciones:** `amount` > 0; `name` obligatorio, `trim`, ≤ 100; `label` opcional, `trim`, ≤ 100; `sortOrder` entero ≥ 0 |
+| DEC-67 | **`descriptionSnapshot`** de la línea `WASH` = exactamente el `name` del `WashType` al cobrar, sin prefijos; conserva el nombre histórico |
+| DEC-68 | **Historial, detalle y anulación** de lavados reutilizan las pantallas genéricas de ventas de R4 (B-135) con `source=WASH`; sin pantallas duplicadas |
+
+Fuera de R5: el momento real del cobro y quién cobra (BR-L7, P-11), el dashboard, los gráficos e indicadores (R7), incluido BR-I1 con lavados, y el cobro de mantenimiento (R6).
 
 ### 3.3 Pendientes que todavía requieren decisión (del dueño o tuya)
 
