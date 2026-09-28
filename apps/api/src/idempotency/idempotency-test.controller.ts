@@ -17,8 +17,9 @@ class IdempotencyTestDto {
 /**
  * Controlador solo para probar el mecanismo de idempotencia end-to-end
  * (04-ARCHITECTURE.md §7.3 lo pide como parte de C0). No representa un
- * endpoint de dominio: no se monta cuando NODE_ENV=production
- * (ver AppModule) y no debe usarse como ejemplo de un módulo real.
+ * endpoint de dominio: solo se monta con NODE_ENV=test (ver
+ * `idempotencyControllers` en IdempotencyModule) y no debe usarse como
+ * ejemplo de un módulo real.
  */
 @ApiExcludeController()
 @Controller('internal/idempotency-test')

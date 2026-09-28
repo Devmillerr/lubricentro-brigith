@@ -12,10 +12,17 @@ import {
   IsPositive,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
+import {
+  MAX_MONEY,
+  MAX_MONEY_MESSAGE,
+  MAX_QUANTITY,
+  MAX_QUANTITY_MESSAGE,
+} from '../../common/decimal-limits';
 import { MAX_SALE_LINES, MAX_SALE_TEXT, type CreateSaleInput } from '../sales.service';
 
 /** Una línea de la venta: producto, cantidad y precio aplicado (06-API.md §2, "Ventas"). */
@@ -28,6 +35,7 @@ export class CreateSaleLineDto {
     description: 'Mayor que 0, hasta 3 decimales, en la unidad del producto.',
     minimum: 0,
     exclusiveMinimum: true,
+    maximum: MAX_QUANTITY,
   })
   @Type(() => Number)
   @IsNumber(
@@ -35,11 +43,13 @@ export class CreateSaleLineDto {
     { message: 'La cantidad debe ser un número con hasta 3 decimales.' },
   )
   @IsPositive({ message: 'La cantidad debe ser mayor que 0.' })
+  @Max(MAX_QUANTITY, { message: MAX_QUANTITY_MESSAGE })
   quantity!: number;
 
   @ApiProperty({
     description: 'Precio aplicado en esta venta (DEC-29). Mayor o igual que 0, hasta 2 decimales.',
     minimum: 0,
+    maximum: MAX_MONEY,
   })
   @Type(() => Number)
   @IsNumber(
@@ -47,6 +57,7 @@ export class CreateSaleLineDto {
     { message: 'El precio debe ser un número con hasta 2 decimales.' },
   )
   @Min(0, { message: 'El precio no puede ser negativo.' })
+  @Max(MAX_MONEY, { message: MAX_MONEY_MESSAGE })
   unitPrice!: number;
 }
 

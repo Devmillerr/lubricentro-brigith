@@ -6,10 +6,12 @@ import {
   IsNumber,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
   ValidateIf,
 } from 'class-validator';
+import { MAX_MONEY, MAX_MONEY_MESSAGE } from '../../common/decimal-limits';
 
 /** No enviado = no se toca. */
 const sent = (_: object, value: unknown) => value !== undefined;
@@ -73,11 +75,13 @@ export class UpdateProductDto {
     type: Number,
     nullable: true,
     description: 'null deja el precio pendiente (BR-P17).',
+    maximum: MAX_MONEY,
   })
   @ValidateIf(sentNotNull)
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  @Max(MAX_MONEY, { message: MAX_MONEY_MESSAGE })
   salePrice?: number | null;
 
   @ApiPropertyOptional()

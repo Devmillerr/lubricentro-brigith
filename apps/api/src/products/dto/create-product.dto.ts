@@ -7,9 +7,11 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   Min,
   MaxLength,
 } from 'class-validator';
+import { MAX_MONEY, MAX_MONEY_MESSAGE } from '../../common/decimal-limits';
 
 /**
  * Cada producto es una unidad de stock (BR-P15). `unit` es texto libre a
@@ -64,11 +66,15 @@ export class CreateProductDto {
   @MaxLength(50)
   unit!: string;
 
-  @ApiPropertyOptional({ description: 'Opcional; ningún precio se asume (BR-P17).' })
+  @ApiPropertyOptional({
+    description: 'Opcional; ningún precio se asume (BR-P17).',
+    maximum: MAX_MONEY,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  @Max(MAX_MONEY, { message: MAX_MONEY_MESSAGE })
   salePrice?: number;
 
   @ApiPropertyOptional({ description: 'Por defecto true (BR-P16).', default: true })

@@ -1,6 +1,10 @@
 import { HttpStatus } from '@nestjs/common';
 import { InventoryMovementType, Prisma, type InventoryMovement } from '@prisma/client';
-import { ProblemException } from '../common/exceptions/problem.exception';
+import { MAX_QUANTITY } from '../common/decimal-limits';
+import {
+  ProblemException,
+  ValidationProblemException,
+} from '../common/exceptions/problem.exception';
 import type { ScopedTransaction } from '../prisma/business-scope';
 
 /**
@@ -65,6 +69,8 @@ const CONSUMPTION_TYPES = new Set<InventoryMovementType>([
   InventoryMovementType.MAINTENANCE_USE,
 ]);
 
+const MAX_QUANTITY_DECIMAL = new Prisma.Decimal(String(MAX_QUANTITY));
+
 interface PlannedMovement {
   entry: StockEntry;
   quantityDelta: Prisma.Decimal;
@@ -115,8 +121,9 @@ export async function applyStockMovements(
     policy: StockPolicy;
     entries: StockEntry[];
     /**
-     * Campo de `errors[]` en el 422 `INSUFFICIENT_STOCK` de `BLOCK`. Por
-     * defecto `items` (el cuerpo del mantenimiento); la venta usa `lines`.
+     * Campo de `errors[]` en el 422 `INSUFFICIENT_STOCK` de `BLOCK` y en el 400
+     * por saldo fuera de rango. Por defecto `items` (el cuerpo del
+     * mantenimiento); la venta y la recepción usan `lines`.
      */
     insufficientStockField?: string;
   },
@@ -194,6 +201,24 @@ export async function applyStockMovements(
       }
 
       plan.finalBalance = before.plus(quantityDelta);
+      // Saldo y delta son Decimal(12,3): lo que no cabe es un 400, no un 500
+      // al escribir. Se evalúa antes de escribir nada.
+      if (
+        plan.finalBalance.abs().greaterThan(MAX_QUANTITY_DECIMAL) ||
+        quantityDelta.abs().greaterThan(MAX_QUANTITY_DECIMAL)
+      ) {
+        throw new ValidationProblemException([
+          {
+            field:
+              entry.type === InventoryMovementType.COUNT
+                ? 'countedQuantity'
+                : isPhysicalAdjustment(entry)
+                  ? 'physicalQuantity'
+                  : insufficientStockField,
+            message: `El saldo del producto ${productId} superaría el máximo admitido (999 999 999,999).`,
+          },
+        ]);
+      }
       plan.movements.push({
         entry,
         quantityDelta,

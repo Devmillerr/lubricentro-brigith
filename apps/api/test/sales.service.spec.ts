@@ -348,6 +348,29 @@ describe('SalesService.create', () => {
         'lines.0.unitPrice',
       ],
       [
+        'cantidad mayor que Decimal(12,3)',
+        sale([{ productId: 'p-a', quantity: 1_000_000_000, unitPrice: 0 }]),
+        'lines.0.quantity',
+      ],
+      [
+        'precio mayor que Decimal(10,2)',
+        sale([{ productId: 'p-a', quantity: 1, unitPrice: 100_000_000 }]),
+        'lines.0.unitPrice',
+      ],
+      [
+        'subtotal mayor que Decimal(10,2) con cantidad y precio válidos',
+        sale([{ productId: 'p-a', quantity: 2, unitPrice: 99_999_999.99 }]),
+        'lines.0.subtotal',
+      ],
+      [
+        'total mayor que Decimal(10,2) con subtotales válidos',
+        sale([
+          { productId: 'p-a', quantity: 1, unitPrice: 99_999_999.99 },
+          { productId: 'p-b', quantity: 1, unitPrice: 0.01 },
+        ]),
+        'total',
+      ],
+      [
         'método de pago desconocido',
         sale([{ productId: 'p-a', quantity: 1, unitPrice: 1 }], { paymentMethod: 'CARD' as never }),
         'paymentMethod',

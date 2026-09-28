@@ -324,11 +324,7 @@ export class MaintenancesService {
       throw this.notFound();
     }
     if (existing.status === MaintenanceStatus.VOIDED) {
-      throw new ProblemException({
-        status: HttpStatus.CONFLICT,
-        code: 'MAINTENANCE_VOIDED',
-        title: 'Un mantenimiento anulado no se puede corregir',
-      });
+      throw maintenanceVoided();
     }
     if (!existing.vehicleId) {
       // Misma regla que al crear: sin vehículo no hay seguimiento (DEC-73).
@@ -376,8 +372,11 @@ export class MaintenancesService {
     }
 
     return scoped.$transaction(async (tx) => {
-      const maintenance = await tx.maintenance.update({
-        where: { id },
+      // Condicionado a ACTIVE en la misma sentencia: si una anulación
+      // concurrente ganó después de la lectura de arriba, no se escribe nada
+      // (misma transición condicional que `void`, DEC-77).
+      const { count } = await tx.maintenance.updateMany({
+        where: { id, status: MaintenanceStatus.ACTIVE },
         data: {
           // `undefined` = no se toca; `null` = se quita.
           odometerKm: dto.odometerKm,
@@ -387,6 +386,13 @@ export class MaintenancesService {
           notes: dto.notes,
         },
       });
+      if (count === 0) {
+        throw maintenanceVoided();
+      }
+      const maintenance = await tx.maintenance.findFirst({ where: { id } });
+      if (!maintenance) {
+        throw this.notFound();
+      }
       await this.syncOwnReminder(tx, businessId, maintenance);
       return maintenance;
     });
@@ -836,4 +842,12 @@ async function salesByMaintenance(
       { ...sale, lines: lines.filter((line) => line.saleId === sale.id) },
     ]),
   );
+}
+
+function maintenanceVoided(): ProblemException {
+  return new ProblemException({
+    status: HttpStatus.CONFLICT,
+    code: 'MAINTENANCE_VOIDED',
+    title: 'Un mantenimiento anulado no se puede corregir',
+  });
 }

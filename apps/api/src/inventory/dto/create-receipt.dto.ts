@@ -10,9 +10,11 @@ import {
   IsPositive,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   ValidateNested,
 } from 'class-validator';
+import { MAX_QUANTITY, MAX_QUANTITY_MESSAGE } from '../../common/decimal-limits';
 import { MAX_RECEIPT_LINES, type ReceiptBatchInput } from '../inventory.service';
 
 /** Una línea de la recepción: producto y cantidad recibida (BR-P6). */
@@ -25,10 +27,12 @@ export class ReceiptLineDto {
     description: 'Mayor que 0. Admite decimales (litros).',
     minimum: 0,
     exclusiveMinimum: true,
+    maximum: MAX_QUANTITY,
   })
   @Type(() => Number)
   @IsNumber({}, { message: 'La cantidad debe ser un número.' })
   @IsPositive({ message: 'La cantidad debe ser mayor que 0.' })
+  @Max(MAX_QUANTITY, { message: MAX_QUANTITY_MESSAGE })
   quantity!: number;
 }
 

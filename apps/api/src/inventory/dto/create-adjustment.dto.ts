@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsNumber, IsString, IsUUID, Matches, MaxLength, Min } from 'class-validator';
+import { IsNumber, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
+import { MAX_QUANTITY, MAX_QUANTITY_MESSAGE } from '../../common/decimal-limits';
 
 /**
  * Ajuste por cantidad física (R3, BR-P7b, 06-API.md §2 "Cambios de R3"): se
@@ -17,10 +18,12 @@ export class CreateAdjustmentDto {
   @ApiProperty({
     description: 'Cantidad que hay en el estante. Mayor o igual que 0; admite decimales (litros).',
     minimum: 0,
+    maximum: MAX_QUANTITY,
   })
   @Type(() => Number)
   @IsNumber({}, { message: 'La cantidad física debe ser un número.' })
   @Min(0, { message: 'La cantidad física no puede ser negativa.' })
+  @Max(MAX_QUANTITY, { message: MAX_QUANTITY_MESSAGE })
   physicalQuantity!: number;
 
   @ApiProperty({ maxLength: 500 })

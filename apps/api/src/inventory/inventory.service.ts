@@ -206,6 +206,7 @@ export class InventoryService {
         businessId,
         createdById: userId,
         policy: 'WARN',
+        insufficientStockField: 'lines',
         entries: input.lines.map((line) => ({
           productId: line.productId,
           type: InventoryMovementType.PURCHASE_IN,

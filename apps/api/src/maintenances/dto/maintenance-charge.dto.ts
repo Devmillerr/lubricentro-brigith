@@ -1,7 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { PaymentMethod } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsEnum, IsNumber, IsPositive } from 'class-validator';
+import { IsEnum, IsNumber, IsPositive, Max } from 'class-validator';
+import { MAX_MONEY, MAX_MONEY_MESSAGE } from '../../common/decimal-limits';
 
 /**
  * Cobro de un mantenimiento (R6, DEC-72): un solo monto total (BR-V3) y un
@@ -15,12 +16,16 @@ export class MaintenanceChargeDto {
   @IsEnum(PaymentMethod, { message: 'El método de pago debe ser CASH o YAPE.' })
   paymentMethod!: PaymentMethod;
 
-  @ApiProperty({ description: 'Monto total cobrado. Mayor que 0, hasta 2 decimales.' })
+  @ApiProperty({
+    description: 'Monto total cobrado. Mayor que 0, hasta 2 decimales.',
+    maximum: MAX_MONEY,
+  })
   @Type(() => Number)
   @IsNumber(
     { maxDecimalPlaces: 2 },
     { message: 'El monto debe ser un número con hasta 2 decimales.' },
   )
   @IsPositive({ message: 'El monto debe ser mayor que 0.' })
+  @Max(MAX_MONEY, { message: MAX_MONEY_MESSAGE })
   totalAmount!: number;
 }

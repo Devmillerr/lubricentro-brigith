@@ -16,6 +16,12 @@ import {
   ValidationProblemException,
   type FieldError,
 } from '../common/exceptions/problem.exception';
+import {
+  MAX_MONEY,
+  MAX_MONEY_MESSAGE,
+  MAX_QUANTITY,
+  MAX_QUANTITY_MESSAGE,
+} from '../common/decimal-limits';
 import { paginate, type Page } from '../common/pagination';
 import { applyStockMovements, type StockWarning } from '../inventory/stock-ledger';
 import { forBusiness, type ScopedTransaction } from '../prisma/business-scope';
@@ -426,12 +432,16 @@ function validateCreateSale(input: CreateSaleInput): PricedLine[] {
         field: `lines.${index}.quantity`,
         message: `La cantidad debe ser mayor que 0, con hasta ${QUANTITY_DECIMALS} decimales.`,
       });
+    } else if (line.quantity > MAX_QUANTITY) {
+      errors.push({ field: `lines.${index}.quantity`, message: MAX_QUANTITY_MESSAGE });
     }
     if (!isNumberWithDecimals(line.unitPrice, PRICE_DECIMALS) || line.unitPrice < 0) {
       errors.push({
         field: `lines.${index}.unitPrice`,
         message: `El precio no puede ser negativo y admite hasta ${PRICE_DECIMALS} decimales.`,
       });
+    } else if (line.unitPrice > MAX_MONEY) {
+      errors.push({ field: `lines.${index}.unitPrice`, message: MAX_MONEY_MESSAGE });
     }
   });
   if (errors.length > 0) {
@@ -451,10 +461,26 @@ function validateCreateSale(input: CreateSaleInput): PricedLine[] {
     seen.add(line.productId);
   }
 
-  return lines.map((line) => ({
+  // Subtotal y total son Decimal(10,2): una cantidad y un precio válidos por
+  // separado pueden no caber multiplicados o sumados.
+  const priced = lines.map((line) => ({
     ...line,
     subtotal: lineSubtotal(line.quantity, line.unitPrice),
   }));
+  const maxMoney = new Prisma.Decimal(String(MAX_MONEY));
+  priced.forEach((line, index) => {
+    if (line.subtotal.greaterThan(maxMoney)) {
+      errors.push({ field: `lines.${index}.subtotal`, message: MAX_MONEY_MESSAGE });
+    }
+  });
+  const total = priced.reduce((sum, line) => sum.plus(line.subtotal), new Prisma.Decimal(0));
+  if (errors.length === 0 && total.greaterThan(maxMoney)) {
+    errors.push({ field: 'total', message: MAX_MONEY_MESSAGE });
+  }
+  if (errors.length > 0) {
+    throw new ValidationProblemException(errors);
+  }
+  return priced;
 }
 
 /** `quantity × unitPrice`, redondeado half-up a 2 decimales (06-API.md §2). */
