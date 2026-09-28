@@ -2,7 +2,34 @@
 
 **Actualizado:** 2026-09-28
 
-## Estado actual (2026-09-28): backend de R7 implementado hasta B-166; R7 no cerrado
+## Estado actual (2026-09-28): backend R2–R7 validado en navegador; R7 no cerrado
+
+- **Backend R2–R7 funcionalmente validado**, con pruebas automatizadas y una validación manual completa en navegador. **R7 NO está cerrado y el proyecto tampoco:** faltan **B-167** (UI de R7) y **B-168** (validación final y cierre).
+- **Commits locales, sin push** (`origin/main` sigue en `c697b96`; 11 commits por delante). Además de los de R7 listados en la sección siguiente:
+  - `2f19338` "test: ajustando e2e de tipos de lavado al throttler" (el arreglo de prueba que quedaba sin commit).
+  - `e781c5b` "fix: corrigiendo concurrencia y límites del backend": H3 (el `PATCH` de mantenimiento condicionado a `ACTIVE` dentro de la transacción; 409 `MAINTENANCE_VOIDED` si una anulación concurrente gana), H4 (topes de los `Decimal` en `src/common/decimal-limits.ts` y en el ledger/ventas para valores calculados: 400 `VALIDATION_ERROR` en vez de 500) y H5 (`internal/idempotency-test` montado solo con `NODE_ENV === 'test'`).
+  - `14bc6ea` "docs: documentar límites y conflictos de la API" (`06-API.md`).
+  - `d6a0f31` "fix: mejorando mensajes de validación de ventas e inventario": F1 y F2 de la validación en navegador (abajo).
+  - Último commit: `d6a0f31`.
+- **Pruebas automatizadas** (contra `brigith_test` local, Postgres embebido en 55432): unitarias **484/484**, integración **139/139**, e2e **147/147**; `typecheck` y `build` de API y web OK; `git diff --check` OK. `pnpm lint` sigue con los errores preexistentes de CRLF (`Delete ␍`) en archivos que no se reformatean.
+- **Validación manual en navegador (2026-09-28):** **36/36 pantallas** cargadas y probadas y **13 flujos E2E** funcionales (autenticación, categorías, productos, conteo/ajuste, recepción, cliente → vehículo → mantenimiento → recordatorio → anulación, H3 desde dos pestañas, cobro posterior, mantenimiento sin vehículo, lavados, venta → anulación, resumen del piloto, persistencia y rutas). Sin fallos bloqueantes ni de severidad alta. Consola del navegador y logs de API y web sin errores.
+  - Entorno: API compilada (`:4000`) y `next start` (`:3000`) contra `brigith_test`. `apps/api/.env` apunta a Supabase: la API se levantó con `DATABASE_URL` sobrescrito por el entorno del proceso y secretos JWT desechables; Supabase no se tocó.
+  - Hubo que regenerar el cliente OpenAPI (`pnpm api:generate`, archivos ignorados por git): el local era anterior a R6 y `next build` fallaba.
+  - Datos creados solo en `brigith_test`: negocio desechable "QA E2E 8645f749" (usuario `qa-e2e-8645f749`) con sus productos, cliente, vehículo, mantenimientos, lavados y ventas de prueba.
+  - **F1 y F2 (atribuibles a `e781c5b`), corregidos en `d6a0f31`:** F1, el error de saldo fuera de rango mostraba el UUID interno del producto (ahora usa su nombre); F2, un total de venta calculado por encima del máximo solo mostraba "Revisa los datos ingresados." (ahora la API explica el total y la web lo muestra).
+  - **Pendientes de severidad baja (deuda UX/frontend, a valorar durante B-167/B-168; no reabren el backend):**
+    - F3: el mensaje de precio máximo en producto dice "mayor o igual a 0" y no menciona el máximo.
+    - F4: el precio máximo en Configuración → Tipos de lavado solo muestra "Revisa los datos ingresados.".
+    - F5: la página 404 global sigue siendo la de Next, en inglés.
+    - F6: el enlace desde una venta de mantenimiento hacia Ventas (`?source=MAINTENANCE`) filtra sin ningún chip o filtro visible.
+    - F7: el doble o triple clic en los botones de envío genera solicitudes repetidas; la idempotencia evita efectos duplicados.
+  - El 503 aparente de `POST /auth/logout` en la captura del navegador **no es un fallo confirmado**: la API devuelve 204 directamente y los tokens quedaron revocados en la base; se clasificó como anomalía de la captura.
+- **Pendiente:** **B-167** (UI de R7), **B-168** (validación final y cierre de R7) y push, con autorización.
+- **Próximo paso:** commit de este `STATUS.md` con autorización; después, B-167.
+
+## Estado al 2026-09-28: backend de R7 implementado hasta B-166
+
+Lo pendiente de esta sección (el arreglo de `wash-types.e2e-spec.ts`) quedó en `2f19338`; ver la sección anterior.
 
 - **R7 backend funcionalmente implementado (B-160 a B-166). R7 NO está cerrado:** faltan la UI (B-167) y la validación final y cierre (B-168).
 - **Commits locales, sin push** (sobre `origin/main` = `c697b96`): `35d8c03` (contrato de R7), `57eea87` (dashboard base: B-160, B-161), `bef87e5` (productos: B-162), `14190e7` (stock y recordatorios: B-163), `14aff9c` (BR-I1: B-165), `0f4d7c9` (throttler DEC-86: B-166) y el commit de documentación "docs: cerrando documentación del backend de R7" (06, 09 y este `STATUS.md`). B-164 (pruebas del dashboard) va repartido en `57eea87`, `bef87e5` y `14190e7`.
