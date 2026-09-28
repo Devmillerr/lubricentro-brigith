@@ -24,7 +24,11 @@ import {
   VehicleWithRelationsResponse,
 } from './dto/vehicle-details.response';
 import { ProductResponse } from '../products/dto/product.response';
-import { MaintenanceWithItemsResponse } from '../maintenances/dto/maintenance.response';
+import {
+  MaintenanceDetailResponse,
+  toMaintenanceDetailResponse,
+  type MaintenanceDetailBody,
+} from '../maintenances/dto/maintenance.response';
 
 @ApiTags('vehicles')
 @ApiBearerAuth()
@@ -66,14 +70,15 @@ export class VehiclesController {
     return this.vehiclesService.compatibleProducts(user.businessId, id);
   }
 
-  @ApiOkResponse({ type: [MaintenanceWithItemsResponse] })
+  @ApiOkResponse({ type: [MaintenanceDetailResponse] })
   @ApiErrors({ 400: VALIDATION_ERRORS, 404: ['VEHICLE_NOT_FOUND'] })
   @Get(':id/maintenances')
-  listMaintenances(
+  async listMaintenances(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    return this.vehiclesService.listMaintenances(user.businessId, id);
+  ): Promise<MaintenanceDetailBody[]> {
+    const rows = await this.vehiclesService.listMaintenances(user.businessId, id);
+    return rows.map(toMaintenanceDetailResponse);
   }
 
   @ApiOkResponse({ type: VehicleResponse })

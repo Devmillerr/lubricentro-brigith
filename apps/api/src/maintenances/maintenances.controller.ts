@@ -23,7 +23,9 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AccessTokenPayload } from '../auth/types/jwt-payload';
 import { ProblemException } from '../common/exceptions/problem.exception';
 import { IdempotencyService } from '../idempotency/idempotency.service';
+import { toSaleResponse, SaleResponse } from '../sales/dto/sale.response';
 import { CreateMaintenanceDto } from './dto/create-maintenance.dto';
+import { MaintenanceChargeDto } from './dto/maintenance-charge.dto';
 import { UpdateMaintenanceDto } from './dto/update-maintenance.dto';
 import { VoidMaintenanceDto } from './dto/void-maintenance.dto';
 import { MaintenancesService } from './maintenances.service';
@@ -35,8 +37,12 @@ import {
 } from '../common/openapi/api-errors.decorator';
 import {
   CreateMaintenanceResponse,
+  MaintenanceDetailResponse,
   MaintenanceResponse,
-  MaintenanceWithItemsResponse,
+  type MaintenanceDetailBody,
+  VoidMaintenanceResponse,
+  toMaintenanceDetailResponse,
+  toVoidMaintenanceResponse,
 } from './dto/maintenance.response';
 
 @ApiTags('maintenances')
@@ -74,19 +80,59 @@ export class MaintenancesController {
       key: this.requireIdempotencyKey(idempotencyKey),
       endpoint: 'maintenances',
       requestHash: this.idempotency.hashRequest(dto),
+      handler: async () => {
+        const created = await this.maintenancesService.create(user.businessId, user.sub, dto);
+        return {
+          status: HttpStatus.CREATED,
+          body: { ...created, sale: created.sale ? toSaleResponse(created.sale) : null },
+        };
+      },
+    });
+    return result.body;
+  }
+
+  /**
+   * Cobro posterior de un mantenimiento (R6, DEC-72): una venta MAINTENANCE
+   * con una línea SERVICE por el total, sin stock. Un solo cobro en toda su
+   * vida (DEC-69).
+   */
+  @ApiCreatedResponse({ type: SaleResponse })
+  @ApiErrors({
+    400: [...VALIDATION_ERRORS, ...IDEMPOTENCY_ERRORS[400]],
+    404: ['MAINTENANCE_NOT_FOUND'],
+    409: ['MAINTENANCE_VOIDED', 'MAINTENANCE_ALREADY_CHARGED', ...IDEMPOTENCY_ERRORS[409]],
+  })
+  @Post(':id/charge')
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  async charge(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: MaintenanceChargeDto,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+  ): Promise<SaleResponse> {
+    const result = await this.idempotency.run({
+      businessId: user.businessId,
+      key: this.requireIdempotencyKey(idempotencyKey),
+      endpoint: `maintenances/${id}/charge`,
+      requestHash: this.idempotency.hashRequest(dto),
       handler: async () => ({
         status: HttpStatus.CREATED,
-        body: await this.maintenancesService.create(user.businessId, user.sub, dto),
+        body: toSaleResponse(
+          await this.maintenancesService.charge(user.businessId, user.sub, id, dto),
+        ),
       }),
     });
     return result.body;
   }
 
-  @ApiOkResponse({ type: MaintenanceWithItemsResponse })
+  @ApiOkResponse({ type: MaintenanceDetailResponse })
   @ApiErrors({ 400: VALIDATION_ERRORS, 404: ['MAINTENANCE_NOT_FOUND'] })
   @Get(':id')
-  findOne(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string) {
-    return this.maintenancesService.findOne(user.businessId, id);
+  async findOne(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<MaintenanceDetailBody> {
+    return toMaintenanceDetailResponse(await this.maintenancesService.findOne(user.businessId, id));
   }
 
   @ApiOkResponse({ type: MaintenanceResponse })
@@ -104,7 +150,7 @@ export class MaintenancesController {
     return this.maintenancesService.update(user.businessId, id, dto);
   }
 
-  @ApiOkResponse({ type: MaintenanceResponse })
+  @ApiOkResponse({ type: VoidMaintenanceResponse })
   @ApiErrors({
     400: [...VALIDATION_ERRORS, ...IDEMPOTENCY_ERRORS[400]],
     404: ['MAINTENANCE_NOT_FOUND'],
@@ -126,7 +172,9 @@ export class MaintenancesController {
       requestHash: this.idempotency.hashRequest(dto),
       handler: async () => ({
         status: HttpStatus.OK,
-        body: await this.maintenancesService.void(user.businessId, user.sub, id, dto),
+        body: toVoidMaintenanceResponse(
+          await this.maintenancesService.void(user.businessId, user.sub, id, dto),
+        ),
       }),
     });
     return result.body;

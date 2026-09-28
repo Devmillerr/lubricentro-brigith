@@ -675,6 +675,21 @@ describe('SalesService.void', () => {
     expect(stockOf(products, 'p-a')).toBe(10);
   });
 
+  it('R6 (DEC-70): una venta MAINTENANCE no se anula por aquí: 409 SALE_MANAGED_BY_MAINTENANCE y no cambia nada', async () => {
+    const { service, created, sales, movements } = await withSale([
+      { productId: 'p-a', quantity: 1, unitPrice: 35 },
+    ]);
+    // El cobro de un mantenimiento lo crea R6; aquí solo importa su `source`.
+    Object.assign(sales.get(created.id)!, { source: 'MAINTENANCE', maintenanceId: 'm-1' });
+
+    await expect(
+      service.void('biz-a', 'user-a', created.id, { reason: 'desde ventas' }),
+    ).rejects.toMatchObject({ code: 'SALE_MANAGED_BY_MAINTENANCE', status: 409 });
+    expect(sales.get(created.id)!.status).toBe('ACTIVE');
+    expect(sales.get(created.id)!.voidReason ?? null).toBeNull();
+    expect(movementsOf(movements, 'SALE_VOID')).toHaveLength(0);
+  });
+
   it('inexistente o de otro negocio: 404 SALE_NOT_FOUND y no cambia nada', async () => {
     const { service, created, sales } = await withSale([
       { productId: 'p-a', quantity: 1, unitPrice: 35 },

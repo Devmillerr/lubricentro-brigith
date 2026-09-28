@@ -8,7 +8,7 @@ import {
   type Vehicle,
 } from '@prisma/client';
 import { ProblemException } from '../common/exceptions/problem.exception';
-import type { MaintenanceWithItems } from '../maintenances/maintenances.service';
+import type { MaintenanceDetail } from '../maintenances/maintenances.service';
 import { MaintenancesService } from '../maintenances/maintenances.service';
 import { forBusiness } from '../prisma/business-scope';
 import { PrismaService } from '../prisma/prisma.service';
@@ -78,7 +78,7 @@ export class VehiclesService {
   }
 
   /** Historial de mantenimientos del vehículo (06-API.md), pendiente desde C1. */
-  async listMaintenances(businessId: string, id: string): Promise<MaintenanceWithItems[]> {
+  async listMaintenances(businessId: string, id: string): Promise<MaintenanceDetail[]> {
     const vehicle = await forBusiness(this.prisma, businessId).vehicle.findFirst({
       where: { id },
     });

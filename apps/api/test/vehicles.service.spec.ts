@@ -13,6 +13,8 @@ function setup() {
       'maintenance',
       'maintenanceItem',
       'reminder',
+      'sale',
+      'saleLine',
     ],
     { vehicle: [['businessId', 'plateNormalized']] },
   );

@@ -13,6 +13,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { DueRule } from '@prisma/client';
+import { MaintenanceChargeDto } from './maintenance-charge.dto';
 import { MaintenanceItemDto } from './maintenance-item.dto';
 
 /**
@@ -27,9 +28,13 @@ export class CreateMaintenanceDto {
   @IsUUID()
   id?: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional({
+    description:
+      'Opcional desde R6 (DEC-31, DEC-73). Sin vehículo se rechazan odometerKm, nextDueKm, nextDueDate y dueRule, y no se crea recordatorio.',
+  })
+  @IsOptional()
   @IsUUID()
-  vehicleId!: string;
+  vehicleId?: string;
 
   @ApiProperty()
   @IsUUID()
@@ -73,4 +78,14 @@ export class CreateMaintenanceDto {
   @IsString()
   @MaxLength(2000)
   notes?: string;
+
+  @ApiPropertyOptional({
+    type: MaintenanceChargeDto,
+    description:
+      'Cobro opcional en la misma transacción (R6, DEC-72): una venta MAINTENANCE con una línea SERVICE por el total.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => MaintenanceChargeDto)
+  charge?: MaintenanceChargeDto;
 }

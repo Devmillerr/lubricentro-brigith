@@ -114,7 +114,7 @@ export class SalesController {
   @ApiErrors({
     400: [...VALIDATION_ERRORS, ...IDEMPOTENCY_ERRORS[400]],
     404: ['SALE_NOT_FOUND'],
-    409: ['SALE_ALREADY_VOIDED', ...IDEMPOTENCY_ERRORS[409]],
+    409: ['SALE_ALREADY_VOIDED', 'SALE_MANAGED_BY_MAINTENANCE', ...IDEMPOTENCY_ERRORS[409]],
   })
   @Post(':id/void')
   @HttpCode(HttpStatus.OK)

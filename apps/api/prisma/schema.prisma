@@ -645,8 +645,12 @@ model Maintenance {
   businessId String
   business   Business @relation(fields: [businessId], references: [id])
 
-  vehicleId String
-  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+  /// Opcional desde R6 (DEC-31, DEC-73). Sin vehículo no admite km ni
+  /// próximo km/fecha/regla y no genera recordatorio (BR-M16). `onDelete:
+  /// Restrict` explícito: con la relación opcional, Prisma usaría `SetNull`
+  /// y cambiaría la FK existente.
+  vehicleId String?
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
 
   maintenanceTypeId String
   maintenanceType   MaintenanceType @relation(fields: [maintenanceTypeId], references: [id])

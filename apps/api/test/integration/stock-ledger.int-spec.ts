@@ -412,7 +412,7 @@ describe('StockLedger contra Postgres', () => {
       expect(rejected).toHaveLength(1);
       const winner = ok[0]!.value;
       const loser = rejected[0]!.reason as { code: string; getStatus(): number };
-      expect(winner).toMatchObject({ status: 200, body: { status: 'VOIDED' } });
+      expect(winner).toMatchObject({ status: 200, body: { maintenance: { status: 'VOIDED' } } });
       expect(loser.code).toBe('MAINTENANCE_ALREADY_VOIDED');
       expect(loser.getStatus()).toBe(409);
 
@@ -432,7 +432,7 @@ describe('StockLedger contra Postgres', () => {
 
       const stored = await prisma.maintenance.findFirstOrThrow({ where: { id: maintenanceId } });
       expect(stored.status).toBe('VOIDED');
-      expect(stored.voidReason).toBe(winner.body.voidReason);
+      expect(stored.voidReason).toBe(winner.body.maintenance.voidReason);
     });
   });
 

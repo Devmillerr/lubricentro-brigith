@@ -7,7 +7,12 @@ import {
   type MaintenanceType,
 } from '@prisma/client';
 import { ReminderResponse } from '../../reminders/dto/reminder.response';
-import type { MaintenanceWarning } from '../maintenances.service';
+import { SaleResponse, toSaleResponse } from '../../sales/dto/sale.response';
+import type {
+  MaintenanceDetail,
+  MaintenanceWarning,
+  VoidMaintenanceResult,
+} from '../maintenances.service';
 
 export class MaintenanceTypeResponse implements MaintenanceType {
   @ApiProperty()
@@ -36,8 +41,12 @@ export class MaintenanceResponse implements Maintenance {
   @ApiProperty()
   businessId!: string;
 
-  @ApiProperty()
-  vehicleId!: string;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Nulo en un mantenimiento sin vehículo (R6, DEC-73).',
+  })
+  vehicleId!: string | null;
 
   @ApiProperty()
   maintenanceTypeId!: string;
@@ -105,6 +114,48 @@ export class MaintenanceWithItemsResponse extends MaintenanceResponse {
   items!: MaintenanceItemResponse[];
 }
 
+/** Detalle e historial: el mantenimiento con su cobro, si lo tiene (R6, B-156). */
+export class MaintenanceDetailResponse extends MaintenanceWithItemsResponse {
+  @ApiProperty({
+    type: SaleResponse,
+    nullable: true,
+    description: 'Cobro del mantenimiento (activo o anulado), o `null` si no tiene (R6, DEC-69).',
+  })
+  sale!: SaleResponse | null;
+}
+
+/** Respuesta de la anulación (R6, B-156): el mantenimiento y su cobro, si lo tiene. */
+export class VoidMaintenanceResponse {
+  @ApiProperty({ type: MaintenanceResponse })
+  maintenance!: MaintenanceResponse;
+
+  @ApiProperty({
+    type: SaleResponse,
+    nullable: true,
+    description: 'Cobro asociado, anulado junto con el mantenimiento, o `null` si no tenía.',
+  })
+  sale!: SaleResponse | null;
+}
+
+/**
+ * El mantenimiento tal como sale del servicio (los `Decimal` se serializan
+ * como string al responder), con su cobro ya en la forma de `SaleResponse`.
+ */
+export type MaintenanceDetailBody = Omit<MaintenanceDetail, 'sale'> & {
+  sale: SaleResponse | null;
+};
+
+export function toMaintenanceDetailResponse(detail: MaintenanceDetail): MaintenanceDetailBody {
+  return { ...detail, sale: detail.sale ? toSaleResponse(detail.sale) : null };
+}
+
+export function toVoidMaintenanceResponse(result: VoidMaintenanceResult): VoidMaintenanceResponse {
+  return {
+    maintenance: result.maintenance,
+    sale: result.sale ? toSaleResponse(result.sale) : null,
+  };
+}
+
 const WARNING_CODES = [
   'INSUFFICIENT_STOCK',
   'PRODUCT_NOT_COUNTED',
@@ -138,6 +189,13 @@ export class CreateMaintenanceResponse {
 
   @ApiProperty({ type: ReminderResponse, nullable: true })
   reminder!: ReminderResponse | null;
+
+  @ApiProperty({
+    type: SaleResponse,
+    nullable: true,
+    description: 'Cobro creado con el bloque `charge` (R6, DEC-72), o `null`.',
+  })
+  sale!: SaleResponse | null;
 
   @ApiProperty({ type: [MaintenanceWarningResponse] })
   warnings!: MaintenanceWarningResponse[];

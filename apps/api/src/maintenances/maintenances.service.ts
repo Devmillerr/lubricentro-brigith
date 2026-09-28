@@ -3,17 +3,27 @@ import { randomUUID } from 'node:crypto';
 import {
   InventoryMovementType,
   MaintenanceStatus,
+  Prisma,
   ReminderStatus,
+  SaleLineKind,
+  SaleSource,
+  SaleStatus,
   type Maintenance,
   type MaintenanceItem,
   type Reminder,
 } from '@prisma/client';
-import { ProblemException } from '../common/exceptions/problem.exception';
+import {
+  ProblemException,
+  ValidationProblemException,
+  type FieldError,
+} from '../common/exceptions/problem.exception';
 import { applyStockMovements } from '../inventory/stock-ledger';
 import { forBusiness, type ScopedTransaction } from '../prisma/business-scope';
 import { PrismaService } from '../prisma/prisma.service';
+import { writeSale, type SaleWithLines } from '../sales/sales.service';
 import { resolveDueRule } from './due-rules';
 import type { CreateMaintenanceDto } from './dto/create-maintenance.dto';
+import type { MaintenanceChargeDto } from './dto/maintenance-charge.dto';
 import type { UpdateMaintenanceDto } from './dto/update-maintenance.dto';
 import type { VoidMaintenanceDto } from './dto/void-maintenance.dto';
 
@@ -39,11 +49,25 @@ const CLOSE_REASON_CORRECTED_WITHOUT_DUE = 'mantenimiento corregido sin próximo
 
 export type MaintenanceWithItems = Maintenance & { items: MaintenanceItem[] };
 
+/** Mantenimiento con sus productos y su cobro, si lo tiene (R6, B-156). */
+export type MaintenanceDetail = MaintenanceWithItems & { sale: SaleWithLines | null };
+
+/** Resultado de la anulación (R6, B-156): el mantenimiento y su cobro, si lo tiene. */
+export interface VoidMaintenanceResult {
+  maintenance: Maintenance;
+  sale: SaleWithLines | null;
+}
+
 export interface CreateMaintenanceResult {
   maintenance: MaintenanceWithItems;
   reminder: Reminder | null;
+  /** Cobro creado con el bloque `charge` (R6, DEC-72), o `null`. */
+  sale: SaleWithLines | null;
   warnings: MaintenanceWarning[];
 }
+
+/** Máximo de caracteres del motivo de anulación (igual que en ventas). */
+const MAX_VOID_REASON = 500;
 
 /**
  * Guardar un mantenimiento es una sola transacción indivisible: crea el
@@ -64,9 +88,14 @@ export class MaintenancesService {
   ): Promise<CreateMaintenanceResult> {
     const scoped = forBusiness(this.prisma, businessId);
 
-    const vehicle = await scoped.vehicle.findFirst({ where: { id: dto.vehicleId } });
-    if (!vehicle) {
-      throw this.invalidReference('vehicleId', 'El vehículo indicado no existe');
+    if (dto.vehicleId) {
+      const vehicle = await scoped.vehicle.findFirst({ where: { id: dto.vehicleId } });
+      if (!vehicle) {
+        throw this.invalidReference('vehicleId', 'El vehículo indicado no existe');
+      }
+    } else {
+      // Sin vehículo no hay seguimiento por km ni fecha (DEC-73, BR-M16).
+      rejectTrackingWithoutVehicle(dto);
     }
 
     const maintenanceType = await scoped.maintenanceType.findFirst({
@@ -122,7 +151,7 @@ export class MaintenancesService {
 
     // Avisos que no bloquean (BR-M7, 06-API.md).
     const warnings: MaintenanceWarning[] = [];
-    const lastKnownKm = await this.getLastKnownKm(businessId, dto.vehicleId);
+    const lastKnownKm = dto.vehicleId ? await this.getLastKnownKm(businessId, dto.vehicleId) : null;
     if (dto.odometerKm != null && lastKnownKm != null && dto.odometerKm < lastKnownKm) {
       warnings.push({
         code: 'ODOMETER_LOWER_THAN_PREVIOUS',
@@ -174,7 +203,7 @@ export class MaintenancesService {
         data: {
           id: maintenanceId,
           businessId,
-          vehicleId: dto.vehicleId,
+          vehicleId: dto.vehicleId ?? null,
           maintenanceTypeId: dto.maintenanceTypeId,
           performedAt,
           odometerKm: dto.odometerKm,
@@ -203,61 +232,78 @@ export class MaintenancesService {
       }
 
       // Recordatorio (BR-R1, BR-R2): el anterior abierto del mismo tipo
-      // queda cumplido, haya o no uno nuevo.
-      const priorOpen = await tx.reminder.findFirst({
-        where: {
-          businessId,
-          vehicleId: dto.vehicleId,
-          maintenanceTypeId: dto.maintenanceTypeId,
-          status: { in: [ReminderStatus.PENDING, ReminderStatus.CONTACTED] },
-        },
-      });
-      if (priorOpen) {
-        await tx.reminder.update({
-          where: { id: priorOpen.id },
-          data: {
-            status: ReminderStatus.DONE,
-            closedByMaintenanceId: maintenance.id,
-            closedAt: new Date(),
-            closeReason: 'cumplido',
-          },
-        });
-      }
-
+      // queda cumplido, haya o no uno nuevo. Sin vehículo no hay recordatorio
+      // ni se cierra ninguno previo (DEC-73).
       let reminder: Reminder | null = null;
-      if (dueRule) {
-        reminder = await tx.reminder.create({
-          data: {
+      if (dto.vehicleId) {
+        const priorOpen = await tx.reminder.findFirst({
+          where: {
             businessId,
             vehicleId: dto.vehicleId,
             maintenanceTypeId: dto.maintenanceTypeId,
-            sourceMaintenanceId: maintenance.id,
-            dueDate: nextDueDate,
-            dueKm: dto.nextDueKm,
-            dueRule,
-            status: ReminderStatus.PENDING,
+            status: { in: [ReminderStatus.PENDING, ReminderStatus.CONTACTED] },
           },
         });
+        if (priorOpen) {
+          await tx.reminder.update({
+            where: { id: priorOpen.id },
+            data: {
+              status: ReminderStatus.DONE,
+              closedByMaintenanceId: maintenance.id,
+              closedAt: new Date(),
+              closeReason: 'cumplido',
+            },
+          });
+        }
+
+        if (dueRule) {
+          reminder = await tx.reminder.create({
+            data: {
+              businessId,
+              vehicleId: dto.vehicleId,
+              maintenanceTypeId: dto.maintenanceTypeId,
+              sourceMaintenanceId: maintenance.id,
+              dueDate: nextDueDate,
+              dueKm: dto.nextDueKm,
+              dueRule,
+              status: ReminderStatus.PENDING,
+            },
+          });
+        }
       }
+
+      // Cobro en la misma transacción (R6, DEC-72): una venta MAINTENANCE
+      // que no mueve stock (el stock ya lo movió el mantenimiento).
+      const sale = dto.charge
+        ? await writeMaintenanceSale(tx, {
+            businessId,
+            userId,
+            maintenanceId: maintenance.id,
+            vehicleId: maintenance.vehicleId,
+            maintenanceTypeName: maintenanceType.name,
+            charge: dto.charge,
+          })
+        : null;
 
       const maintenanceItems = await tx.maintenanceItem.findMany({
         where: { maintenanceId: maintenance.id },
       });
 
-      return { maintenance: { ...maintenance, items: maintenanceItems }, reminder };
+      return { maintenance: { ...maintenance, items: maintenanceItems }, reminder, sale };
     });
 
     return { ...result, warnings };
   }
 
-  async findOne(businessId: string, id: string): Promise<MaintenanceWithItems> {
+  async findOne(businessId: string, id: string): Promise<MaintenanceDetail> {
     const scoped = forBusiness(this.prisma, businessId);
     const maintenance = await scoped.maintenance.findFirst({ where: { id } });
     if (!maintenance) {
       throw this.notFound();
     }
     const items = await scoped.maintenanceItem.findMany({ where: { maintenanceId: id } });
-    return { ...maintenance, items };
+    const sales = await salesByMaintenance(scoped, [id]);
+    return { ...maintenance, items, sale: sales.get(id) ?? null };
   }
 
   /**
@@ -283,6 +329,10 @@ export class MaintenancesService {
         code: 'MAINTENANCE_VOIDED',
         title: 'Un mantenimiento anulado no se puede corregir',
       });
+    }
+    if (!existing.vehicleId) {
+      // Misma regla que al crear: sin vehículo no hay seguimiento (DEC-73).
+      rejectTrackingWithoutVehicle(dto);
     }
 
     const nextDueKm = dto.nextDueKm !== undefined ? dto.nextDueKm : existing.nextDueKm;
@@ -390,7 +440,8 @@ export class MaintenancesService {
       return;
     }
 
-    if (!maintenance.dueRule) {
+    // Sin vehículo nunca hay regla (DEC-73): no se crea ni se reabre nada.
+    if (!maintenance.dueRule || !maintenance.vehicleId) {
       return;
     }
 
@@ -476,15 +527,18 @@ export class MaintenancesService {
     userId: string,
     id: string,
     dto: VoidMaintenanceDto,
-  ): Promise<Maintenance> {
+  ): Promise<VoidMaintenanceResult> {
+    const reason = requireVoidReason(dto.reason);
+
     return forBusiness(this.prisma, businessId).$transaction(async (tx) => {
+      const voidedAt = new Date();
       const { count } = await tx.maintenance.updateMany({
         where: { id, status: MaintenanceStatus.ACTIVE },
         data: {
           status: MaintenanceStatus.VOIDED,
-          voidedAt: new Date(),
+          voidedAt,
           voidedById: userId,
-          voidReason: dto.reason,
+          voidReason: reason,
         },
       });
       if (count === 0) {
@@ -539,9 +593,79 @@ export class MaintenancesService {
         });
       }
 
+      // Cobro asociado (R6, DEC-71, DEC-77): va después del mantenimiento
+      // (orden Maintenance → Sale) y con el mismo motivo. Transición
+      // condicional: si ya estaba VOIDED no cambia nada y la anulación sigue
+      // (D8). La línea SERVICE no mueve stock, así que no hay SALE_VOID. La
+      // relación `maintenanceId` se conserva (DEC-69).
+      await tx.sale.updateMany({
+        where: { maintenanceId: id, status: SaleStatus.ACTIVE },
+        data: { status: SaleStatus.VOIDED, voidedAt, voidedById: userId, voidReason: reason },
+      });
+
       const voided = await tx.maintenance.findFirst({ where: { id } });
-      return voided!;
+      const sales = await salesByMaintenance(tx, [id]);
+      return { maintenance: voided!, sale: sales.get(id) ?? null };
     });
+  }
+
+  /**
+   * Cobro posterior de un mantenimiento (R6, DEC-72): una venta
+   * `MAINTENANCE` con una sola línea `SERVICE` por el total, sin stock.
+   *
+   * En una transacción, bloquea primero la fila del mantenimiento (`FOR
+   * UPDATE`, mismo orden Maintenance → Sale que la anulación): así un cobro y
+   * una anulación simultáneos se ordenan, y dos cobros simultáneos no crean
+   * dos ventas. Después: 404 si no existe o es de otro negocio, 409
+   * `MAINTENANCE_VOIDED` si está anulado, 409 `MAINTENANCE_ALREADY_CHARGED` si
+   * ya tiene venta (activa o anulada: no se vuelve a cobrar, DEC-69). El
+   * único de `Sale.maintenanceId` respalda esto último en la base.
+   */
+  async charge(
+    businessId: string,
+    userId: string,
+    id: string,
+    dto: MaintenanceChargeDto,
+  ): Promise<SaleWithLines> {
+    try {
+      return await forBusiness(this.prisma, businessId).$transaction(async (tx) => {
+        await tx.$queryRaw(
+          Prisma.sql`SELECT "id" FROM "maintenances" WHERE "businessId" = ${businessId}::text AND "id" = ${id}::text FOR UPDATE`,
+        );
+        const maintenance = await tx.maintenance.findFirst({ where: { id } });
+        if (!maintenance) {
+          throw this.notFound();
+        }
+        if (maintenance.status === MaintenanceStatus.VOIDED) {
+          throw new ProblemException({
+            status: HttpStatus.CONFLICT,
+            code: 'MAINTENANCE_VOIDED',
+            title: 'Un mantenimiento anulado no se puede cobrar',
+          });
+        }
+        const existingSale = await tx.sale.findFirst({ where: { maintenanceId: id } });
+        if (existingSale) {
+          throw alreadyCharged();
+        }
+        const maintenanceType = await tx.maintenanceType.findFirst({
+          where: { id: maintenance.maintenanceTypeId },
+        });
+
+        return writeMaintenanceSale(tx, {
+          businessId,
+          userId,
+          maintenanceId: id,
+          vehicleId: maintenance.vehicleId,
+          maintenanceTypeName: maintenanceType!.name,
+          charge: dto,
+        });
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw alreadyCharged();
+      }
+      throw error;
+    }
   }
 
   /** Mantenimiento activo más reciente con km, para el "último km conocido". */
@@ -561,16 +685,21 @@ export class MaintenancesService {
     });
   }
 
-  async listByVehicle(businessId: string, vehicleId: string): Promise<MaintenanceWithItems[]> {
+  async listByVehicle(businessId: string, vehicleId: string): Promise<MaintenanceDetail[]> {
     const scoped = forBusiness(this.prisma, businessId);
     const rows = await scoped.maintenance.findMany({
       where: { vehicleId },
       orderBy: { performedAt: 'desc' },
     });
+    const sales = await salesByMaintenance(
+      scoped,
+      rows.map((row) => row.id),
+    );
     return Promise.all(
       rows.map(async (row) => ({
         ...row,
         items: await scoped.maintenanceItem.findMany({ where: { maintenanceId: row.id } }),
+        sale: sales.get(row.id) ?? null,
       })),
     );
   }
@@ -591,4 +720,120 @@ export class MaintenancesService {
       title: 'Mantenimiento no encontrado',
     });
   }
+}
+
+/** Campos de seguimiento por km o fecha, que un mantenimiento sin vehículo no admite. */
+const TRACKING_FIELDS = ['odometerKm', 'nextDueKm', 'nextDueDate', 'dueRule'] as const;
+
+/**
+ * Sin vehículo no hay seguimiento por km ni fecha (DEC-73, BR-M16): enviar
+ * cualquiera de esos campos, al crear o al corregir, es un 400
+ * `VALIDATION_ERROR` con un error por campo. No se ignoran ni se guardan. Un
+ * campo omitido (`undefined`) no cuenta; un `null` explícito sí.
+ */
+function rejectTrackingWithoutVehicle(
+  dto: Partial<Record<(typeof TRACKING_FIELDS)[number], unknown>>,
+): void {
+  const errors: FieldError[] = TRACKING_FIELDS.filter((field) => dto[field] !== undefined).map(
+    (field) => ({ field, message: 'Un mantenimiento sin vehículo no admite este campo.' }),
+  );
+  if (errors.length > 0) {
+    throw new ValidationProblemException(errors);
+  }
+}
+
+/**
+ * Escribe el cobro de un mantenimiento (R6): `Sale` `source = MAINTENANCE`
+ * con una sola línea `SERVICE` por el total (BR-V3, DEC-72). `occurredAt` es
+ * la hora del servidor (DEC-75), `customerId` queda nulo (DEC-74) y
+ * `vehicleId` es el del mantenimiento (puede ser nulo, DEC-73). La línea no
+ * mueve stock: no pasa por el StockLedger.
+ */
+async function writeMaintenanceSale(
+  tx: ScopedTransaction,
+  params: {
+    businessId: string;
+    userId: string;
+    maintenanceId: string;
+    vehicleId: string | null;
+    maintenanceTypeName: string;
+    charge: MaintenanceChargeDto;
+  },
+): Promise<SaleWithLines> {
+  const amount = new Prisma.Decimal(String(params.charge.totalAmount));
+  return writeSale(tx, {
+    businessId: params.businessId,
+    userId: params.userId,
+    saleId: randomUUID(),
+    source: SaleSource.MAINTENANCE,
+    paymentMethod: params.charge.paymentMethod,
+    occurredAt: new Date(),
+    maintenanceId: params.maintenanceId,
+    vehicleId: params.vehicleId,
+    lines: [
+      {
+        kind: SaleLineKind.SERVICE,
+        productId: null,
+        washTypeId: null,
+        descriptionSnapshot: params.maintenanceTypeName,
+        codeSnapshot: null,
+        quantity: 1,
+        unitPrice: amount,
+        subtotal: amount,
+        movesStock: false,
+      },
+    ],
+  });
+}
+
+function alreadyCharged(): ProblemException {
+  return new ProblemException({
+    status: HttpStatus.CONFLICT,
+    code: 'MAINTENANCE_ALREADY_CHARGED',
+    title: 'El mantenimiento ya tiene un cobro',
+  });
+}
+
+/**
+ * Motivo obligatorio al anular un mantenimiento (DEC-71): sin texto → 400
+ * `VALIDATION_ERROR`; hasta 500 caracteres. El DTO ya lo exige por HTTP; esto
+ * cubre a quien llame al servicio directamente.
+ */
+function requireVoidReason(reason: string | undefined): string {
+  const trimmed = typeof reason === 'string' ? reason.trim() : '';
+  if (trimmed.length === 0) {
+    throw new ValidationProblemException([
+      { field: 'reason', message: 'Escribe el motivo de la anulación.' },
+    ]);
+  }
+  if (trimmed.length > MAX_VOID_REASON) {
+    throw new ValidationProblemException([
+      { field: 'reason', message: `El motivo admite hasta ${MAX_VOID_REASON} caracteres.` },
+    ]);
+  }
+  return trimmed;
+}
+
+/**
+ * Cobros de varios mantenimientos, con sus líneas, en dos consultas (sin
+ * N+1). Un mantenimiento tiene como máximo una venta en toda su vida
+ * (DEC-69), activa o anulada.
+ */
+async function salesByMaintenance(
+  client: ScopedTransaction,
+  maintenanceIds: string[],
+): Promise<Map<string, SaleWithLines>> {
+  if (maintenanceIds.length === 0) return new Map();
+  const sales = await client.sale.findMany({ where: { maintenanceId: { in: maintenanceIds } } });
+  if (sales.length === 0) return new Map();
+  const lines = await client.saleLine.findMany({
+    where: { saleId: { in: sales.map((sale) => sale.id) } },
+    orderBy: [{ productId: 'asc' }],
+  });
+  return new Map(
+    sales.map((sale) => [
+      sale.maintenanceId!,
+      { ...sale, lines: lines.filter((line) => line.saleId === sale.id) },
+    ]),
+  );
 }

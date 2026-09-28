@@ -259,6 +259,17 @@ export class SalesService {
     return forBusiness(this.prisma, businessId).$transaction(async (tx) => {
       const existing = await tx.sale.findFirst({ where: { id } });
       if (!existing) throw saleNotFound();
+      // El cobro de un mantenimiento solo se anula con su mantenimiento
+      // (R6, DEC-70), para no dejar un mantenimiento activo sin su venta.
+      // `source` no cambia nunca, así que leerlo sin bloqueo es seguro.
+      if (existing.source === SaleSource.MAINTENANCE) {
+        throw new ProblemException({
+          status: HttpStatus.CONFLICT,
+          code: 'SALE_MANAGED_BY_MAINTENANCE',
+          title: 'Este cobro se anula desde su mantenimiento',
+          detail: 'Anula el mantenimiento: su cobro se anula con él.',
+        });
+      }
 
       const { count } = await tx.sale.updateMany({
         where: { id, status: SaleStatus.ACTIVE },
@@ -341,6 +352,9 @@ export async function writeSale(
     paymentMethod: PaymentMethod;
     occurredAt: Date;
     note?: string;
+    /** Solo el cobro de un mantenimiento (R6) los llena; nulos en mostrador y lavado. */
+    maintenanceId?: string | null;
+    vehicleId?: string | null;
     lines: SaleLineDraft[];
   },
 ): Promise<SaleWithLines> {
@@ -358,6 +372,8 @@ export async function writeSale(
       total,
       occurredAt: params.occurredAt,
       note: params.note ?? null,
+      maintenanceId: params.maintenanceId ?? null,
+      vehicleId: params.vehicleId ?? null,
       createdById: params.userId,
     },
   });
