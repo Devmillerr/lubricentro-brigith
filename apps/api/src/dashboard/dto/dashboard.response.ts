@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { StockAlertProductResponse } from '../../inventory/dto/inventory.response';
 import { DASHBOARD_PERIODS, type DashboardPeriodKind } from '../dashboard-period';
 
 /** Respuesta de `GET /dashboard` (R7, 06-API.md §2 "Dashboard"). Montos: string decimal. */
@@ -127,6 +128,34 @@ export class DashboardSeriesPointResponse {
   maintenance!: string;
 }
 
+export class DashboardStockResponse {
+  @ApiProperty({
+    description: 'Productos con conteo y saldo = 0 (misma regla que /inventory/alerts).',
+  })
+  outOfStock!: number;
+
+  @ApiProperty({ description: 'Productos con conteo y saldo < 0.' })
+  negative!: number;
+
+  @ApiProperty({ description: 'Productos activos que controlan stock y no tienen conteo inicial.' })
+  notCounted!: number;
+
+  @ApiProperty({
+    type: [StockAlertProductResponse],
+    description:
+      'Hasta 10: primero negativos, luego agotados, cada grupo por nombre. Saldo actual.',
+  })
+  items!: StockAlertProductResponse[];
+}
+
+export class DashboardRemindersResponse {
+  @ApiProperty({
+    description:
+      'Recordatorios PENDING que corresponde avisar ahora (igual que GET /reminders?due=now&status=PENDING). No depende del período.',
+  })
+  dueNow!: number;
+}
+
 export class DashboardResponse {
   @ApiProperty({ type: DashboardPeriodResponse })
   period!: DashboardPeriodResponse;
@@ -151,4 +180,10 @@ export class DashboardResponse {
 
   @ApiProperty({ type: [DashboardSeriesPointResponse] })
   series!: DashboardSeriesPointResponse[];
+
+  @ApiProperty({ type: DashboardStockResponse })
+  stock!: DashboardStockResponse;
+
+  @ApiProperty({ type: DashboardRemindersResponse })
+  reminders!: DashboardRemindersResponse;
 }

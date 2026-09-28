@@ -3,7 +3,10 @@ import type { PaymentMethod, SaleSource, SaleStatus } from '@prisma/client';
 import type { ConfigService } from '@nestjs/config';
 import type { Env } from '../../src/config/env.validation';
 import { DashboardService } from '../../src/dashboard/dashboard.service';
+import { InventoryService } from '../../src/inventory/inventory.service';
+import { MaintenancesService } from '../../src/maintenances/maintenances.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { RemindersService } from '../../src/reminders/reminders.service';
 
 /**
  * `GET /dashboard` (R7, B-160/B-161, DEC-78 a DEC-80) contra Postgres real:
@@ -35,7 +38,11 @@ if (!/\/[^/?]*_test(\?|$)/.test(url)) {
 const prisma = new PrismaService({
   get: () => url,
 } as unknown as ConfigService<Env, true>);
-const dashboard = new DashboardService(prisma);
+const dashboard = new DashboardService(
+  prisma,
+  new InventoryService(prisma),
+  new RemindersService(prisma, new MaintenancesService(prisma)),
+);
 
 interface Tenant {
   businessId: string;

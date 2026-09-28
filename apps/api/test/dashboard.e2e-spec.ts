@@ -84,7 +84,9 @@ describeIfTestDb('Dashboard /api/v1/dashboard (e2e)', () => {
       'maintenances',
       'period',
       'productsSold',
+      'reminders',
       'series',
+      'stock',
       'topProducts',
       'totals',
       'washes',
@@ -115,6 +117,8 @@ describeIfTestDb('Dashboard /api/v1/dashboard (e2e)', () => {
     expect(res.body.maintenances).toEqual({ count: 0, charged: 0, uncharged: 0 });
     expect(res.body.productsSold).toEqual({ units: '0' });
     expect(res.body.topProducts).toEqual([]);
+    expect(res.body.stock).toEqual({ outOfStock: 0, negative: 0, notCounted: 0, items: [] });
+    expect(res.body.reminders).toEqual({ dueNow: 0 });
     expect(res.body.series).toHaveLength(7);
     expect(Object.keys(res.body.series[0]).sort()).toEqual([
       'bucket',

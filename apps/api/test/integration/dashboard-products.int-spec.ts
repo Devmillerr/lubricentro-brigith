@@ -6,6 +6,7 @@ import { DashboardService } from '../../src/dashboard/dashboard.service';
 import { InventoryService } from '../../src/inventory/inventory.service';
 import { MaintenancesService } from '../../src/maintenances/maintenances.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { RemindersService } from '../../src/reminders/reminders.service';
 import { SalesService } from '../../src/sales/sales.service';
 
 /**
@@ -36,7 +37,11 @@ if (!/\/[^/?]*_test(\?|$)/.test(url)) {
 const prisma = new PrismaService({
   get: () => url,
 } as unknown as ConfigService<Env, true>);
-const dashboard = new DashboardService(prisma);
+const dashboard = new DashboardService(
+  prisma,
+  new InventoryService(prisma),
+  new RemindersService(prisma, new MaintenancesService(prisma)),
+);
 const inventory = new InventoryService(prisma);
 const sales = new SalesService(prisma);
 const maintenances = new MaintenancesService(prisma);

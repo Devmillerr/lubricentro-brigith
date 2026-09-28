@@ -24,6 +24,8 @@ const zeroRows = (): DashboardRows => ({
   productsSold: { units: '0' },
   topProducts: [],
   series: [],
+  stock: { outOfStock: [], negative: [], notCountedCount: 0 },
+  remindersDueNow: 0,
 });
 
 describe('buildDashboard', () => {
@@ -49,6 +51,8 @@ describe('buildDashboard', () => {
     expect(dashboard.maintenances).toEqual({ count: 0, charged: 0, uncharged: 0 });
     expect(dashboard.productsSold).toEqual({ units: '0' });
     expect(dashboard.topProducts).toEqual([]);
+    expect(dashboard.stock).toEqual({ outOfStock: 0, negative: 0, notCounted: 0, items: [] });
+    expect(dashboard.reminders).toEqual({ dueNow: 0 });
     expect(dashboard.series).toHaveLength(24);
     expect(
       dashboard.series.every((p) => p.counter === '0' && p.wash === '0' && p.maintenance === '0'),
@@ -171,6 +175,34 @@ describe('buildDashboard', () => {
       },
       { productId: 'b', name: 'Filtro', soldUnits: '0', soldAmount: '0', maintenanceUnits: '0.1' },
     ]);
+  });
+
+  it('stock: cantidades por grupo e items con negativos primero, máximo 10', () => {
+    const period = resolveDashboardPeriod({ date: '2026-09-28' }, LIMA);
+    const rows = zeroRows();
+    const item = (name: string, balance: number) => ({
+      productId: name,
+      name,
+      unit: 'unidad',
+      balance,
+    });
+    rows.stock = {
+      outOfStock: Array.from({ length: 9 }, (_, i) => item(`Agotado ${i}`, 0)),
+      negative: [item('Negativo A', -2), item('Negativo B', -0.5)],
+      notCountedCount: 4,
+    };
+    rows.remindersDueNow = 3;
+    const dashboard = buildDashboard(period, rows);
+    expect(dashboard.stock.outOfStock).toBe(9);
+    expect(dashboard.stock.negative).toBe(2);
+    expect(dashboard.stock.notCounted).toBe(4);
+    expect(dashboard.stock.items).toHaveLength(10);
+    expect(dashboard.stock.items.slice(0, 3).map((i) => i.name)).toEqual([
+      'Negativo A',
+      'Negativo B',
+      'Agotado 0',
+    ]);
+    expect(dashboard.reminders).toEqual({ dueNow: 3 });
   });
 
   it('lavados por tipo: conserva orden, conteo y monto como string', () => {

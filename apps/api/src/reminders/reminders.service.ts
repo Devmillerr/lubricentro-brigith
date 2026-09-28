@@ -68,27 +68,7 @@ export class RemindersService {
   ) {}
 
   async list(businessId: string, query: ListRemindersQueryDto): Promise<Page<ReminderListItem>> {
-    const scoped = forBusiness(this.prisma, businessId);
-    const business = await this.prisma.business.findUniqueOrThrow({ where: { id: businessId } });
-    const dueFilter = query.due ?? 'now';
-
-    const where: Record<string, unknown> = {};
-    if (query.status) {
-      where.status = query.status;
-    } else if (dueFilter !== 'all') {
-      where.status = { in: [ReminderStatus.PENDING, ReminderStatus.CONTACTED] };
-    }
-
-    const reminders = await scoped.reminder.findMany({ where });
-    let items = await Promise.all(
-      reminders.map((reminder) => this.toListItem(businessId, scoped, business, reminder)),
-    );
-
-    if (dueFilter === 'now') {
-      items = items.filter((item) => item.due);
-    } else if (dueFilter === 'upcoming') {
-      items = items.filter((item) => !item.due);
-    }
+    let items = await this.filteredItems(businessId, query);
 
     // Ordenada por urgencia (07-UI-UX.md §3.4): lo más específico que dan
     // las reglas es la fecha; sin fecha (solo KM), queda al final.
@@ -105,6 +85,44 @@ export class RemindersService {
       items = index === -1 ? [] : items.slice(index + 1);
     }
     return paginate(items.slice(0, limit + 1), limit);
+  }
+
+  /**
+   * Cuántos devolvería `GET /reminders?due=now&status=PENDING` (dashboard, R7,
+   * DEC-82): la misma evaluación que `list`, sin paginar ni ordenar.
+   */
+  async countDueNow(businessId: string): Promise<number> {
+    const items = await this.filteredItems(businessId, {
+      due: 'now',
+      status: ReminderStatus.PENDING,
+    });
+    return items.length;
+  }
+
+  /** Filtro por estado y por "corresponde avisar" de `list` (BR-R3 a BR-R6). */
+  private async filteredItems(
+    businessId: string,
+    query: Pick<ListRemindersQueryDto, 'due' | 'status'>,
+  ): Promise<ReminderListItem[]> {
+    const scoped = forBusiness(this.prisma, businessId);
+    const business = await this.prisma.business.findUniqueOrThrow({ where: { id: businessId } });
+    const dueFilter = query.due ?? 'now';
+
+    const where: Record<string, unknown> = {};
+    if (query.status) {
+      where.status = query.status;
+    } else if (dueFilter !== 'all') {
+      where.status = { in: [ReminderStatus.PENDING, ReminderStatus.CONTACTED] };
+    }
+
+    const reminders = await scoped.reminder.findMany({ where });
+    const items = await Promise.all(
+      reminders.map((reminder) => this.toListItem(businessId, scoped, business, reminder)),
+    );
+
+    if (dueFilter === 'now') return items.filter((item) => item.due);
+    if (dueFilter === 'upcoming') return items.filter((item) => !item.due);
+    return items;
   }
 
   async findOne(businessId: string, id: string): Promise<ReminderDetail> {

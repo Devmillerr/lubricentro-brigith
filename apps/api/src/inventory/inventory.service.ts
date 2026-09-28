@@ -92,19 +92,20 @@ export class InventoryService {
   }
 
   /**
-   * Stock que requiere atención (R3, BR-P19, DEC-50). Solo productos activos.
-   * Agotados (saldo = 0) y negativos (saldo < 0) solo incluyen productos con
-   * conteo, porque el saldo de uno sin conteo no es confiable (BR-P8); esos
-   * solo suman en `notCountedCount`, que no cuenta los productos que no
-   * controlan stock. Lee la caché de `Product`. Sin stock
-   * mínimo por producto. Las listas van por nombre y sin paginar: dos
-   * consultas en total.
+   * Stock que requiere atención (R3, BR-P19, DEC-50). Solo productos activos
+   * que controlan stock (BR-P16): uno sin control no tiene saldo que vigilar,
+   * aunque se haya contado antes de desmarcarlo (R7, B-163). Agotados
+   * (saldo = 0) y negativos (saldo < 0) solo incluyen productos con conteo,
+   * porque el saldo de uno sin conteo no es confiable (BR-P8); esos solo suman
+   * en `notCountedCount`. Lee la caché de `Product`. Sin stock mínimo por
+   * producto. Las listas van por nombre y sin paginar: dos consultas en total.
+   * El dashboard reutiliza este método (DEC-82).
    */
   async getAlerts(businessId: string): Promise<StockAlerts> {
     const scoped = forBusiness(this.prisma, businessId);
     const [atOrBelowZero, notCountedCount] = await Promise.all([
       scoped.product.findMany({
-        where: { isActive: true, isCounted: true, stockQuantity: { lte: 0 } },
+        where: { isActive: true, tracksStock: true, isCounted: true, stockQuantity: { lte: 0 } },
         select: { id: true, name: true, unit: true, stockQuantity: true },
         orderBy: [{ name: 'asc' }, { id: 'asc' }],
       }),

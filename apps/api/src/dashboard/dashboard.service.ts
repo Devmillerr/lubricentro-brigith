@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { InventoryService, type StockAlertProduct } from '../inventory/inventory.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RemindersService } from '../reminders/reminders.service';
 import {
   periodBuckets,
   resolveDashboardPeriod,
@@ -45,10 +47,24 @@ export interface DashboardTopProduct {
 /** Máximo de productos en el ranking (06-API.md §2 "Dashboard"). */
 export const TOP_PRODUCTS_LIMIT = 10;
 
+/** Máximo de productos en `stock.items` (06-API.md §2 "Dashboard"). */
+export const STOCK_ITEMS_LIMIT = 10;
+
 /**
- * `GET /dashboard` de R7 (B-160 a B-162). Stock y recordatorios (B-163)
- * todavía no están: sus campos se agregan en ese ítem.
+ * Stock que requiere atención (B-163, DEC-82, BR-P19): la misma lógica que
+ * `GET /inventory/alerts`. `outOfStock` y `negative` son cantidades; `items`
+ * muestra hasta 10, primero los negativos y luego los agotados, cada uno con la
+ * forma de un elemento de `/inventory/alerts`. No depende del período: es el
+ * saldo actual.
  */
+export interface DashboardStock {
+  outOfStock: number;
+  negative: number;
+  notCounted: number;
+  items: StockAlertProduct[];
+}
+
+/** `GET /dashboard` de R7 (B-160 a B-163). */
 export interface Dashboard {
   period: { kind: DashboardPeriodKind; date: string; from: string; to: string; timezone: string };
   totals: {
@@ -63,6 +79,13 @@ export interface Dashboard {
   productsSold: { units: string };
   topProducts: DashboardTopProduct[];
   series: DashboardSeriesPoint[];
+  stock: DashboardStock;
+  /**
+   * `dueNow`: recordatorios `PENDING` que corresponde avisar ahora, con la misma
+   * evaluación que `GET /reminders?due=now&status=PENDING` (la pantalla Avisar).
+   * Es el estado actual: no depende del período elegido.
+   */
+  reminders: { dueNow: number };
 }
 
 /** Filas tal como salen del SQL: montos como texto, conteos como int. */
@@ -120,6 +143,12 @@ export interface DashboardRows {
   productsSold: ProductsSoldRow;
   topProducts: TopProductRow[];
   series: SeriesRow[];
+  stock: {
+    outOfStock: StockAlertProduct[];
+    negative: StockAlertProduct[];
+    notCountedCount: number;
+  };
+  remindersDueNow: number;
 }
 
 /** Normaliza un decimal de Postgres igual que `Decimal.toString()` en el resto de la API. */
@@ -184,6 +213,13 @@ export function buildDashboard(period: DashboardPeriod, rows: DashboardRows): Da
       maintenanceUnits: money(row.maintenanceUnits),
     })),
     series,
+    stock: {
+      outOfStock: rows.stock.outOfStock.length,
+      negative: rows.stock.negative.length,
+      notCounted: rows.stock.notCountedCount,
+      items: [...rows.stock.negative, ...rows.stock.outOfStock].slice(0, STOCK_ITEMS_LIMIT),
+    },
+    reminders: { dueNow: rows.remindersDueNow },
   };
 }
 
@@ -218,7 +254,11 @@ export function buildDashboard(period: DashboardPeriod, rows: DashboardRows): Da
  */
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly inventory: InventoryService,
+    private readonly reminders: RemindersService,
+  ) {}
 
   async get(businessId: string, query: DashboardQuery, now: Date = new Date()): Promise<Dashboard> {
     const business = await this.prisma.business.findUniqueOrThrow({
@@ -226,11 +266,18 @@ export class DashboardService {
       select: { timezone: true },
     });
     const period = resolveDashboardPeriod(query, business.timezone, now);
-    const rows = await this.loadRows(businessId, period);
-    return buildDashboard(period, rows);
+    const [rows, stock, remindersDueNow] = await Promise.all([
+      this.loadRows(businessId, period),
+      this.inventory.getAlerts(businessId),
+      this.reminders.countDueNow(businessId),
+    ]);
+    return buildDashboard(period, { ...rows, stock, remindersDueNow });
   }
 
-  private async loadRows(businessId: string, period: DashboardPeriod): Promise<DashboardRows> {
+  private async loadRows(
+    businessId: string,
+    period: DashboardPeriod,
+  ): Promise<Omit<DashboardRows, 'stock' | 'remindersDueNow'>> {
     const from = Prisma.sql`(${period.from.toISOString()}::timestamptz AT TIME ZONE 'UTC')`;
     const to = Prisma.sql`(${period.to.toISOString()}::timestamptz AT TIME ZONE 'UTC')`;
     const tz = period.timezone;
