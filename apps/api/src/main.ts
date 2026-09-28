@@ -21,6 +21,8 @@ async function bootstrap(): Promise<void> {
       .split(',')
       .map((origin) => origin.trim()),
     credentials: true,
+    // La web lee `Retry-After` del 429 (DEC-86).
+    exposedHeaders: ['Retry-After'],
   });
 
   app.useGlobalPipes(

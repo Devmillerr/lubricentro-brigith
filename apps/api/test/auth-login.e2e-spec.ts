@@ -4,11 +4,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { LOGIN_THROTTLE } from '../src/auth/auth.controller';
+import { RATE_LIMITS } from '../src/rate-limit/rate-limit.constants';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 /**
- * Login y su límite propio (más estricto que el global de app.module.ts).
+ * Login y su límite propio (DEC-86: 5/min por IP y por `username`).
  * El login correcto crea un negocio y un usuario desechables, así que solo
  * corre contra una base de prueba (nombre terminado en "_test", como en CI);
  * contra otra base se omite y solo se prueban intentos fallidos, que no escriben.
@@ -19,7 +19,7 @@ describe('POST /auth/login (e2e)', () => {
   let app: INestApplication;
 
   beforeEach(async () => {
-    // App nueva por prueba: el contador del throttler vive en memoria.
+    // App nueva por prueba: el contador del rate limit vive en memoria.
     const moduleRef: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -61,17 +61,17 @@ describe('POST /auth/login (e2e)', () => {
     },
   );
 
-  it(`limita a ${LOGIN_THROTTLE.limit} intentos por minuto por IP: el siguiente es 429`, async () => {
+  it(`limita a ${RATE_LIMITS.loginIp} intentos por minuto por IP: el siguiente es 429`, async () => {
     const username = `no-existe-${randomUUID()}`;
-    for (let attempt = 0; attempt < LOGIN_THROTTLE.limit; attempt += 1) {
+    for (let attempt = 0; attempt < RATE_LIMITS.loginIp; attempt += 1) {
       await login(username, 'incorrecta').expect(401);
     }
 
     await login(username, 'incorrecta').expect(429);
   });
 
-  it('el límite de login es más estricto que el global y no afecta a otras rutas', async () => {
-    for (let attempt = 0; attempt <= LOGIN_THROTTLE.limit; attempt += 1) {
+  it('el límite de login no afecta a otras rutas', async () => {
+    for (let attempt = 0; attempt <= RATE_LIMITS.loginIp; attempt += 1) {
       await login(`no-existe-${randomUUID()}`, 'incorrecta');
     }
 
