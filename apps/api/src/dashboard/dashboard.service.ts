@@ -29,9 +29,25 @@ export interface DashboardWashType {
 }
 
 /**
- * `GET /dashboard` de R7 (B-160, B-161). Productos más vendidos (B-162),
- * stock y recordatorios (B-163) todavía no están: sus campos se agregan en
- * esos ítems.
+ * Producto del ranking (B-162, DEC-81, BR-D5). `soldUnits`/`soldAmount`: lo
+ * vendido en mostrador. `maintenanceUnits`: lo consumido en mantenimientos,
+ * sin monto (es inventario, no un ingreso). Cantidades en la unidad del
+ * producto, como string decimal.
+ */
+export interface DashboardTopProduct {
+  productId: string;
+  name: string;
+  soldUnits: string;
+  soldAmount: string;
+  maintenanceUnits: string;
+}
+
+/** Máximo de productos en el ranking (06-API.md §2 "Dashboard"). */
+export const TOP_PRODUCTS_LIMIT = 10;
+
+/**
+ * `GET /dashboard` de R7 (B-160 a B-162). Stock y recordatorios (B-163)
+ * todavía no están: sus campos se agregan en ese ítem.
  */
 export interface Dashboard {
   period: { kind: DashboardPeriodKind; date: string; from: string; to: string; timezone: string };
@@ -44,6 +60,8 @@ export interface Dashboard {
   };
   washes: { count: number; amount: string; byType: DashboardWashType[] };
   maintenances: { count: number; charged: number; uncharged: number };
+  productsSold: { units: string };
+  topProducts: DashboardTopProduct[];
   series: DashboardSeriesPoint[];
 }
 
@@ -83,10 +101,24 @@ export interface SeriesRow {
   maintenance: string;
 }
 
+export interface ProductsSoldRow {
+  units: string;
+}
+
+export interface TopProductRow {
+  productId: string;
+  name: string;
+  soldUnits: string;
+  soldAmount: string;
+  maintenanceUnits: string;
+}
+
 export interface DashboardRows {
   money: MoneyRow;
   washTypes: WashTypeRow[];
   maintenances: MaintenanceRow;
+  productsSold: ProductsSoldRow;
+  topProducts: TopProductRow[];
   series: SeriesRow[];
 }
 
@@ -143,6 +175,14 @@ export function buildDashboard(period: DashboardPeriod, rows: DashboardRows): Da
       charged: rows.maintenances.charged,
       uncharged: rows.maintenances.count - rows.maintenances.charged,
     },
+    productsSold: { units: money(rows.productsSold.units) },
+    topProducts: rows.topProducts.map((row) => ({
+      productId: row.productId,
+      name: row.name,
+      soldUnits: money(row.soldUnits),
+      soldAmount: money(row.soldAmount),
+      maintenanceUnits: money(row.maintenanceUnits),
+    })),
     series,
   };
 }
@@ -162,6 +202,19 @@ export function buildDashboard(period: DashboardPeriod, rows: DashboardRows): Da
  * - Mantenimientos: `Maintenance` `ACTIVE` por `performedAt`. Cobrado = con
  *   venta `ACTIVE` (como máximo una, `Sale.maintenanceId @unique`, DEC-69), así
  *   que el cobro no suma un segundo mantenimiento.
+ * - Productos (DEC-81, BR-D5), con los tipos reales del ledger:
+ *   - Vendido: `quantity`/`subtotal` de las líneas `PRODUCT` de ventas
+ *     `COUNTER` `ACTIVE`, por `Sale.occurredAt`. Es la misma fecha y cantidad del
+ *     movimiento `SALE`, que el ledger solo crea para productos con
+ *     `tracksStock`; la línea cuenta también lo vendido sin control de stock.
+ *   - Consumo en mantenimiento: `−quantityDelta` de los movimientos
+ *     `MAINTENANCE_USE` (`refType = 'Maintenance'`) de mantenimientos `ACTIVE`,
+ *     por el `occurredAt` del movimiento (= `performedAt`, que no se edita). No
+ *     tiene monto: el dinero del mantenimiento es solo su venta `MAINTENANCE`,
+ *     que no lleva líneas `PRODUCT`.
+ *   - Fuera: `COUNT`, `PURCHASE_IN` y `ADJUSTMENT` (no son consumo), y
+ *     `SALE_VOID`/`MAINTENANCE_VOID` (lo anulado se excluye por el estado del
+ *     origen, no restando la reversa, que lleva la fecha de la anulación).
  */
 @Injectable()
 export class DashboardService {
@@ -182,7 +235,7 @@ export class DashboardService {
     const to = Prisma.sql`(${period.to.toISOString()}::timestamptz AT TIME ZONE 'UTC')`;
     const tz = period.timezone;
 
-    const [money, washTypes, maintenances, series] = await Promise.all([
+    const [money, washTypes, maintenances, productsSold, topProducts, series] = await Promise.all([
       this.prisma.$queryRaw<MoneyRow[]>(Prisma.sql`
         SELECT
           COUNT(*)::int AS "salesCount",
@@ -231,6 +284,66 @@ export class DashboardService {
           AND m."performedAt" >= ${from}
           AND m."performedAt" < ${to}
       `),
+      this.prisma.$queryRaw<ProductsSoldRow[]>(Prisma.sql`
+        SELECT COALESCE(SUM(l."quantity"), 0)::text AS "units"
+        FROM "sales" s
+        JOIN "sale_lines" l ON l."saleId" = s."id" AND l."businessId" = s."businessId"
+        WHERE s."businessId" = ${businessId}::text
+          AND s."status" = 'ACTIVE'
+          AND s."source" = 'COUNTER'
+          AND l."kind" = 'PRODUCT'
+          AND s."occurredAt" >= ${from}
+          AND s."occurredAt" < ${to}
+      `),
+      this.prisma.$queryRaw<TopProductRow[]>(Prisma.sql`
+        WITH "sold" AS (
+          SELECT l."productId", SUM(l."quantity") AS "units", SUM(l."subtotal") AS "amount"
+          FROM "sales" s
+          JOIN "sale_lines" l ON l."saleId" = s."id" AND l."businessId" = s."businessId"
+          WHERE s."businessId" = ${businessId}::text
+            AND s."status" = 'ACTIVE'
+            AND s."source" = 'COUNTER'
+            AND l."kind" = 'PRODUCT'
+            AND l."productId" IS NOT NULL
+            AND s."occurredAt" >= ${from}
+            AND s."occurredAt" < ${to}
+          GROUP BY l."productId"
+        ),
+        "used" AS (
+          SELECT mv."productId", SUM(-mv."quantityDelta") AS "units"
+          FROM "inventory_movements" mv
+          JOIN "maintenances" m ON m."id" = mv."refId" AND m."businessId" = mv."businessId"
+          WHERE mv."businessId" = ${businessId}::text
+            AND mv."type" = 'MAINTENANCE_USE'
+            AND mv."refType" = 'Maintenance'
+            AND m."status" = 'ACTIVE'
+            AND mv."occurredAt" >= ${from}
+            AND mv."occurredAt" < ${to}
+          GROUP BY mv."productId"
+        ),
+        "ranked" AS (
+          SELECT
+            p."id" AS "productId",
+            p."name" AS "name",
+            COALESCE(sold."units", 0) AS "soldUnits",
+            COALESCE(sold."amount", 0) AS "soldAmount",
+            COALESCE(used."units", 0) AS "maintenanceUnits"
+          FROM (SELECT "productId" FROM "sold" UNION SELECT "productId" FROM "used") ids
+          JOIN "products" p ON p."id" = ids."productId" AND p."businessId" = ${businessId}::text
+          LEFT JOIN "sold" ON sold."productId" = ids."productId"
+          LEFT JOIN "used" ON used."productId" = ids."productId"
+        )
+        SELECT
+          "productId",
+          "name",
+          "soldUnits"::text AS "soldUnits",
+          "soldAmount"::text AS "soldAmount",
+          "maintenanceUnits"::text AS "maintenanceUnits"
+        FROM "ranked"
+        WHERE "soldUnits" + "maintenanceUnits" > 0
+        ORDER BY "soldUnits" + "maintenanceUnits" DESC, "name" ASC, "productId" ASC
+        LIMIT ${TOP_PRODUCTS_LIMIT}
+      `),
       this.prisma.$queryRaw<SeriesRow[]>(Prisma.sql`
         SELECT
           to_char(
@@ -253,9 +366,17 @@ export class DashboardService {
     // Agregados sin GROUP BY: Postgres siempre devuelve exactamente una fila.
     const [moneyRow] = money;
     const [maintenanceRow] = maintenances;
-    if (!moneyRow || !maintenanceRow) {
+    const [productsSoldRow] = productsSold;
+    if (!moneyRow || !maintenanceRow || !productsSoldRow) {
       throw new Error('El agregado del dashboard no devolvió fila.');
     }
-    return { money: moneyRow, washTypes, maintenances: maintenanceRow, series };
+    return {
+      money: moneyRow,
+      washTypes,
+      maintenances: maintenanceRow,
+      productsSold: productsSoldRow,
+      topProducts,
+      series,
+    };
   }
 }

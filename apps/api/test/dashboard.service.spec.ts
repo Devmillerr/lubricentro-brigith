@@ -21,6 +21,8 @@ const zeroRows = (): DashboardRows => ({
   },
   washTypes: [],
   maintenances: { count: 0, charged: 0 },
+  productsSold: { units: '0' },
+  topProducts: [],
   series: [],
 });
 
@@ -45,6 +47,8 @@ describe('buildDashboard', () => {
     });
     expect(dashboard.washes).toEqual({ count: 0, amount: '0', byType: [] });
     expect(dashboard.maintenances).toEqual({ count: 0, charged: 0, uncharged: 0 });
+    expect(dashboard.productsSold).toEqual({ units: '0' });
+    expect(dashboard.topProducts).toEqual([]);
     expect(dashboard.series).toHaveLength(24);
     expect(
       dashboard.series.every((p) => p.counter === '0' && p.wash === '0' && p.maintenance === '0'),
@@ -133,6 +137,40 @@ describe('buildDashboard', () => {
       wash: '0',
       maintenance: '0',
     });
+  });
+
+  it('productos: cantidades y montos como string decimal exacto, sin float, en el orden del SQL', () => {
+    const period = resolveDashboardPeriod({ date: '2026-09-28' }, LIMA);
+    const rows = zeroRows();
+    rows.productsSold = { units: '3.750' };
+    rows.topProducts = [
+      {
+        productId: 'a',
+        name: 'Aceite',
+        soldUnits: '3.750',
+        soldAmount: '112.50',
+        maintenanceUnits: '4.000',
+      },
+      {
+        productId: 'b',
+        name: 'Filtro',
+        soldUnits: '0',
+        soldAmount: '0',
+        maintenanceUnits: '0.100',
+      },
+    ];
+    const dashboard = buildDashboard(period, rows);
+    expect(dashboard.productsSold).toEqual({ units: '3.75' });
+    expect(dashboard.topProducts).toEqual([
+      {
+        productId: 'a',
+        name: 'Aceite',
+        soldUnits: '3.75',
+        soldAmount: '112.5',
+        maintenanceUnits: '4',
+      },
+      { productId: 'b', name: 'Filtro', soldUnits: '0', soldAmount: '0', maintenanceUnits: '0.1' },
+    ]);
   });
 
   it('lavados por tipo: conserva orden, conteo y monto como string', () => {

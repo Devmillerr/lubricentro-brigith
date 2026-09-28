@@ -83,6 +83,34 @@ export class DashboardMaintenancesResponse {
   uncharged!: number;
 }
 
+export class DashboardProductsSoldResponse {
+  @ApiProperty({
+    description:
+      'Unidades vendidas en mostrador (líneas PRODUCT de ventas ACTIVE). Decimal como string.',
+  })
+  units!: string;
+}
+
+export class DashboardTopProductResponse {
+  @ApiProperty()
+  productId!: string;
+
+  @ApiProperty({ description: 'Nombre actual del producto.' })
+  name!: string;
+
+  @ApiProperty({ description: 'Unidades vendidas en mostrador.' })
+  soldUnits!: string;
+
+  @ApiProperty({ description: 'Monto vendido en mostrador (ya incluido en totals).' })
+  soldAmount!: string;
+
+  @ApiProperty({
+    description:
+      'Unidades consumidas en mantenimientos (MAINTENANCE_USE). Sin monto: no suma a ventas ni a ingresos.',
+  })
+  maintenanceUnits!: string;
+}
+
 export class DashboardSeriesPointResponse {
   @ApiProperty({
     description: 'Inicio del punto (UTC): una hora (today) o un día local (week, month).',
@@ -111,6 +139,15 @@ export class DashboardResponse {
 
   @ApiProperty({ type: DashboardMaintenancesResponse })
   maintenances!: DashboardMaintenancesResponse;
+
+  @ApiProperty({ type: DashboardProductsSoldResponse })
+  productsSold!: DashboardProductsSoldResponse;
+
+  @ApiProperty({
+    type: [DashboardTopProductResponse],
+    description: 'Hasta 10, por soldUnits + maintenanceUnits descendente, luego nombre e id.',
+  })
+  topProducts!: DashboardTopProductResponse[];
 
   @ApiProperty({ type: [DashboardSeriesPointResponse] })
   series!: DashboardSeriesPointResponse[];
