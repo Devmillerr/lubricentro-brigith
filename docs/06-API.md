@@ -1,6 +1,6 @@
 # 06 — API REST
 
-**Versión:** 0.6 · **Actualizado:** 2026-09-26 (contrato de R4 en §2, Ventas; diseño de R5 en §2, Lavados)
+**Versión:** 0.7 · **Actualizado:** 2026-09-28 (contrato de R6 cerrado en §2, Mantenimientos, sin implementar; R4 y R5 en §2)
 Etiquetas: ver `03-BUSINESS-RULES.md`. Todo lo de este documento es [TÉCNICO] salvo lo indicado. La documentación viva será Swagger/OpenAPI generada por NestJS en `/api/docs`; este documento fija el diseño.
 
 ## 1. Convenciones
@@ -11,7 +11,7 @@ Etiquetas: ver `03-BUSINESS-RULES.md`. Todo lo de este documento es [TÉCNICO] s
 | Formato | JSON, campos en `camelCase` |
 | Autenticación | `Authorization: Bearer <JWT>`. El negocio sale del token; nunca aparece en rutas ni cuerpos (BR-G3) |
 | Identificadores | UUID. En creaciones, el cliente puede enviar el `id` |
-| Idempotencia | `Idempotency-Key` **obligatoria** en `POST /maintenances`, `POST /maintenances/:id/void`, `POST /inventory/*`, `POST /sales` y `POST /sales/:id/void` (R4). Repetir la clave devuelve el resultado original |
+| Idempotencia | `Idempotency-Key` **obligatoria** en `POST /maintenances`, `POST /maintenances/:id/void`, `POST /inventory/*`, `POST /sales`, `POST /sales/:id/void` (R4) y `POST /maintenances/:id/charge` (R6). Repetir la clave devuelve el resultado original |
 | Paginación | `?limit=&cursor=` |
 | Errores | Problem details: `type`, `title`, `status`, `detail`, `code` estable, `errors[]` por campo |
 | Avisos | Las respuestas de escritura incluyen `warnings[]`. Los avisos no bloquean |
@@ -120,8 +120,9 @@ Errores de R3:
 | POST | `/maintenance-types` | Crear tipo |
 | POST | `/maintenances` | Crea un mantenimiento **completo** en una sola petición: `vehicleId`, `maintenanceTypeId`, `performedAt`, `odometerKm?`, `items[]`, `nextDueKm?`, `nextDueDate?`, `dueRule?`, `notes?`. Requiere `Idempotency-Key`. Es una transacción (BR-M10): crea movimientos, evalúa stock y actualiza recordatorios |
 | GET | `/maintenances/:id` | Detalle |
-| PATCH | `/maintenances/:id` | Corrige solo campos que no afectan el stock (BR-M11) |
-| POST | `/maintenances/:id/void` | `{ reason? }`. Anula, revierte movimientos y descarta el recordatorio (BR-M12) |
+| PATCH | `/maintenances/:id` | Corrige solo campos que no afectan el stock (BR-M11). Desde R6, sin vehículo: 400 con `odometerKm`, `nextDueKm`, `nextDueDate` o `dueRule` (DEC-73) |
+| POST | `/maintenances/:id/void` | `{ reason }` **obligatorio desde R6** (DEC-71; hoy opcional). Anula, revierte movimientos, descarta el recordatorio y anula el cobro asociado si existe (BR-M12). Ver "Cambios de R6" |
+| POST | `/maintenances/:id/charge` | **R6, sin implementar.** Cobro posterior de un mantenimiento. Ver "Cambios de R6" |
 
 **Respuesta de `POST /maintenances`:** el mantenimiento, el recordatorio resultante (si aplica) y `warnings[]`. Códigos de aviso:
 
@@ -136,6 +137,50 @@ Errores de R3:
 **DEC-26:** el mantenimiento nunca se rechaza por stock, aunque `Business.insufficientStockPolicy` sea `BLOCK`: el producto ya se usó. El 422 `INSUFFICIENT_STOCK` queda para la venta de mostrador (R4), cuando un producto **con conteo** no alcanza. Un producto sin conteo nunca se bloquea (DEC-27).
 
 Si se ingresan próximo km y próxima fecha sin `dueRule` y el negocio no definió `defaultDueRuleWhenBoth`, la respuesta es **400** con el campo `dueRule` requerido (BR-M5).
+
+#### Cambios de R6 (contrato cerrado el 2026-09-28, sin implementar)
+
+Cobro de mantenimiento, anulación conjunta y mantenimiento sin vehículo (DEC-31). Decisiones: DEC-69 a DEC-77 (`09-BACKLOG.md` §2). Diseño: `10-OPERACION-REAL.md` §2.2. El cobro es una `Sale` con `source = MAINTENANCE` y **una sola línea `SERVICE`** por el total (monto único, BR-V3); el stock sigue siendo del mantenimiento (`MAINTENANCE_USE`), la venta no mueve stock.
+
+**Antes de R6 — Corte 0 (DEC-77):** `POST /maintenances/:id/void` pasa a una transición condicional `ACTIVE → VOIDED` dentro de la misma transacción; si no cambia ninguna fila, 409 `MAINTENANCE_ALREADY_VOIDED` sin generar movimientos. Corrige la anulación doble concurrente (hallazgo A1). No cambia el contrato HTTP.
+
+**`POST /maintenances` (cambios):**
+
+- `vehicleId` pasa a ser **opcional** (DEC-31, DEC-73). Requiere una migración de R6 (`maintenances.vehicleId` nullable).
+- **Sin `vehicleId`** (DEC-73): `odometerKm`, `nextDueKm`, `nextDueDate` y `dueRule` se **rechazan con 400** `VALIDATION_ERROR` (un `errors[]` por campo); no se aceptan ni se guardan en silencio. No se crea recordatorio, no se cierra ningún recordatorio previo y no hay seguimiento por fecha ni km. Con `vehicleId`, esos campos siguen las reglas de siempre (BR-M2 a BR-M7).
+- `charge?: { paymentMethod: CASH | YAPE, totalAmount }` opcional (DEC-72): `totalAmount` > 0 con hasta 2 decimales. Si viene, el cobro se crea en la **misma transacción** que el mantenimiento; si falla, no se guarda nada (BR-M10).
+- Respuesta: `{ maintenance, reminder, sale, warnings }`, con `sale` = `SaleResponse` o `null`.
+
+**`PATCH /maintenances/:id` (cambios, DEC-73):** la regla sin vehículo es simétrica a la creación. Si el mantenimiento **no tiene `vehicleId`**, enviar cualquiera de `odometerKm`, `nextDueKm`, `nextDueDate` o `dueRule` responde **400** `VALIDATION_ERROR` (un `errors[]` por campo); no se ignoran ni se guardan. `PATCH` no asigna ni quita el vehículo en R6. Con `vehicleId`, rigen las reglas de siempre (BR-M11).
+
+**`POST /maintenances/:id/charge`** (DEC-72): cobro posterior de un mantenimiento sin cobro. Requiere `Idempotency-Key` (mecanismo actual, DEC-76).
+
+- Request: `{ paymentMethod: CASH | YAPE, totalAmount }`, `totalAmount` > 0 con hasta 2 decimales. **No acepta `occurredAt`** (DEC-75).
+- Crea en una transacción la `Sale`: `source = MAINTENANCE`, `status = ACTIVE`, `maintenanceId` = el mantenimiento, `vehicleId` = el del mantenimiento (o `null`), `customerId = null` (DEC-74; clientes en R8), `occurredAt` = hora del servidor al cobrar (DEC-75, D10), `total = totalAmount`. Una línea `SERVICE`: `productId = null`, `washTypeId = null`, `quantity = 1`, `unitPrice = subtotal = totalAmount`, `movesStock = false`, `descriptionSnapshot` = nombre del tipo de mantenimiento.
+- Un mantenimiento tiene **como máximo una venta en toda su vida** (DEC-69): `Sale.maintenanceId` es único y la relación queda aunque la venta pase a `VOIDED`. No existe volver a cobrar.
+- Response: 201 `SaleResponse`.
+
+**`POST /maintenances/:id/void` (cambios):**
+
+- `reason` **obligatorio** (DEC-71), tenga o no cobro: vacío o solo espacios → 400 `VALIDATION_ERROR`. Cambio incompatible: la web se adapta dentro de R6.
+- Anulación conjunta, en una transacción y con el orden de bloqueo **Maintenance → Sale** (DEC-77, D8): transición condicional del mantenimiento (Corte 0); `MAINTENANCE_VOID` por cada `MAINTENANCE_USE`; descarte del recordatorio propio; si hay una venta `ACTIVE`, pasa a `VOIDED` con el **mismo `reason`**. La línea `SERVICE` no genera movimientos. Si la venta ya estaba `VOIDED`, la anulación continúa y la venta queda como estaba.
+- Una segunda anulación (otra clave, concurrente o posterior): 409 `MAINTENANCE_ALREADY_VOIDED`.
+- Response: 200 `{ maintenance, sale }`, con `sale` = la venta asociada o `null`.
+
+**Lecturas (P8, sin número de DEC):** `GET /maintenances/:id` y `GET /vehicles/:id/maintenances` exponen `sale` (`SaleResponse` o `null`). No hay una pantalla separada de cobros de mantenimiento.
+
+**Errores de R6:**
+
+| Código | Estado | Cuándo |
+|---|---|---|
+| `VALIDATION_ERROR` | 400 | `POST /maintenances` sin `vehicleId`, o `PATCH /maintenances/:id` de un mantenimiento sin vehículo, con `odometerKm`, `nextDueKm`, `nextDueDate` o `dueRule` (DEC-73); `POST /maintenances/:id/void` sin `reason` (DEC-71); `charge`/cobro con `totalAmount` inválido |
+| `MAINTENANCE_NOT_FOUND` | 404 | `POST /maintenances/:id/charge` sobre un mantenimiento inexistente o de otro negocio |
+| `MAINTENANCE_VOIDED` | 409 | `POST /maintenances/:id/charge` sobre un mantenimiento `VOIDED`: no se cobra ni se vuelve a cobrar (DEC-69) |
+| `MAINTENANCE_ALREADY_CHARGED` | 409 | `POST /maintenances/:id/charge` sobre un mantenimiento que ya tiene una venta, `ACTIVE` o `VOIDED` (DEC-69) |
+| `MAINTENANCE_ALREADY_VOIDED` | 409 | Segunda anulación del mismo mantenimiento (Corte 0, DEC-77) |
+| `SALE_MANAGED_BY_MAINTENANCE` | 409 | `POST /sales/:id/void` sobre una venta con `source = MAINTENANCE` (DEC-70) |
+
+**Deuda técnica (DEC-76):** R6 usa el `IdempotencyService` actual. La atomicidad entre la reserva de la clave y el efecto (hallazgo A2) no se resuelve en R6; queda como corte separado.
 
 ### Recordatorios y WhatsApp
 | Método | Ruta | Descripción |
@@ -295,6 +340,7 @@ Anula una venta. Requiere `Idempotency-Key`.
 
 - La misma `Idempotency-Key` con el mismo cuerpo devuelve la respuesta original, sin generar otro `SALE_VOID`.
 - Otra clave sobre una venta ya anulada: 409 `SALE_ALREADY_VOIDED`, sin cambios.
+- **Cobro de mantenimiento (R6, DEC-70, sin implementar):** una venta con `source = MAINTENANCE` no se anula por aquí: 409 `SALE_MANAGED_BY_MAINTENANCE`, sin cambios. Su única vía es `POST /maintenances/:id/void`.
 - Errores de la cabecera: los mismos que en `POST /sales` (`IDEMPOTENCY_KEY_REQUIRED`, `IDEMPOTENCY_KEY_REUSED`, `IDEMPOTENCY_KEY_IN_PROGRESS`).
 
 **Response:** 200 `SaleResponse` con `status: VOIDED`, `voidedAt` y `voidReason`.
@@ -310,6 +356,7 @@ Errores: 404 `SALE_NOT_FOUND` (inexistente o de otro negocio), 400 si `:id` no e
 | `SALE_NOT_FOUND` | 404 | La venta no existe o es de otro negocio (`GET /sales/:id`, `POST /sales/:id/void`) |
 | `PRODUCT_INACTIVE` | 409 | Un producto de la venta está inactivo. Rechaza la venta completa |
 | `SALE_ALREADY_VOIDED` | 409 | Se intenta anular una venta que ya está anulada |
+| `SALE_MANAGED_BY_MAINTENANCE` | 409 | **R6 (DEC-70), sin implementar.** Se intenta anular con `POST /sales/:id/void` una venta con `source = MAINTENANCE`; se anula con `POST /maintenances/:id/void` |
 | `INSUFFICIENT_STOCK` | 422 | Un producto con conteo inicial quedaría con saldo negativo. Rollback completo (DEC-26) |
 | `PRODUCT_NOT_COUNTED` | aviso (201) | Un producto sin conteo inicial: se vende sin evaluar el saldo (DEC-27) |
 

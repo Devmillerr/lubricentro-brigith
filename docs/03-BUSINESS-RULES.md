@@ -1,6 +1,6 @@
 # 03 — Reglas de negocio
 
-**Versión:** 0.6 · **Actualizado:** 2026-09-26 (contrato de R4: BR-P21 y BR-V4; decisiones de R5: BR-L7, BR-L9 y BR-L10)
+**Versión:** 0.7 · **Actualizado:** 2026-09-28 (contrato de R6: BR-M12, BR-M15, BR-M16 y BR-V7; antes, R4: BR-P21 y BR-V4; R5: BR-L7, BR-L9 y BR-L10)
 **Fuentes de verdad:** [`/research/BRIGITH-DISCOVERY.md`](../research/BRIGITH-DISCOVERY.md) y [`01-VISION.md`](01-VISION.md).
 
 ## Etiquetas (iguales en todos los documentos)
@@ -59,10 +59,12 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 | BR-M8 | Un mantenimiento tiene 0 a n productos usados, cada uno con cantidad mayor que cero. | [DECISIÓN] D-13 |
 | BR-M9 | La fecha del mantenimiento puede ser anterior a la de su registro. | [TÉCNICO] |
 | BR-M10 | Guardar un mantenimiento es **una sola operación indivisible**: crea el mantenimiento, sus productos, sus movimientos de inventario y su recordatorio, o no crea nada. | [TÉCNICO] |
-| BR-M11 | Un mantenimiento guardado permite corregir campos que no afectan el stock (notas, km, próximo km/fecha, regla). Cambiar los productos o las cantidades se hace anulando y registrando uno nuevo. | [TÉCNICO] |
-| BR-M12 | Anular un mantenimiento genera los movimientos inversos de sus productos (BR-P9) y descarta el recordatorio que había creado. Un mantenimiento anulado no cuenta para el último km conocido. | [TÉCNICO] |
+| BR-M11 | Un mantenimiento guardado permite corregir campos que no afectan el stock (notas, km, próximo km/fecha, regla). Cambiar los productos o las cantidades se hace anulando y registrando uno nuevo. Sin vehículo, km, próximo km/fecha y regla no se pueden corregir (BR-M16). | [TÉCNICO] |
+| BR-M12 | Anular un mantenimiento exige un **motivo** (desde R6, tenga o no cobro), genera los movimientos inversos de sus productos (BR-P9) y descarta el recordatorio que había creado. **Desde R6:** si tiene cobro (BR-M15), su venta se anula en la misma operación y con el mismo motivo; si la venta ya estaba anulada, la anulación sigue sin generar movimientos. Un mantenimiento se anula una sola vez: una segunda anulación se rechaza. Un mantenimiento anulado no cuenta para el último km conocido. | [TÉCNICO] · motivo y anulación conjunta: [DECISIÓN] DEC-71, DEC-77 (R6) |
 | BR-M13 | Existe el tipo "Cambio de aceite". Otros tipos de mantenimiento no se crean por defecto. | [CONFIRMADO] C-03 · [PENDIENTE] P-17 |
 | BR-M14 | Qué datos exactos lleva el sticker actual, y por lo tanto qué debe registrar un mantenimiento, se completa tras P-02. | [PENDIENTE] P-02, P-03 |
+| BR-M15 | Un mantenimiento puede tener **un cobro**: una venta (`Sale` con `source = MAINTENANCE`) con una sola línea de servicio por el **monto total** (BR-V3), al registrarlo o después. Sin cobro es válido. El stock lo sigue moviendo el mantenimiento; la venta no mueve stock. Como máximo **un cobro en toda su vida**: no se vuelve a cobrar, ni siquiera si su cobro fue anulado, y un mantenimiento anulado no se cobra. El cobro no lleva cliente en R6 y su fecha es la hora real del cobro. | [CONFIRMADO] monto único (`10-OPERACION-REAL.md` §0.2) · [DECISIÓN] DEC-69, DEC-72, DEC-74, DEC-75 (R6) |
+| BR-M16 | **Mantenimiento sin vehículo** (DEC-31): se puede registrar y cobrar sin vehículo. En ese caso no admite km actual, próximo km, próxima fecha ni regla de vencimiento, **ni al registrarlo ni al corregirlo (BR-M11)**: se rechazan, no se ignoran ni se guardan. No genera recordatorio, no cierra recordatorios previos y no tiene seguimiento por fecha ni km. En R6 no se le asigna un vehículo después. Con vehículo, rigen BR-M2 a BR-M7 y BR-R1. | [DECISIÓN] DEC-31, DEC-73 (R6) |
 
 ## BR-R — Recordatorios
 
@@ -150,6 +152,7 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 | BR-V2 | Métodos de pago confirmados: **Yape** y **efectivo**. | [CONFIRMADO] C-17 |
 | BR-V3 | El cambio de aceite se cobra con **un único monto total** (producto + mano de obra). Los productos usados solo descuentan stock y no generan otro ingreso. Otros métodos de pago y ventas a crédito siguen sin definir. | Monto único: [CONFIRMADO] (`10-OPERACION-REAL.md` §0.2) · resto: [PENDIENTE] P-09 |
 | BR-V4 | Cada producto vendido genera un movimiento de stock `SALE` con el mismo mecanismo del MVP (BR-P3, BR-P14). **Excepción:** un producto con `tracksStock = false` (BR-P16) se registra como línea de la venta (`movesStock = false`) pero **no** genera `SALE` ni se evalúa su saldo. | [TÉCNICO] · excepción: contrato de R4 (2026-09-26) |
+| BR-V7 | Anular una venta exige un **motivo**, genera `SALE_VOID` de sus líneas que mueven stock y la saca de los totales. **Excepción (R6):** la venta de un cobro de mantenimiento (`source = MAINTENANCE`) no se anula por sí sola: se anula al anular su mantenimiento (BR-M12). | [TÉCNICO] · excepción: [DECISIÓN] DEC-70 (R6) |
 
 ## BR-L — Lavado (Fase 2)
 

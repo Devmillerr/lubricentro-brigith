@@ -1,8 +1,25 @@
 # STATUS — Estado del proyecto
 
-**Actualizado:** 2026-09-27
+**Actualizado:** 2026-09-28
 
-## Estado actual (2026-09-27): R4 (Ventas) y R5 (Lavados) cerrados y desplegados en Supabase
+## Estado actual (2026-09-28): contrato de R6 cerrado en documentación, sin implementar
+
+- **Base:** `origin/main` = `b159655` ("docs: actualizando el cierre de R4 y R5 en STATUS"), que ya incluye `9702197` (R4 y R5) y `99df6c5`. Lo que la sección siguiente marca como pendiente de push ya está en `origin/main`.
+- **Decisiones de R6 cerradas (2026-09-28): DEC-69 a DEC-77** en `09-BACKLOG.md` §2 y `10-OPERACION-REAL.md` §3.2g. Contrato en `06-API.md` §2, Mantenimientos ("Cambios de R6"). Reglas: BR-M12, BR-M15, BR-M16 y BR-V7 en `03-BUSINESS-RULES.md`. Backlog: B-150 a B-158.
+  - Un cobro por mantenimiento en toda su vida; `Sale.maintenanceId @unique` sin cambios y sin volver a cobrar (DEC-69). Cobrar un mantenimiento anulado: 409 `MAINTENANCE_VOIDED`.
+  - `POST /sales/:id/void` rechaza `source = MAINTENANCE` con 409 `SALE_MANAGED_BY_MAINTENANCE` (DEC-70).
+  - `reason` obligatorio en `POST /maintenances/:id/void`; la venta se anula con el mismo motivo (DEC-71). Cambio incompatible para la web, incluido en R6.
+  - Cobro al registrar (`charge`) y cobro posterior (`POST /maintenances/:id/charge`, idempotente) (DEC-72).
+  - Sin vehículo (DEC-31, DEC-73): 400 con `odometerKm`, `nextDueKm`, `nextDueDate` o `dueRule`, tanto en `POST` como en `PATCH`; sin recordatorio ni seguimiento; sin asignación posterior de vehículo.
+  - `customerId = null` (DEC-74); `occurredAt` del cobro = hora del servidor (DEC-75).
+  - A2 (idempotencia atómica) queda como deuda técnica fuera de R6 (DEC-76).
+  - `05-DATABASE.md` y `07-UI-UX.md` alineados: `vehicleId` opcional y `voidReason` obligatorio al anular (migración en R6); la anulación genérica de ventas no se ofrece para `source = MAINTENANCE`.
+  - **Corte 0 antes de R6 (DEC-77, B-150):** anulación de mantenimiento con transición condicional y 409 `MAINTENANCE_ALREADY_VOIDED` (hallazgo A1). En R6, orden Maintenance → Sale.
+- **Sin cambios de código, sin migraciones, sin seed, sin Supabase, sin commit ni push.** R6 no tiene migraciones: la de `maintenances.vehicleId` nullable (B-151) se hará en R6.
+- **Archivo sin commit ajeno a este cambio:** `apps/api/test/business-scope.coverage.spec.ts` (prueba preventiva de cobertura de `BUSINESS_SCOPED_MODELS`).
+- **Próximo paso:** implementar solo el Corte 0 (B-150), con autorización.
+
+## Estado al 2026-09-27: R4 (Ventas) y R5 (Lavados) cerrados y desplegados en Supabase
 
 - **R4 (Ventas): implementado, probado y cerrado.** **R5 (Lavados): implementado, probado y cerrado.** El detalle de la implementación y las pruebas está en la sección siguiente.
 - **Commits:**

@@ -1,6 +1,6 @@
 # 05 — Base de datos
 
-**Versión:** 0.3 · **Actualizado:** 2026-09-21
+**Versión:** 0.4 · **Actualizado:** 2026-09-28 (`Maintenance` y `Sale.maintenanceId` según el contrato de R6, sin implementar)
 PostgreSQL + Prisma. Modelo **conceptual**; el esquema Prisma se escribe en la implementación. Etiquetas: ver `03-BUSINESS-RULES.md`. Las reglas viven en `03`; aquí solo se indica cómo se guardan.
 
 ## 1. Convenciones [TÉCNICO]
@@ -108,17 +108,18 @@ Cada fila es una **unidad de stock**. Cómo se representan presentaciones y gran
 ### Maintenance
 | Campo | Notas |
 |---|---|
-| id, businessId, vehicleId, maintenanceTypeId | |
+| id, businessId, maintenanceTypeId | |
+| vehicleId? | **Desde R6, opcional** (DEC-31, DEC-73). Hoy es obligatorio en el esquema: requiere una migración de R6 (B-151). Sin vehículo, `odometerKm`, `nextDueKm`, `nextDueDate` y `dueRule` quedan siempre nulos: la API los rechaza al crear y al corregir (BR-M16) |
 | performedAt | Cuándo se hizo |
 | odometerKm? | Opcional |
 | nextDueKm?, nextDueDate? | Opcionales (BR-M2) |
 | dueRule? | `KM`, `DATE`, `ANY`, `ALL`. Nulo si no hay próximo mantenimiento (BR-M4) |
 | notes? | |
 | status | `ACTIVE` \| `VOIDED` |
-| voidedAt?, voidedById?, voidReason? | Al anular (BR-M12) |
+| voidedAt?, voidedById?, voidReason? | Al anular (BR-M12). **Desde R6, `voidReason` es obligatorio cuando `status = VOIDED`** (DEC-71); la columna puede seguir siendo nullable físicamente, y la regla la aplica la API. Los mantenimientos anulados antes de R6 pueden tenerlo nulo |
 
 Coherencia: `KM` exige `nextDueKm`; `DATE` exige `nextDueDate`; `ANY`/`ALL` exigen ambos.
-No hay precios ni totales en el MVP: cómo se cobra un cambio de aceite es P-09 y se resuelve en la Fase 2.
+`Maintenance` no guarda precios ni totales. Desde R6 su cobro es una `Sale` con `source = MAINTENANCE` y una sola línea `SERVICE` (BR-M15, DEC-72), enlazada por `Sale.maintenanceId`: único y **permanente**, aunque la venta pase a `VOIDED`. Un mantenimiento tiene como máximo una venta en toda su vida (DEC-69).
 
 ### MaintenanceItem
 `id, maintenanceId, productId, productNameSnapshot, productCodeSnapshot?, quantity`. `quantity > 0`.
@@ -164,13 +165,13 @@ Un solo recordatorio abierto (`PENDING`/`CONTACTED`) por `(businessId, vehicleId
 `id, reminderId, userId, channel (WHATSAPP_LINK), openedAt, messageSnapshot`. Historial de enlaces abiertos (BR-W6). No prueba que se haya enviado (BR-W2).
 
 ### IdempotencyRecord
-`businessId, key, endpoint, requestHash, responseStatus, responseBody, createdAt`. Único `(businessId, key)`. Sirve a todas las escrituras críticas (mantenimientos e inventario), por eso no es una columna de `Maintenance`. Se purga tras un plazo técnico.
+`businessId, key, endpoint, requestHash, responseStatus, responseBody, createdAt`. Único `(businessId, key, endpoint)` (migración `20260922200000_idempotency_key_per_endpoint`). Sirve a todas las escrituras críticas (mantenimientos, inventario, ventas, lavados y, en R6, el cobro de mantenimiento), por eso no es una columna de `Maintenance`. La purga tras un plazo técnico no está implementada. La atomicidad entre la reserva de la clave y el efecto (hallazgo A2) es deuda técnica fuera de R6 (DEC-76).
 
 ## 4. Tablas de la Fase 2 (no se crean en el MVP)
 
 | Tabla | Idea |
 |---|---|
-| Sale, SaleLine | Venta con líneas de producto o servicio. Cliente y vehículo opcionales |
+| Sale, SaleLine | Venta con líneas de producto o servicio. Cliente y vehículo opcionales. Implementadas en R4 (`schema.prisma`). `maintenanceId` único y permanente (R6, DEC-69) |
 | PaymentMethod, Payment | Métodos sembrados: **Efectivo** y **Yape** (C-17). Otros: P-09 |
 | WashType | **R5.** Tipo de lavado (moto lineal, auto, camioneta…): `name` único por negocio, `imageKey?`, `sortOrder`, `isActive`. Sin precio propio: los precios son sus `WashPriceOption`. Valores confirmados en `10-OPERACION-REAL.md` §0.3 (BR-L6). **Modelo creado (B-140, sin commit):** tabla `wash_types`, único `(businessId, name)`, índice `(businessId, sortOrder)`; migración `20260927023545_r5_washes` solo en `brigith_test` |
 | WashPriceOption | **R5.** Opción de precio de un tipo: `washTypeId`, `amount` (10,2), `label?`, `sortOrder`, `isActive`. Un tipo tiene una o dos opciones y el dueño elige una al cobrar, sin criterio escrito (§0.3). **Modelo creado (B-140, sin commit):** tabla `wash_price_options`, FK a `wash_types` y `businesses` (`RESTRICT`), índice `(businessId, washTypeId, sortOrder)`. `sale_lines.washTypeId` ya tiene FK hacia `wash_types` |
@@ -188,7 +189,7 @@ Los movimientos de venta usan `InventoryMovement` con los tipos `SALE` y `SALE_V
 - `Maintenance(businessId, vehicleId, performedAt desc)`.
 - `InventoryMovement(businessId, productId, occurredAt)`.
 - `Reminder(businessId, status)` y único parcial `(businessId, vehicleId, maintenanceTypeId)` para recordatorios abiertos.
-- `IdempotencyRecord(businessId, key)` único.
+- `IdempotencyRecord(businessId, key, endpoint)` único.
 - Todas las claves foráneas dentro del mismo `businessId`. Las pruebas de aislamiento lo verifican (`04-ARCHITECTURE.md` §10).
 
 ## 6. Migraciones y datos iniciales

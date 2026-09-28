@@ -1,6 +1,6 @@
 # 09 — Backlog y registro de decisiones
 
-**Versión:** 0.7 · **Actualizado:** 2026-09-26 (R3 cerrado; R4 (API, Vender e historial) y R5 implementados sin commit)
+**Versión:** 0.8 · **Actualizado:** 2026-09-28 (R4 y R5 cerrados; contrato de R6 cerrado sin implementar: DEC-69 a DEC-77)
 Etiquetas: ver `03-BUSINESS-RULES.md`. Prioridad: **M** Must · **S** Should · **C** Could.
 
 ## 1. Lo que bloquea el inicio del desarrollo
@@ -19,8 +19,9 @@ Los bloqueos 1 y 2 son del inicio del MVP. El MVP se construyó (`v1.0-mvp`) con
 | Corte | Bloqueos | Estado |
 |---|---|---|
 | R3 — Recepción en lote, ajuste por cantidad física y alertas | Ninguno. Decisiones cerradas el 2026-09-25: DEC-36, DEC-39 y DEC-48 a DEC-52 (§2) | **Cerrado** (2026-09-26): commit `1588d85` en `origin/main`, migración `20260925214438_r3_inventory_receipts` aplicada en Supabase, CI en verde |
-| R4 — Ventas de mostrador, consultas, anulación y su UI | Ninguno. Decisiones cerradas el 2026-09-26: DEC-30 y el alcance de R4 (§2) | **API implementada, sin commit** (B-130 a B-133 y B-136; migración `20260926175402_r4_sales` solo en la base local `brigith_test`, no en Supabase). Historial, detalle y anulación genéricos (B-135) y **Vender (B-134)** hechos sin commit. API y UI implementadas; falta commit y aplicar la migración en Supabase |
-| R5 — Lavados, su configuración y su UI | Ninguno. Contrato cerrado el 2026-09-26 (DEC-63 a DEC-67) y reparto con B-135 decidido (DEC-68). B-147 depende de B-135 (hecho). Se apoya en R4, que sigue sin commit | **Implementado, sin commit** (B-140 a B-149): API, seed local y UI (Lavado, Configuración → Tipos de lavado; historial por `/ventas?source=WASH`, DEC-68). Migración y seed solo en `brigith_test`, no en Supabase (DEC-62) |
+| R4 — Ventas de mostrador, consultas, anulación y su UI | Ninguno. Decisiones cerradas el 2026-09-26: DEC-30 y el alcance de R4 (§2) | **Cerrado** (2026-09-27): commit `9702197` en `origin/main`, migración `20260926175402_r4_sales` aplicada en Supabase (ver `STATUS.md`) |
+| R5 — Lavados, su configuración y su UI | Ninguno. Contrato cerrado el 2026-09-26 (DEC-63 a DEC-67) y reparto con B-135 decidido (DEC-68) | **Cerrado** (2026-09-27): commit `9702197` en `origin/main`, migración `20260927023545_r5_washes` y seed de lavados de brigith aplicados en Supabase (ver `STATUS.md`) |
+| R6 — Cobro de mantenimiento, anulación conjunta y mantenimiento sin vehículo (DEC-31) | Antes, el **Corte 0** (DEC-77): anulación condicional de mantenimiento. Contrato cerrado el 2026-09-28: DEC-69 a DEC-77 (§2) | **Contrato documentado, sin implementar** (B-150 a B-158). Sin migraciones de R6 |
 
 ## 2. Registro de decisiones
 
@@ -95,6 +96,15 @@ Decisiones de R5, aprobadas por el usuario el 2026-09-26 (detalle en `10-OPERACI
 | DEC-66 | Validaciones: `amount` > 0; `name` obligatorio, `trim`, ≤ 100; `label` opcional, `trim`, ≤ 100; `sortOrder` entero ≥ 0. Sin otras restricciones | **Aprobada** (2026-09-26) | — |
 | DEC-67 | `descriptionSnapshot` de la línea `WASH` = exactamente el `name` del `WashType` al cobrar, sin prefijos; conserva el nombre histórico | **Aprobada** (2026-09-26) | — |
 | DEC-68 | R5 reutiliza el historial, detalle y anulación genéricos de ventas (B-135), filtrando `source=WASH`; sin pantallas duplicadas de historial de lavados | **Aprobada** (2026-09-26) | — |
+| DEC-69 | Un mantenimiento tiene **como máximo una venta en toda su vida**: `Sale.maintenanceId` sigue `@unique` (sin índice parcial ni migración) y la relación queda aunque la venta pase a `VOIDED`. **No existe volver a cobrar.** Cobrar un mantenimiento `VOIDED` responde 409 `MAINTENANCE_VOIDED`; uno que ya tiene venta, 409 `MAINTENANCE_ALREADY_CHARGED` | **Aprobada** (2026-09-28) | R6 |
+| DEC-70 | Una venta con `source = MAINTENANCE` **no se anula** con `POST /sales/:id/void`: 409 `SALE_MANAGED_BY_MAINTENANCE`. Su única vía es `POST /maintenances/:id/void`, que mantiene la consistencia mantenimiento ↔ venta | **Aprobada** (2026-09-28) | R6 |
+| DEC-71 | `reason` **obligatorio** en `POST /maintenances/:id/void`, tenga o no cobro (vacío → 400 `VALIDATION_ERROR`). La venta asociada se anula con ese mismo motivo, sin texto fijo. Cambio incompatible: la UI se adapta dentro de R6 | **Aprobada** (2026-09-28) | R6 |
+| DEC-72 | Dos formas de cobrar: el bloque `charge` en `POST /maintenances` (misma transacción) y `POST /maintenances/:id/charge` para cobrar después, con `Idempotency-Key`. El cobro es una `Sale` `MAINTENANCE` con una sola línea `SERVICE` por el total | **Aprobada** (2026-09-28) | R6 |
+| DEC-73 | Mantenimiento sin vehículo (concreta DEC-31): `vehicleId` opcional (migración de R6). Sin vehículo, `odometerKm`, `nextDueKm`, `nextDueDate` y `dueRule` se rechazan con 400 `VALIDATION_ERROR` al crear (`POST`) y al corregir (`PATCH`), sin ignorarlos ni guardarlos; sin recordatorio, sin cerrar recordatorios previos y sin seguimiento por fecha ni km. Se puede registrar y cobrar. Sin asignación posterior de vehículo en R6 | **Aprobada** (2026-09-28) | R6 |
+| DEC-74 | La venta del cobro de mantenimiento lleva `customerId = null` en R6; clientes en R8 | **Aprobada** (2026-09-28) | R6 |
+| DEC-75 | `Sale.occurredAt` del cobro = hora real del cobro, fijada por el servidor; el cobro no acepta `occurredAt` del cliente. `Maintenance.performedAt` sigue siendo el momento del servicio | **Aprobada** (2026-09-28) | R6 |
+| DEC-76 | R6 usa el `IdempotencyService` actual. La atomicidad entre la reserva de la clave y el efecto (hallazgo A2) queda como **deuda técnica** en un corte separado, fuera de R6 | **Aprobada** (2026-09-28) | Fuera de R6 |
+| DEC-77 | **Corte 0, antes de R6:** `POST /maintenances/:id/void` hace la transición `ACTIVE → VOIDED` condicional en la misma transacción; si no cambia ninguna fila, 409 `MAINTENANCE_ALREADY_VOIDED` sin movimientos (hallazgo A1). En R6, orden de bloqueo **Maintenance → Sale**; si la venta ya está `VOIDED`, la anulación continúa sin generar movimientos | **Aprobada** (2026-09-28) | Antes de R6 |
 
 ## 3. Backlog por corte
 
@@ -226,6 +236,25 @@ Diseño: `10-OPERACION-REAL.md` §0.3, §2.3, §2.5, §2.7 y §3.2f · contrato:
 | B-149 | Pruebas: precio de la opción, 409 por tipo o precio inactivo, ningún `InventoryMovement` al crear ni al anular, idempotencia, rollback y aislamiento entre negocios (unitarias, e2e e integración Postgres) | M | Hecho (sin commit): `wash-types.*`, `washes.*` y `integration/washes.int-spec.ts` |
 
 **Fuera de R5:** momento real del cobro y quién cobra (BR-L7, P-11) · dashboard, gráficos e indicadores, incluido BR-I1 con lavados (R7) · cobro de mantenimiento (R6) · estados, cola o Kanban de lavado (BR-L1) · cliente o placa en el lavado (DEC-44).
+
+### R6 — Cobro de mantenimiento, anulación conjunta y mantenimiento sin vehículo
+Diseño: `10-OPERACION-REAL.md` §2.2, §2.3 y §2.7 · contrato: `06-API.md` §2, Mantenimientos ("Cambios de R6") · decisiones: DEC-31 y DEC-69 a DEC-77 (§2).
+
+**Estado:** contrato cerrado el 2026-09-28, **sin implementar**. Primero el Corte 0 (B-150).
+
+| ID | Ítem | Prio | Estado |
+|---|---|---|---|
+| B-150 | **Corte 0:** anulación de mantenimiento con transición condicional y 409 `MAINTENANCE_ALREADY_VOIDED`; prueba de concurrencia contra Postgres con dos solicitudes independientes (DEC-77) | M | Pendiente (antes de R6) |
+| B-151 | Migración: `maintenances.vehicleId` nullable (DEC-73) | M | Pendiente |
+| B-152 | `POST /maintenances` con `vehicleId` opcional, rechazo 400 de `odometerKm`/`nextDueKm`/`nextDueDate`/`dueRule` sin vehículo (también en `PATCH /maintenances/:id`) y bloque `charge` en la misma transacción (DEC-72, DEC-73) | M | Pendiente |
+| B-153 | `POST /maintenances/:id/charge`: una `Sale` `MAINTENANCE` con una línea `SERVICE`, `customerId = null`, `occurredAt` del servidor, idempotente; 409 `MAINTENANCE_VOIDED` y `MAINTENANCE_ALREADY_CHARGED` (DEC-69, DEC-72, DEC-74, DEC-75) | M | Pendiente |
+| B-154 | Anulación conjunta: `reason` obligatorio, orden Maintenance → Sale, la venta se anula con el mismo motivo; si ya está `VOIDED`, continúa (DEC-71, DEC-77) | M | Pendiente |
+| B-155 | `POST /sales/:id/void` rechaza `source = MAINTENANCE` con 409 `SALE_MANAGED_BY_MAINTENANCE` (DEC-70) | M | Pendiente |
+| B-156 | Lecturas de mantenimiento con `sale` (`GET /maintenances/:id`, `GET /vehicles/:id/maintenances`) y respuesta de la anulación `{ maintenance, sale }` | M | Pendiente |
+| B-157 | Web: cobro en el formulario de mantenimiento y cobro posterior desde su detalle, motivo obligatorio al anular, mantenimiento sin vehículo. Sin pantalla separada de cobros | M | Pendiente |
+| B-158 | Pruebas: ninguna venta `MAINTENANCE` mueve stock; un solo cobro por mantenimiento; anulación conjunta sin doble `MAINTENANCE_VOID`; rechazo 400 sin vehículo; aislamiento entre negocios (unitarias, e2e e integración Postgres) | M | Pendiente |
+
+**Fuera de R6:** volver a cobrar un mantenimiento (DEC-69) · asignar un vehículo después (DEC-73) · clientes en la venta (R8, DEC-74) · atomicidad de la idempotencia (A2, DEC-76) · dashboard (R7).
 
 ### Fase 2
 B-100 (venta rápida) y B-101 (métodos de pago) pasaron a R4 el 2026-09-26; B-102 (lavado) pasó a R5.

@@ -1,6 +1,6 @@
 # 07 — UI/UX
 
-**Versión:** 0.5 · **Actualizado:** 2026-09-26 (Inventario de R3 en §3.6; Lavado de R5 en §3.9)
+**Versión:** 0.6 · **Actualizado:** 2026-09-28 (contrato de R6 en §3.3 y §3.9, sin implementar; Inventario de R3 en §3.6; Lavado de R5 en §3.9)
 Etiquetas: ver `03-BUSINESS-RULES.md`. Este documento describe **flujos y pantallas**, no diseño visual. Los flujos son [TÉCNICO] y se validan con Brigith antes de cerrar el diseño (guía en Discovery §5). Mobile-first [DECISIÓN] D-01.
 
 ## 1. Principios
@@ -48,6 +48,12 @@ Después de guardar:
 - Confirmación con **"Avisar por WhatsApp"** si hay teléfono y recordatorio.
 - Avisos no bloqueantes en pantalla: stock insuficiente (con acceso directo a "Contar"), producto sin conteo inicial, km menor al anterior, próxima fecha anterior a hoy.
 - Con política `BLOCK` y stock insuficiente: mensaje claro con el producto, el saldo y el acceso a "Contar", antes de guardar.
+
+**Cambios de R6 (contrato cerrado, sin implementar; `06-API.md` §2, Mantenimientos):**
+
+- **Cobro opcional** en el formulario (un total y Efectivo/Yape, DEC-72) y **cobro posterior** desde el detalle del mantenimiento. No hay pantalla separada de cobros (P8): el detalle y el historial del mantenimiento muestran su venta cuando existe.
+- **Sin vehículo** (DEC-73): se permite registrar y cobrar; sin km actual, próximo km/fecha ni regla, y sin recordatorio.
+- **Anular un mantenimiento** pide el motivo **obligatorio** (DEC-71); si tiene cobro, se anula junto con él. Cambio incompatible con el formulario actual, donde el motivo es opcional.
 
 ### 3.3.1 Cliente y teléfono
 Desde la ficha del vehículo: nombre y teléfono, ambos opcionales, con la nota "Agrega el teléfono si quieres avisarle". Nunca son obligatorios (D-08).
@@ -102,7 +108,7 @@ La UI forma parte de R5 (DEC-60). Sigue el patrón actual del frontend: sin TanS
 | **Lavado** | Tarjetas grandes con los tipos activos. Si el tipo tiene dos precios (moto lineal S/8 · S/10; camioneta S/30 · S/40), el dueño toca uno; si tiene uno, el paso se salta. Los montos no llevan etiqueta inventada (§0.3). Solo muestra los tipos activos con **al menos un precio activo**: un tipo activo sin precio (hoy Minibán, Combi y Moto carguera, `prices: []`) no aparece, ni como botón deshabilitado; se resuelve en la UI, sin cambiar la API (decisión del usuario, 2026-09-26). Nota opcional. Confirmación con tipo, monto, pago y fecha, y **Nuevo lavado** / **Volver al inicio**. Si el tipo o el precio se desactivó mientras tanto (409), avisa y recarga la lista. Ruta `/lavado`, desde el botón **Lavado** de Inicio Después, **Efectivo** / **Yape** y **Confirmar** (`POST /washes`, idempotente). **No pide cliente ni placa, ni como campo opcional** (DEC-44, BR-L2) |
 | **Lavados** (historial) | El historial genérico de ventas (`/ventas`, B-135) filtrado por `source=WASH` (`/ventas?source=WASH`, `GET /sales?source=WASH`), con monto, fuente, método de pago, fecha, nota y estado. Chips Todas / Mostrador / Lavado. No es una pantalla aparte (DEC-68). El nombre del tipo no sale en la lista porque `SaleSummaryResponse` no trae las líneas: se ve en el detalle |
 | **Detalle** | El detalle genérico de venta (`/ventas/:id`, `GET /sales/:id`, B-135) y acción **Anular**. En un lavado, el título es el nombre del tipo (`descriptionSnapshot`) |
-| **Anular** | Pide el motivo, siempre obligatorio (BR-V7, DEC-59), y usa `POST /sales/:id/void`. No se usa "Deshacer" para una venta: el término es **Anular** |
+| **Anular** | Pide el motivo, siempre obligatorio (BR-V7, DEC-59), y usa `POST /sales/:id/void`. No se usa "Deshacer" para una venta: el término es **Anular**. **Desde R6 (DEC-70):** en una venta con `source = MAINTENANCE` (cobro de mantenimiento) **no** se ofrece esta acción: se oculta o se deshabilita, o conduce a la anulación de su mantenimiento. La API la rechaza igual con 409 `SALE_MANAGED_BY_MAINTENANCE`. Las ventas de mostrador (R4) y los lavados (R5) no cambian |
 | **Configuración → Tipos de lavado** | `/configuracion/lavados`. Crear, renombrar, ordenar (subir/bajar) y desactivar/reactivar tipos; agregar, editar (monto y etiqueta; etiqueta vacía = sin etiqueta) y desactivar/reactivar precios (DEC-56, DEC-63). Lista con `GET /wash-types?includeInactive=true`: muestra todos, también los inactivos y los que no tienen precio (marcados "Sin precio: no se cobra"), para agregarles precio. La pantalla **Lavado** solo pide los activos (DEC-64) |
 
 - Sin estados de lavado, cola ni Kanban (BR-L1).

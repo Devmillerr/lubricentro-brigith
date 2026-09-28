@@ -188,7 +188,7 @@ auth (`login`, `refresh`, `logout`, `me`) · `GET /business`, `PATCH /business/s
 - `InventoryService` → se convierte en el **único punto** que escribe movimientos (`StockLedger`), con bloqueo de fila y actualización del saldo en caché en la misma transacción.
 - `POST /inventory/receipts` → lote de productos (**cambio incompatible**).
 - `POST /inventory/adjustments` → recibe cantidad física, devuelve anterior/diferencia/resultante (**cambio incompatible**).
-- `MaintenancesService` → usa `StockLedger`; cobro opcional; vehículo opcional (si se aprueba DEC-31).
+- `MaintenancesService` → usa `StockLedger`; cobro opcional; vehículo opcional (DEC-31, aprobada; concretada por DEC-73).
 - `PilotIndicatorsService` → adopción cuenta ventas y lavados.
 - Throttler → límites por usuario y más altos en lecturas.
 - Web: navegación, Inicio, Productos, Inventario; capa de datos (DEC-38).
@@ -255,8 +255,8 @@ Ver §3 (lista completa con recomendación).
 
 - `Maintenance` y `MaintenanceItem` quedan igual: los productos usados generan `MAINTENANCE_USE` (stock), el recordatorio y la anulación funcionan como hoy. **Los ítems no llevan precio.**
 - `POST /maintenances` acepta un bloque opcional `charge: { paymentMethod, totalAmount }`. Si viene, **en la misma transacción** se crea una `Sale { source: MAINTENANCE, maintenanceId }` con **una sola línea** `SERVICE` por `totalAmount` (descripción: nombre del tipo de mantenimiento, p. ej. "Cambio de aceite"). Esa línea no mueve stock.
-- El cobro también se puede registrar **después** (`POST /maintenances/:id/charge`). Un mantenimiento **sin cobro** es válido (garantía, cliente que paga luego): no se obliga. El dashboard muestra "mantenimientos sin cobro" como recordatorio, no como error.
-- **Anular el mantenimiento** anula su venta en la misma transacción. **Anular solo la venta** corrige el cobro sin tocar el stock (el stock pertenece al mantenimiento) y permite volver a cobrar.
+- El cobro también se puede registrar **después** (`POST /maintenances/:id/charge`, DEC-72). Un mantenimiento **sin cobro** es válido (garantía, cliente que paga luego): no se obliga. El dashboard muestra "mantenimientos sin cobro" como recordatorio, no como error.
+- **Anular el mantenimiento** anula su venta en la misma transacción, con el mismo motivo obligatorio (DEC-71, DEC-77). **La venta no se anula sola:** `POST /sales/:id/void` la rechaza con 409 `SALE_MANAGED_BY_MAINTENANCE` (DEC-70). **No existe volver a cobrar:** un mantenimiento tiene como máximo una venta en toda su vida, aunque esté `VOIDED` (DEC-69). Cierre del contrato: `06-API.md` §2, Mantenimientos, "Cambios de R6".
 - **Dashboard:** el ingreso de mantenimiento se muestra como **un solo monto** ("Mantenimiento"). No se reparte entre producto y mano de obra, porque el negocio no lo separa. Las unidades de aceite y filtros que se usan en mantenimientos sí aparecen en "productos más usados/vendidos", pero desde el stock, no desde el dinero.
 
 ### 2.2b Diseño aprobado de R2 — Catálogo (2026-09-23)
@@ -373,7 +373,7 @@ model Sale {                       // NUEVO
   occurredAt    DateTime @default(now())
   vehicleId     String?     // solo en el cobro de un mantenimiento (copiado del mantenimiento)
   customerId    String?     // opcional
-  maintenanceId String?  @unique  // 1:1 con el mantenimiento cobrado (activo)
+  maintenanceId String?  @unique  // 1:1 con el mantenimiento cobrado, permanente aunque la venta esté VOIDED (DEC-69)
   note          String?
   createdById   String
   voidedAt DateTime?, voidedById String?, voidReason String?
@@ -415,8 +415,8 @@ model WashPriceOption {            // NUEVO
 // sin cliente ni placa.
 
 // ---------- Mantenimiento ----------
-model Maintenance {                // MODIFICADO (solo si se aprueba DEC-31)
-  vehicleId String?                // sin vehículo => no admite próximo km/fecha
+model Maintenance {                // MODIFICADO (DEC-31, aprobada; DEC-73)
+  vehicleId String?                // sin vehículo => 400 con odometerKm, nextDueKm, nextDueDate o dueRule; sin recordatorio (DEC-73)
 }
 
 // ---------- Clientes y avisos (§2.11) ----------
@@ -478,7 +478,7 @@ Flujo del mapa: Inicio → Vender → categorías → productos → carrito → 
 - Conteo inicial (`COUNT`) se mantiene separado, sin motivo, para la carga inicial (DEC-21).
 
 **Mantenimiento** (reutiliza el formulario actual)
-1. Buscar por placa/vehículo (lookup existente) **o por cliente** → elegir uno de sus vehículos; **sin vehículo** solo si se aprueba DEC-31. 2. Tipo. 3. Productos usados con el selector visual del catálogo (compatibles primero); descuentan stock y **no** generan ingreso. 4. Km actual opcional. 5. Próximo: chips **Por fecha / Por km / Ambos / Ninguno**, solo cuando corresponda a ese vehículo; nada se prellena ni es obligatorio (BR-M3). 6. **Cobro** opcional: un solo campo **Total cobrado** + Efectivo/Yape ([CONFIRMADO] monto único, §0.2; sin desglose). 7. Guardar → mantenimiento + stock + recordatorio + venta, en una transacción. 8. Si el vehículo tiene cliente con teléfono, la confirmación ofrece **Avisar por WhatsApp** más adelante desde el recordatorio; si no tiene cliente, ofrece **Asignar cliente** (buscar o "+ Agregar cliente", §2.11).
+1. Buscar por placa/vehículo (lookup existente) **o por cliente** → elegir uno de sus vehículos; **sin vehículo** está permitido (DEC-31, DEC-73): sin km actual ni próximo km/fecha, y sin recordatorio. 2. Tipo. 3. Productos usados con el selector visual del catálogo (compatibles primero); descuentan stock y **no** generan ingreso. 4. Km actual opcional. 5. Próximo: chips **Por fecha / Por km / Ambos / Ninguno**, solo cuando corresponda a ese vehículo; nada se prellena ni es obligatorio (BR-M3). 6. **Cobro** opcional: un solo campo **Total cobrado** + Efectivo/Yape ([CONFIRMADO] monto único, §0.2; sin desglose). 7. Guardar → mantenimiento + stock + recordatorio + venta, en una transacción. 8. Si el vehículo tiene cliente con teléfono, la confirmación ofrece **Avisar por WhatsApp** más adelante desde el recordatorio; si no tiene cliente, ofrece **Asignar cliente** (buscar o "+ Agregar cliente", §2.11).
 
 **Lavado** (flujo del mapa: Lavado → tipo → precio → pago → confirmar; sin cola, sin estados)
 1. Inicio → **Lavado**. 2. Tarjetas grandes: Moto lineal · Tico · Auto · Mototaxi · Camioneta · Furgón (solo los tipos con al menos un precio activo: Minibán, Combi y Moto carguera, activos pero sin precio, §0.3, no aparecen hasta que se les agregue precio en Configuración → Tipos de lavado). 3. Si el tipo tiene 2 precios (moto lineal S/8 · S/10; camioneta S/30 · S/40), el dueño toca uno según lo que ve; si tiene uno, se salta ([CONFIRMADO] §0.3). No se pide el motivo del precio. 4. **Efectivo** / **Yape**. 5. **Confirmar** → guardado. No se pide cliente ni placa, ni como campo opcional (DEC-44). Lista "Lavados de hoy" debajo; cada lavado se puede **Anular** con motivo obligatorio (`POST /sales/:id/void`, BR-V7, DEC-59).
@@ -506,11 +506,11 @@ Flujo del mapa: Inicio → Vender → categorías → productos → carrito → 
 | BR-V1…V4 | Venta: pasa de Fase 2 a implementación; métodos Efectivo/Yape; `SALE` por línea de mostrador | [DECISIÓN] al aprobar |
 | BR-V5 | Todo ingreso es una `Sale`; una línea de venta no mueve stock, lo mueve la operación que consumió el producto | [TÉCNICO] |
 | BR-V6 | Una venta tiene un solo método de pago: `CASH` o `YAPE` | [DECISIÓN] DEC-30 (aprobada el 2026-09-26). El pago mixto queda fuera de R4, como decisión futura |
-| BR-V7 | Anular una venta exige motivo, genera `SALE_VOID` de sus líneas con stock y la saca de los totales | [TÉCNICO] |
+| BR-V7 | Anular una venta exige motivo, genera `SALE_VOID` de sus líneas con stock y la saca de los totales. La venta de un cobro de mantenimiento solo se anula con su mantenimiento (DEC-70) | [TÉCNICO] · excepción DEC-70 |
 | BR-V8 | El precio aplicado se guarda en la línea; cambiar el precio del catálogo no altera ventas pasadas | [TÉCNICO] (BR-G6) |
 | BR-L2 | Lavado: tipo → precio (de sus opciones) → pago → confirmar; sin cliente ni placa | [DECISIÓN] mapa funcional · DEC-44 |
 | BR-L3/L4 | Cierre del día con conteos manuales | **Fuera** (el mapa no lo incluye): cada lavado se registra al cobrarlo y el dashboard "Hoy" hace de resumen. Resuelve DEC-15 |
-| BR-M15 | Un mantenimiento puede tener un cobro (`Sale` MAINTENANCE 1:1) con **un único monto total** (producto + mano de obra); sin cobro es válido. Los productos usados se registran solo para el stock | [CONFIRMADO] monto único (§0.2) · [TÉCNICO] estructura |
+| BR-M15 | Un mantenimiento puede tener un cobro (`Sale` MAINTENANCE 1:1, permanente aunque la venta esté `VOIDED`) con **un único monto total** (producto + mano de obra); sin cobro es válido. Sin volver a cobrar. Los productos usados se registran solo para el stock | [CONFIRMADO] monto único (§0.2) · [DECISIÓN] DEC-69, DEC-72 (R6) |
 | BR-V3 | Cómo se cobra un cambio de aceite | [CONFIRMADO] monto único (§0.2). Otros métodos de pago y crédito siguen [PENDIENTE] P-09 |
 | BR-P15 | Presentaciones y granel: un producto se cuenta en una unidad de stock y puede tener formas de venta con factor (aceite de balde: litro o balde completo) | [CONFIRMADO] aceite de balde (§0.4) · capacidad del balde [PENDIENTE] |
 | BR-L6 | Tipos y precios de lavado: los de §0.3. Con dos montos, el dueño elige; el sistema no aplica criterio | [CONFIRMADO] |
@@ -545,11 +545,11 @@ Todas las escrituras de dinero o stock exigen `Idempotency-Key` y aceptan `id` U
 | POST | `/sales` | `{ id?, paymentMethod, occurredAt?, note?, lines: [{ productId, quantity, unitPrice }] }` → `SaleResponse` + `warnings`. Sin `saleUnitId` en R4. El total lo calcula el servidor: subtotal por línea = `quantity × unitPrice` redondeado half-up a 2 decimales; total = suma de subtotales. Un producto inactivo rechaza la venta completa (409 `PRODUCT_INACTIVE`). Un producto con `tracksStock = false` se registra como línea sin movimiento `SALE`. Contrato completo: `06-API.md` §2, Ventas |
 | GET | `/sales` | `?from&to&source&paymentMethod&status&cursor&limit`. `from` incluido y `to` excluido, comparados contra `occurredAt` |
 | GET | `/sales/:id` | Con líneas |
-| POST | `/sales/:id/void` | `{ reason }`. Se puede anular aunque un producto se haya desactivado después de la venta: la validación de producto inactivo aplica al crear la venta, no al `SALE_VOID` |
+| POST | `/sales/:id/void` | `{ reason }`. Se puede anular aunque un producto se haya desactivado después de la venta: la validación de producto inactivo aplica al crear la venta, no al `SALE_VOID`. Desde R6, una venta `source = MAINTENANCE` se rechaza con 409 `SALE_MANAGED_BY_MAINTENANCE` (DEC-70) |
 | GET | `/wash-types` | Con precios activos |
 | POST/PATCH | `/wash-types`, `/wash-types/:id`, `/wash-types/:id/prices` | Configuración (Configuración → Lavados) |
 | POST | `/washes` | `{ id?, washTypeId, priceOptionId, paymentMethod, occurredAt?, note? }` → `SaleResponse`. Sin monto libre: el precio sale de la opción activa (DEC-55). Historial, detalle y anulación por `/sales` (DEC-59). Contrato: `06-API.md` §2, Lavados |
-| POST | `/maintenances/:id/charge` | `{ paymentMethod, totalAmount }` → `SaleResponse` (una línea SERVICE) |
+| POST | `/maintenances/:id/charge` | `{ paymentMethod, totalAmount }` → `SaleResponse` (una línea SERVICE). Idempotente. Sin `occurredAt` del cliente (DEC-75). 409 `MAINTENANCE_VOIDED` o `MAINTENANCE_ALREADY_CHARGED` (DEC-69) |
 | PUT | `/products/:id/sale-units` | `[{ label, factor, salePrice? }]` (formas de venta: litro/balde). **Fuera de R4** |
 | POST | `/customers/with-vehicles` | `{ name, phone?, vehicles?: [{ plate, vehicleModelId? }] }` → cliente + vehículos en una transacción (alta desde Avisar) |
 | GET | `/customers/:id/reminders` | Recordatorios abiertos de todos sus vehículos, para elegir sobre cuál avisar |
@@ -568,10 +568,11 @@ Todas las escrituras de dinero o stock exigen `Idempotency-Key` y aceptan `id` U
 | `POST /inventory/adjustments` | **Incompatible:** `{ productId, physicalQuantity, reason }` → `{ previousBalance, quantityDelta, resultingBalance, reason, createdById, occurredAt }` |
 | `POST /inventory/counts` | Usa `StockLedger` (bloqueo + caché); agrega `createdById` |
 | `GET /inventory/stock` | Lee la caché |
-| `POST /maintenances` | `charge?: { paymentMethod, totalAmount }` (monto único, §2.2); ítems sin precio; `vehicleId` opcional (DEC-31) → respuesta incluye `sale` |
+| `POST /maintenances` | `charge?: { paymentMethod, totalAmount }` (monto único, §2.2, DEC-72); ítems sin precio; `vehicleId` opcional (DEC-31, DEC-73: sin vehículo, 400 con `odometerKm`/`nextDueKm`/`nextDueDate`/`dueRule`) → respuesta incluye `sale` |
 | `GET /customers` | `search` también busca por placa de sus vehículos (normalizada, BR-C6); la respuesta incluye las placas de cada cliente |
 | `POST /customers` | Si el teléfono ya existe en otro cliente activo, responde con aviso `PHONE_ALREADY_REGISTERED` y el cliente existente (sin bloquear, DEC-47) |
-| `POST /maintenances/:id/void` | Anula también la venta enlazada |
+| `POST /maintenances/:id/void` | `reason` obligatorio (DEC-71). Anula también la venta enlazada con el mismo motivo; orden Maintenance → Sale; si la venta ya está `VOIDED`, continúa (DEC-77). Respuesta `{ maintenance, sale }` |
+| `POST /sales/:id/void` | Rechaza `source = MAINTENANCE` con 409 `SALE_MANAGED_BY_MAINTENANCE` (DEC-70) |
 | `GET /pilot-indicators` | Adopción incluye ventas y lavados |
 
 **Contratos DTO principales**
@@ -612,7 +613,7 @@ DashboardResponse {
 
 Montos como `string` decimal (igual que hoy `Decimal` serializado), nunca `float`.
 
-Errores nuevos: `INSUFFICIENT_STOCK` (422, ya existe), `SALE_NOT_FOUND`, `SALE_ALREADY_VOIDED`, `WASH_PRICE_NOT_IN_TYPE`, `SALE_UNIT_NOT_IN_PRODUCT` (fuera de R4), `PHONE_ALREADY_REGISTERED` (aviso, no error), `CATALOG_OPTION_NOT_ALLOWED`, `MAINTENANCE_ALREADY_CHARGED`, `DUPLICATE_PRODUCT_LINE`.
+Errores nuevos: `INSUFFICIENT_STOCK` (422, ya existe), `SALE_NOT_FOUND`, `SALE_ALREADY_VOIDED`, `WASH_PRICE_NOT_IN_TYPE`, `SALE_UNIT_NOT_IN_PRODUCT` (fuera de R4), `PHONE_ALREADY_REGISTERED` (aviso, no error), `CATALOG_OPTION_NOT_ALLOWED`, `MAINTENANCE_ALREADY_CHARGED` (409), `MAINTENANCE_VOIDED` (409 al cobrar un mantenimiento anulado), `SALE_MANAGED_BY_MAINTENANCE` (409), `MAINTENANCE_ALREADY_VOIDED` (409, Corte 0), `DUPLICATE_PRODUCT_LINE`.
 
 ### 2.8 Estrategia de actualización del dashboard
 
@@ -732,7 +733,7 @@ Lo que pide el mapa (§10) y dónde se consulta. Todo registro es inmutable o se
 | DEC-26 | La venta se bloquea si un producto **con conteo** no alcanza; el mantenimiento continúa con aviso aunque deje el saldo negativo (BR-P11). Implementado en R1 (`StockLedger`, política `BLOCK`/`WARN`) |
 | DEC-27 | Los productos sin conteo inicial se pueden vender, con aviso de stock no confiable (BR-P12). Implementado en R1 |
 | DEC-29 | El precio aplicado en una venta se puede modificar y queda guardado como snapshot de esa operación (R4) |
-| DEC-31 | Se permite un mantenimiento sin vehículo; en ese caso no hay recordatorio (R6) |
+| DEC-31 | Se permite un mantenimiento sin vehículo; en ese caso no hay recordatorio (R6). Concretada por DEC-73 (§3.2g) |
 | DEC-38 | Capa de datos web: TanStack Query (Fase 4) |
 | DEC-34 | R2 solo agrega `Product.imageKey` (nullable) y un placeholder visual. La subida y el almacenamiento (Supabase Storage) van en un corte posterior |
 | DEC-37 | Árbol inicial de 2 niveles, editable desde Configuración, sin enums. Se arma debajo de las categorías existentes, sin renombrarlas: Lubricante (Aceite auto, Aceite moto, Aceite 2 tiempos, Aceite de transmisión) · Filtro (Filtro de aire, Filtro de aceite) · Fluidos (Refrigerante, Líquido de freno, Limpiaparabrisas, Hidrolina) · Siliconas (Silicona, Silicona de empaque) |
@@ -788,6 +789,22 @@ Registradas en `09-BACKLOG.md` §2 (DEC-53 a DEC-68) y §3 (sección R5). Contra
 | DEC-68 | **Historial, detalle y anulación** de lavados reutilizan las pantallas genéricas de ventas de R4 (B-135) con `source=WASH`; sin pantallas duplicadas |
 
 Fuera de R5: el momento real del cobro y quién cobra (BR-L7, P-11), el dashboard, los gráficos e indicadores (R7), incluido BR-I1 con lavados, y el cobro de mantenimiento (R6).
+
+### 3.2g Aprobadas por el usuario para R6 (2026-09-28)
+
+Contrato en `06-API.md` §2, Mantenimientos ("Cambios de R6"); registro en `09-BACKLOG.md` §2.
+
+| ID | Decisión |
+|---|---|
+| DEC-69 | Como máximo una venta por mantenimiento en toda su vida; `Sale.maintenanceId` sigue `@unique` y la relación queda aunque la venta esté `VOIDED`. Sin volver a cobrar. Cobrar uno `VOIDED`: 409 `MAINTENANCE_VOIDED` |
+| DEC-70 | `POST /sales/:id/void` rechaza `source = MAINTENANCE` con 409 `SALE_MANAGED_BY_MAINTENANCE`; se anula solo con `POST /maintenances/:id/void` |
+| DEC-71 | `reason` obligatorio al anular un mantenimiento, tenga o no cobro; la venta se anula con ese motivo |
+| DEC-72 | Cobro al registrar (`charge`) y cobro posterior (`POST /maintenances/:id/charge`, idempotente) |
+| DEC-73 | Sin vehículo: 400 con `odometerKm`, `nextDueKm`, `nextDueDate` o `dueRule`, al crear y al corregir (`PATCH`); sin recordatorio ni seguimiento; sin asignar vehículo después en R6 |
+| DEC-74 | `customerId = null` en la venta del cobro (clientes en R8) |
+| DEC-75 | `occurredAt` del cobro = hora del servidor; sin `occurredAt` del cliente |
+| DEC-76 | Idempotencia atómica (A2): deuda técnica, fuera de R6 |
+| DEC-77 | Corte 0 antes de R6: anulación de mantenimiento condicional (409 `MAINTENANCE_ALREADY_VOIDED`); en R6, orden Maintenance → Sale y venta ya `VOIDED` sin movimientos |
 
 ### 3.3 Pendientes que todavía requieren decisión (del dueño o tuya)
 
