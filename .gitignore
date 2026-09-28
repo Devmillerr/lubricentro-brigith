@@ -8,10 +8,9 @@ build/
 .next/
 out/
 
-# Env
-.env
-.env.*.local
-.env.local
+# Env: cualquier .env* en cualquier carpeta; solo se versionan los .env.example
+.env*
+!.env.example
 
 # Prisma
 apps/api/prisma/migrations/**/migration_lock.toml.bak
