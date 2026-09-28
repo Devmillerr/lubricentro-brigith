@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { BusinessModule } from './business/business.module';
 import { validateEnv } from './config/env.validation';
 import { CustomersModule } from './customers/customers.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { HealthModule } from './health/health.module';
 import { IdempotencyModule } from './idempotency/idempotency.module';
 import { InventoryModule } from './inventory/inventory.module';
@@ -41,6 +42,7 @@ import { WashesModule } from './washes/washes.module';
     WashesModule,
     RemindersModule,
     PilotModule,
+    DashboardModule,
   ],
   providers: [
     {
