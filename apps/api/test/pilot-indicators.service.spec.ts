@@ -7,6 +7,7 @@ function setup() {
     'reminder',
     'reminderContact',
     'inventoryMovement',
+    'sale',
   ]);
   const service = new PilotIndicatorsService(prisma);
   return {
@@ -15,6 +16,7 @@ function setup() {
     reminders: stores.get('reminder')!,
     contacts: stores.get('reminderContact')!,
     movements: stores.get('inventoryMovement')!,
+    sales: stores.get('sale')!,
   };
 }
 
@@ -190,5 +192,98 @@ describe('PilotIndicatorsService', () => {
     const result = await service.get('biz-a', {});
 
     expect(result.adoption.activeMaintenances).toBe(0);
+  });
+
+  describe('BR-I1 desde R7 (DEC-85): ventas de mostrador y lavados por separado', () => {
+    function sale(
+      id: string,
+      source: 'COUNTER' | 'WASH' | 'MAINTENANCE',
+      occurredAt: string,
+      extra: Record<string, unknown> = {},
+    ) {
+      return {
+        id,
+        businessId: 'biz-a',
+        source,
+        status: 'ACTIVE',
+        occurredAt: new Date(occurredAt),
+        ...extra,
+      };
+    }
+
+    it('cuenta cada fuente por separado; el cobro de mantenimiento no suma ni como venta ni como mantenimiento', async () => {
+      const { service, sales, maintenances } = setup();
+      sales.set('c1', sale('c1', 'COUNTER', '2026-03-10T10:00:00Z'));
+      sales.set('c2', sale('c2', 'COUNTER', '2026-03-11T10:00:00Z'));
+      sales.set('w1', sale('w1', 'WASH', '2026-03-10T11:00:00Z'));
+      maintenances.set('m1', {
+        id: 'm1',
+        businessId: 'biz-a',
+        status: 'ACTIVE',
+        performedAt: new Date('2026-03-10T09:00:00Z'),
+      });
+      sales.set('mc', sale('mc', 'MAINTENANCE', '2026-03-10T12:00:00Z', { maintenanceId: 'm1' }));
+
+      const { adoption } = await service.get('biz-a', {
+        from: '2026-03-01T00:00:00Z',
+        to: '2026-03-31T23:59:59.999Z',
+      });
+
+      expect(adoption).toEqual({ activeMaintenances: 1, counterSales: 2, washes: 1 });
+    });
+
+    it('excluye ventas y lavados anulados', async () => {
+      const { service, sales } = setup();
+      sales.set('c1', sale('c1', 'COUNTER', '2026-03-10T10:00:00Z', { status: 'VOIDED' }));
+      sales.set('w1', sale('w1', 'WASH', '2026-03-10T10:00:00Z', { status: 'VOIDED' }));
+      sales.set('w2', sale('w2', 'WASH', '2026-03-10T10:00:00Z'));
+
+      const { adoption } = await service.get('biz-a', {});
+
+      expect(adoption).toEqual({ activeMaintenances: 0, counterSales: 0, washes: 1 });
+    });
+
+    it('usa los mismos límites que el resto del endpoint: inclusivos y opcionales', async () => {
+      const { service, sales } = setup();
+      sales.set('edgeFrom', sale('edgeFrom', 'COUNTER', '2026-03-01T05:00:00.000Z'));
+      sales.set('edgeTo', sale('edgeTo', 'COUNTER', '2026-03-02T04:59:59.999Z'));
+      sales.set('before', sale('before', 'COUNTER', '2026-03-01T04:59:59.999Z'));
+      sales.set('after', sale('after', 'COUNTER', '2026-03-02T05:00:00.000Z'));
+
+      const bounded = await service.get('biz-a', {
+        from: '2026-03-01T05:00:00.000Z',
+        to: '2026-03-02T04:59:59.999Z',
+      });
+      expect(bounded.adoption.counterSales).toBe(2);
+
+      const onlyFrom = await service.get('biz-a', { from: '2026-03-01T05:00:00.000Z' });
+      expect(onlyFrom.adoption.counterSales).toBe(3);
+      const unbounded = await service.get('biz-a', {});
+      expect(unbounded.adoption.counterSales).toBe(4);
+    });
+
+    it('no cruza negocios', async () => {
+      const { service, sales } = setup();
+      sales.set('mine', sale('mine', 'WASH', '2026-03-10T10:00:00Z'));
+      sales.set('theirs', {
+        ...sale('theirs', 'WASH', '2026-03-10T10:00:00Z'),
+        businessId: 'biz-b',
+      });
+
+      const { adoption } = await service.get('biz-a', {});
+
+      expect(adoption.washes).toBe(1);
+    });
+
+    it('sin operaciones: ceros, y la adopción solo trae conteos (sin metas ni porcentajes)', async () => {
+      const { service } = setup();
+      const { adoption } = await service.get('biz-a', {});
+      expect(adoption).toEqual({ activeMaintenances: 0, counterSales: 0, washes: 0 });
+      expect(Object.keys(adoption).sort()).toEqual([
+        'activeMaintenances',
+        'counterSales',
+        'washes',
+      ]);
+    });
   });
 });

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { InventoryMovementType } from '@prisma/client';
+import { InventoryMovementType, SaleSource, SaleStatus } from '@prisma/client';
 import { forBusiness } from '../prisma/business-scope';
 import { PrismaService } from '../prisma/prisma.service';
 import type { PilotIndicatorsQueryDto } from './dto/pilot-indicators-query.dto';
@@ -8,8 +8,12 @@ export interface PilotIndicators {
   from: string | null;
   to: string | null;
   adoption: {
-    /** BR-I1: mantenimientos no anulados del negocio real, en el período. */
+    /** BR-I1: mantenimientos no anulados del negocio real, en el período (por `performedAt`). */
     activeMaintenances: number;
+    /** BR-I1 (R7, DEC-85): ventas de mostrador `ACTIVE` en el período (por `occurredAt`). */
+    counterSales: number;
+    /** BR-I1 (R7, DEC-85): lavados (ventas `WASH` `ACTIVE`) en el período (por `occurredAt`). */
+    washes: number;
   };
   maintenance: {
     /** BR-I2: mantenimientos activos del período con próximo km/fecha registrado. */
@@ -41,6 +45,20 @@ export class PilotIndicatorsService {
     const from = query.from ? new Date(query.from) : null;
     const to = query.to ? new Date(query.to) : null;
     const inPeriod = (date: Date) => (!from || date >= from) && (!to || date <= to);
+
+    // BR-I1 (R7, DEC-85): ventas de mostrador y lavados, por separado. Mismos
+    // límites que el resto del endpoint (inclusivos, opcionales). El cobro de
+    // un mantenimiento (`source = MAINTENANCE`) no se cuenta: el mantenimiento
+    // ya cuenta en `activeMaintenances`. Sin metas ni porcentajes (BR-I4).
+    const occurredAt =
+      from || to ? { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } : undefined;
+    const [counterSales, washes] = await Promise.all(
+      [SaleSource.COUNTER, SaleSource.WASH].map((source) =>
+        scoped.sale.count({
+          where: { status: SaleStatus.ACTIVE, source, ...(occurredAt ? { occurredAt } : {}) },
+        }),
+      ),
+    );
 
     const maintenances = await scoped.maintenance.findMany({ where: { status: 'ACTIVE' } });
     const maintenancesInPeriod = maintenances.filter((m) => inPeriod(m.performedAt));
@@ -75,7 +93,11 @@ export class PilotIndicatorsService {
     return {
       from: query.from ?? null,
       to: query.to ?? null,
-      adoption: { activeMaintenances: maintenancesInPeriod.length },
+      adoption: {
+        activeMaintenances: maintenancesInPeriod.length,
+        counterSales: counterSales ?? 0,
+        washes: washes ?? 0,
+      },
       maintenance: { maintenancesWithNextDue, remindersOpenedInWhatsApp },
       inventory: {
         movementsByType,

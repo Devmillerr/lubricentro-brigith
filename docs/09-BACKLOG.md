@@ -301,6 +301,7 @@ B-100 (venta rápida) y B-101 (métodos de pago) pasaron a R4 el 2026-09-26; B-1
 | B-902 | Alertas de stock mínimo | No aprobado |
 | B-903 | Roles adicionales | P-12 |
 | B-904 | ~~Salida de stock por venta, sin precio ni pago~~ **Retirado** (2026-09-26): lo cubre la venta de mostrador de R4 (B-131) | DEC-24 |
+| B-905 | **Deuda técnica:** `checkReminderDue` (`src/reminders/reminder-due.ts`) calcula "hoy" con la medianoche de la zona horaria del **servidor**, no con `Business.timezone`. En un servidor en UTC, un recordatorio por fecha puede vencer unas horas antes o después que en Lima. Corregirlo cambia `GET /reminders`, Avisar y `reminders.dueNow` del dashboard: va en un corte separado, fuera de R7 | Detectado en R7 (B-163), 2026-09-28 |
 
 ## 4. Explícitamente fuera del backlog
 

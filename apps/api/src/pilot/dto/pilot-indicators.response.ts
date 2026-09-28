@@ -5,6 +5,15 @@ import type { PilotIndicators } from '../pilot-indicators.service';
 export class PilotAdoptionResponse {
   @ApiProperty({ description: 'BR-I1: mantenimientos no anulados en el período.' })
   activeMaintenances!: number;
+
+  @ApiProperty({ description: 'BR-I1: ventas de mostrador (COUNTER) no anuladas en el período.' })
+  counterSales!: number;
+
+  @ApiProperty({
+    description:
+      'BR-I1: lavados (ventas WASH) no anulados en el período. El cobro de mantenimiento no se cuenta aparte.',
+  })
+  washes!: number;
 }
 
 export class PilotMaintenanceResponse {
