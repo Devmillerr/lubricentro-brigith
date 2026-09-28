@@ -372,6 +372,68 @@ describe('StockLedger contra Postgres', () => {
       }
       expect(await stockOf(productId)).toMatchObject({ cached: 0, sum: 0, movements: 6 });
     });
+
+    it('dos anulaciones simultáneas del mismo mantenimiento con claves distintas: 200 y 409, un solo MAINTENANCE_VOID por producto (Corte 0, DEC-77)', async () => {
+      const oilId = await createProduct(tenantA, 10);
+      const filterId = await createProduct(tenantA, 4);
+      const created = await maintenances.create(tenantA.businessId, tenantA.userId, {
+        vehicleId: tenantA.vehicleId,
+        maintenanceTypeId: tenantA.maintenanceTypeId,
+        performedAt: new Date().toISOString(),
+        items: [
+          { productId: oilId, quantity: 3 },
+          { productId: filterId, quantity: 1 },
+        ],
+      });
+      const maintenanceId = created.maintenance.id;
+      expect(await stockOf(oilId)).toMatchObject({ cached: 7, sum: 7 });
+      expect(await stockOf(filterId)).toMatchObject({ cached: 3, sum: 3 });
+
+      // Como el controlador: cada solicitud con su propia Idempotency-Key.
+      const voidWithOwnKey = (reason: string) => {
+        const dto = { reason };
+        return idempotency.run({
+          businessId: tenantA.businessId,
+          key: randomUUID(),
+          endpoint: `maintenances/${maintenanceId}/void`,
+          requestHash: idempotency.hashRequest(dto),
+          handler: async () => ({
+            status: 200,
+            body: await maintenances.void(tenantA.businessId, tenantA.userId, maintenanceId, dto),
+          }),
+        });
+      };
+
+      const results = await Promise.allSettled([voidWithOwnKey('A'), voidWithOwnKey('B')]);
+
+      const ok = results.filter((r) => r.status === 'fulfilled');
+      const rejected = results.filter((r) => r.status === 'rejected');
+      expect(ok).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      const winner = ok[0]!.value;
+      const loser = rejected[0]!.reason as { code: string; getStatus(): number };
+      expect(winner).toMatchObject({ status: 200, body: { status: 'VOIDED' } });
+      expect(loser.code).toBe('MAINTENANCE_ALREADY_VOIDED');
+      expect(loser.getStatus()).toBe(409);
+
+      for (const productId of [oilId, filterId]) {
+        const voids = await prisma.inventoryMovement.count({
+          where: {
+            productId,
+            refType: 'Maintenance',
+            refId: maintenanceId,
+            type: InventoryMovementType.MAINTENANCE_VOID,
+          },
+        });
+        expect(voids).toBe(1);
+      }
+      expect(await stockOf(oilId)).toMatchObject({ cached: 10, sum: 10 });
+      expect(await stockOf(filterId)).toMatchObject({ cached: 4, sum: 4 });
+
+      const stored = await prisma.maintenance.findFirstOrThrow({ where: { id: maintenanceId } });
+      expect(stored.status).toBe('VOIDED');
+      expect(stored.voidReason).toBe(winner.body.voidReason);
+    });
   });
 
   describe('concurrencia del ajuste por cantidad física (R3, BR-P7b)', () => {

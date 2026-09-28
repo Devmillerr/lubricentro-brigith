@@ -463,6 +463,13 @@ export class MaintenancesService {
   /**
    * Anula: movimientos inversos por cada producto y descarta el recordatorio
    * que había creado (BR-M12). También es una sola transacción (§7.1).
+   *
+   * La transición `ACTIVE → VOIDED` es condicional y va **primero** dentro de
+   * la transacción (Corte 0, DEC-77): la escritura bloquea la fila del
+   * mantenimiento, así que dos anulaciones simultáneas con claves distintas
+   * no generan dos `MAINTENANCE_VOID`: la segunda espera, no cambia ninguna
+   * fila y responde 409 antes de tocar el stock. El orden de bloqueo es
+   * mantenimiento → productos (StockLedger) → venta (R6, D8).
    */
   async void(
     businessId: string,
@@ -470,20 +477,28 @@ export class MaintenancesService {
     id: string,
     dto: VoidMaintenanceDto,
   ): Promise<Maintenance> {
-    const scoped = forBusiness(this.prisma, businessId);
-    const existing = await scoped.maintenance.findFirst({ where: { id } });
-    if (!existing) {
-      throw this.notFound();
-    }
-    if (existing.status === 'VOIDED') {
-      throw new ProblemException({
-        status: HttpStatus.CONFLICT,
-        code: 'MAINTENANCE_ALREADY_VOIDED',
-        title: 'El mantenimiento ya estaba anulado',
+    return forBusiness(this.prisma, businessId).$transaction(async (tx) => {
+      const { count } = await tx.maintenance.updateMany({
+        where: { id, status: MaintenanceStatus.ACTIVE },
+        data: {
+          status: MaintenanceStatus.VOIDED,
+          voidedAt: new Date(),
+          voidedById: userId,
+          voidReason: dto.reason,
+        },
       });
-    }
+      if (count === 0) {
+        const existing = await tx.maintenance.findFirst({ where: { id } });
+        if (!existing) {
+          throw this.notFound();
+        }
+        throw new ProblemException({
+          status: HttpStatus.CONFLICT,
+          code: 'MAINTENANCE_ALREADY_VOIDED',
+          title: 'El mantenimiento ya estaba anulado',
+        });
+      }
 
-    return scoped.$transaction(async (tx) => {
       const useMovements = await tx.inventoryMovement.findMany({
         where: {
           businessId,
@@ -524,15 +539,8 @@ export class MaintenancesService {
         });
       }
 
-      return tx.maintenance.update({
-        where: { id },
-        data: {
-          status: 'VOIDED',
-          voidedAt: new Date(),
-          voidedById: userId,
-          voidReason: dto.reason,
-        },
-      });
+      const voided = await tx.maintenance.findFirst({ where: { id } });
+      return voided!;
     });
   }
 

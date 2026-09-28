@@ -367,6 +367,38 @@ describe('MaintenancesService.void', () => {
     );
   });
 
+  it('la segunda anulación no genera otro MAINTENANCE_VOID ni cambia quién lo anuló (DEC-77)', async () => {
+    const { service, movements, products } = setup();
+    seedCount(movements, products, 10);
+    const created = await service.create('biz-a', 'user-a', {
+      ...base,
+      items: [{ productId: 'prod-tracked', quantity: 3 }],
+    });
+    await service.void('biz-a', 'user-a', created.maintenance.id, { reason: 'Primera' });
+
+    await expect(
+      service.void('biz-a', 'user-b', created.maintenance.id, { reason: 'Segunda' }),
+    ).rejects.toMatchObject({ code: 'MAINTENANCE_ALREADY_VOIDED' });
+
+    const voids = [...movements.values()].filter((m) => m.type === 'MAINTENANCE_VOID');
+    expect(voids).toHaveLength(1);
+    const maintenance = await service.findOne('biz-a', created.maintenance.id);
+    expect(maintenance.voidedById).toBe('user-a');
+    expect(maintenance.voidReason).toBe('Primera');
+  });
+
+  it('un mantenimiento inexistente o de otro negocio responde MAINTENANCE_NOT_FOUND', async () => {
+    const { service } = setup();
+    const created = await service.create('biz-a', 'user-a', { ...base });
+
+    await expect(service.void('biz-a', 'user-a', 'no-existe', {})).rejects.toMatchObject({
+      code: 'MAINTENANCE_NOT_FOUND',
+    });
+    await expect(service.void('biz-b', 'user-b', created.maintenance.id, {})).rejects.toMatchObject(
+      { code: 'MAINTENANCE_NOT_FOUND' },
+    );
+  });
+
   it('un mantenimiento anulado no cuenta para el último km conocido (BR-M12)', async () => {
     const { service } = setup();
     const created = await service.create('biz-a', 'user-a', { ...base, odometerKm: 20000 });
