@@ -5,6 +5,10 @@ export type MaintenanceWithItems = Schemas['MaintenanceWithItemsResponse'];
 export type MaintenanceType = Schemas['MaintenanceTypeResponse'];
 export type MaintenanceWarning = Schemas['MaintenanceWarningResponse'];
 export type CreateMaintenanceResult = Schemas['CreateMaintenanceResponse'];
+/** Con su cobro (`sale`), o `null` si no tiene (R6, B-156). */
+export type MaintenanceDetail = Schemas['MaintenanceDetailResponse'];
+export type VoidMaintenanceResult = Schemas['VoidMaintenanceResponse'];
+export type MaintenanceCharge = Schemas['MaintenanceChargeDto'];
 export type DueRule = Schemas['DueRule'];
 
 /** BR-M4: KM y DATE se infieren; ANY y ALL los elige el usuario cuando hay ambos. */

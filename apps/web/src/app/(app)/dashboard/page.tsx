@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, ChartColumn, Droplets, ShoppingCart, Users } from 'lucide-react';
+import { Bell, ChartColumn, Droplets, ShoppingCart, Users, Wrench } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { Figure } from '@/components/pilot/indicators-view';
@@ -50,6 +50,13 @@ export default function DashboardPage() {
         <Link href="/lavado" className={buttonVariants({ size: 'lg' })}>
           <Droplets className="mr-2 size-5" aria-hidden />
           Lavado
+        </Link>
+        <Link
+          href="/mantenimientos/nuevo"
+          className={buttonVariants({ variant: 'outline', className: 'col-span-2' })}
+        >
+          <Wrench className="mr-2 size-4" aria-hidden />
+          Mantenimiento sin vehículo
         </Link>
       </section>
 

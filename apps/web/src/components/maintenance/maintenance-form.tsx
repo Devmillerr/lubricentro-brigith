@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleAlert, Plus, Trash2, TriangleAlert } from 'lucide-react';
+import { CircleAlert, Info, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import Link from 'next/link';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { FormError } from '@/components/customers/form-error';
@@ -23,6 +23,8 @@ import {
   type NextDueValues,
 } from '@/lib/maintenance/format';
 import type { Product } from '@/lib/products/format';
+import type { PaymentMethod } from '@/lib/sales/format';
+import { CHARGE_AMOUNT_ERROR, ChargeFields, parseChargeAmount } from './charge-fields';
 import { NextDueFields } from './next-due-fields';
 import { ProductPicker, StockHint } from './product-picker';
 
@@ -37,7 +39,14 @@ interface Item {
 
 type Errors = Partial<
   Record<
-    'maintenanceTypeId' | 'performedAt' | 'odometerKm' | 'items' | 'notes' | keyof NextDueValues,
+    | 'maintenanceTypeId'
+    | 'performedAt'
+    | 'odometerKm'
+    | 'items'
+    | 'notes'
+    | 'chargeAmount'
+    | 'chargeMethod'
+    | keyof NextDueValues,
     string
   >
 > & { itemQuantity?: Record<string, string> };
@@ -52,16 +61,21 @@ export interface SavedMaintenance {
  * Registrar un mantenimiento (07-UI-UX.md §3.3): una sola pantalla y una sola
  * petición indivisible (BR-M10), con `Idempotency-Key`. Los avisos previos
  * (BR-M7, BR-P8) no bloquean; lo que la API rechaza (400, 422) sí.
+ *
+ * R6: `vehicleId` es opcional (DEC-31, DEC-73). Sin vehículo no se muestran
+ * ni se envían km ni próximo mantenimiento, y no hay recordatorio. El cobro
+ * inmediato (DEC-72) es opcional: método y un único monto total.
  */
 export function MaintenanceForm({
   vehicleId,
   lastKnownKm,
   onSaved,
 }: {
-  vehicleId: string;
+  vehicleId: string | null;
   lastKnownKm: number | null;
   onSaved: (saved: SavedMaintenance) => void;
 }) {
+  const hasVehicle = vehicleId !== null;
   const types = useApiQuery('maintenance-types', () => callApi(api.GET('/maintenance-types')));
   const business = useApiQuery('business', () => callApi(api.GET('/business')));
   const businessDefault =
@@ -80,6 +94,9 @@ export function MaintenanceForm({
     dueRule: '',
   });
   const [notes, setNotes] = useState('');
+  const [chargeNow, setChargeNow] = useState(false);
+  const [chargeMethod, setChargeMethod] = useState<PaymentMethod | null>(null);
+  const [chargeAmount, setChargeAmount] = useState('');
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState<ApiFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -137,8 +154,11 @@ export function MaintenanceForm({
   }
 
   // Avisos previos, que no bloquean (BR-M7). La API los vuelve a informar al guardar.
-  const odometerKm = parseKm(odometer);
-  const nextKm = parseKm(nextDue.nextDueKm);
+  // Sin vehículo no hay km ni próximo mantenimiento (DEC-73): no se leen ni se envían.
+  const odometerKm = hasVehicle ? parseKm(odometer) : null;
+  const nextKm = hasVehicle ? parseKm(nextDue.nextDueKm) : null;
+  const nextDueDate = hasVehicle ? nextDue.nextDueDate : '';
+  const chargeTotal = chargeNow ? parseChargeAmount(chargeAmount) : null;
   const hints: string[] = [];
   if (odometerKm !== null && lastKnownKm !== null && odometerKm < lastKnownKm) {
     hints.push(`El km ingresado es menor al último conocido (${formatKm(lastKnownKm)}).`);
@@ -146,7 +166,7 @@ export function MaintenanceForm({
   if (nextKm !== null && odometerKm !== null && nextKm <= odometerKm) {
     hints.push('El próximo km no supera al km actual.');
   }
-  if (nextDue.nextDueDate && performedAt && nextDue.nextDueDate < performedAt.slice(0, 10)) {
+  if (nextDueDate && performedAt && nextDueDate < performedAt.slice(0, 10)) {
     hints.push('La próxima fecha es anterior a la del mantenimiento.');
   }
 
@@ -156,8 +176,10 @@ export function MaintenanceForm({
     if (!performedAt || Number.isNaN(new Date(performedAt).getTime())) {
       found.performedAt = 'Ingresa la fecha del mantenimiento.';
     }
-    if (odometer.trim() && odometerKm === null) found.odometerKm = 'Ingresa el km sin decimales.';
-    if (nextDue.nextDueKm.trim() && nextKm === null) {
+    if (hasVehicle && odometer.trim() && odometerKm === null) {
+      found.odometerKm = 'Ingresa el km sin decimales.';
+    }
+    if (hasVehicle && nextDue.nextDueKm.trim() && nextKm === null) {
       found.nextDueKm = 'Ingresa el km sin decimales.';
     }
     const itemQuantity: Record<string, string> = {};
@@ -169,11 +191,16 @@ export function MaintenanceForm({
     }
     if (Object.keys(itemQuantity).length) found.itemQuantity = itemQuantity;
     if (
+      hasVehicle &&
       nextDue.nextDueKm.trim() &&
       nextDue.nextDueDate &&
       !effectiveDueRule(nextDue, businessDefault)
     ) {
       found.dueRule = 'Elige cuándo avisar.';
+    }
+    if (chargeNow) {
+      if (!chargeMethod) found.chargeMethod = 'Elige Efectivo o Yape.';
+      if (chargeTotal === null) found.chargeAmount = CHARGE_AMOUNT_ERROR;
     }
     return found;
   }
@@ -189,7 +216,6 @@ export function MaintenanceForm({
 
     const rule = effectiveDueRule(nextDue, businessDefault);
     const body: Schemas['CreateMaintenanceDto'] = {
-      vehicleId,
       maintenanceTypeId: selectedTypeId,
       performedAt: new Date(performedAt).toISOString(),
       items: items.map((item) => ({
@@ -197,11 +223,15 @@ export function MaintenanceForm({
         quantity: parseQuantity(item.quantity)!,
       })),
     };
+    if (vehicleId) body.vehicleId = vehicleId;
     if (odometerKm !== null) body.odometerKm = odometerKm;
     if (nextKm !== null) body.nextDueKm = nextKm;
-    if (nextDue.nextDueDate) body.nextDueDate = fromDateInput(nextDue.nextDueDate);
-    if (nextKm !== null && nextDue.nextDueDate && rule) body.dueRule = rule;
+    if (nextDueDate) body.nextDueDate = fromDateInput(nextDueDate);
+    if (nextKm !== null && nextDueDate && rule) body.dueRule = rule;
     if (notes.trim()) body.notes = notes.trim();
+    if (chargeNow && chargeMethod && chargeTotal !== null) {
+      body.charge = { paymentMethod: chargeMethod, totalAmount: chargeTotal };
+    }
 
     const result = await callApi(
       api.POST('/maintenances', {
@@ -227,6 +257,8 @@ export function MaintenanceForm({
       nextDueKm: apiErrors.nextDueKm,
       nextDueDate: apiErrors.nextDueDate,
       notes: apiErrors.notes,
+      chargeAmount: apiErrors['charge.totalAmount'],
+      chargeMethod: apiErrors['charge.paymentMethod'],
       dueRule:
         code === 'DUE_RULE_REQUIRED'
           ? 'Elige cuándo avisar.'
@@ -306,7 +338,15 @@ export function MaintenanceForm({
         )}
       </Section>
 
-      <Section title="Fecha y km">
+      {!hasVehicle && (
+        <p className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--muted)] p-4 text-sm">
+          <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+          Mantenimiento sin vehículo: se registra sin km ni próximo mantenimiento, y no genera
+          recordatorio.
+        </p>
+      )}
+
+      <Section title={hasVehicle ? 'Fecha y km' : 'Fecha'}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field
             id="performed-at"
@@ -322,22 +362,24 @@ export function MaintenanceForm({
               aria-invalid={!!errors.performedAt || undefined}
             />
           </Field>
-          <Field
-            id="odometer"
-            label="Km actual"
-            optional
-            hint={lastKnownKm !== null ? `Último conocido: ${formatKm(lastKnownKm)}` : undefined}
-            error={errors.odometerKm}
-          >
-            <Input
+          {hasVehicle && (
+            <Field
               id="odometer"
-              inputMode="numeric"
-              autoComplete="off"
-              value={odometer}
-              onChange={(e) => setOdometer(e.target.value)}
-              aria-invalid={!!errors.odometerKm || undefined}
-            />
-          </Field>
+              label="Km actual"
+              optional
+              hint={lastKnownKm !== null ? `Último conocido: ${formatKm(lastKnownKm)}` : undefined}
+              error={errors.odometerKm}
+            >
+              <Input
+                id="odometer"
+                inputMode="numeric"
+                autoComplete="off"
+                value={odometer}
+                onChange={(e) => setOdometer(e.target.value)}
+                aria-invalid={!!errors.odometerKm || undefined}
+              />
+            </Field>
+          )}
         </div>
       </Section>
 
@@ -367,13 +409,46 @@ export function MaintenanceForm({
         )}
       </Section>
 
-      <Section>
-        <NextDueFields
-          values={nextDue}
-          onChange={setNextDue}
-          errors={errors}
-          businessDefault={businessDefault}
-        />
+      {hasVehicle && (
+        <Section>
+          <NextDueFields
+            values={nextDue}
+            onChange={setNextDue}
+            errors={errors}
+            businessDefault={businessDefault}
+          />
+        </Section>
+      )}
+
+      <Section title="Cobro">
+        <label className="flex min-h-11 items-center gap-3 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={chargeNow}
+            onChange={(e) => setChargeNow(e.target.checked)}
+            className="size-5"
+          />
+          Cobrar ahora
+        </label>
+        {chargeNow ? (
+          <>
+            {errors.chargeMethod && (
+              <p className="text-sm text-[var(--danger)]">{errors.chargeMethod}</p>
+            )}
+            <ChargeFields
+              idPrefix="charge-now"
+              method={chargeMethod}
+              onMethod={setChargeMethod}
+              amount={chargeAmount}
+              onAmount={setChargeAmount}
+              amountError={errors.chargeAmount}
+            />
+          </>
+        ) : (
+          <p className="text-xs text-[var(--muted-foreground)]">
+            Puede guardarse sin cobro y cobrarse después desde el mantenimiento.
+          </p>
+        )}
       </Section>
 
       <Section title="Notas">

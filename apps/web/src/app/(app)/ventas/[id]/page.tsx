@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { VoidSale } from '@/components/sales/void-sale';
@@ -22,6 +23,8 @@ import {
 /**
  * Detalle genérico de una venta (`GET /sales/{id}`, B-135) con **Anular**.
  * Sirve igual para mostrador y lavado (DEC-68): no hay detalle propio de lavado.
+ * El cobro de un mantenimiento (R6) no se anula aquí: se administra desde su
+ * mantenimiento (DEC-70; la API responde 409 `SALE_MANAGED_BY_MAINTENANCE`).
  */
 export default function SaleDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -46,6 +49,7 @@ export default function SaleDetailPage() {
   const sale = query.data;
   const voided = sale.status === 'VOIDED';
   const isWash = sale.source === 'WASH';
+  const isMaintenance = sale.source === 'MAINTENANCE';
   const note = present(sale.note);
   const title = isWash ? (sale.lines[0]?.descriptionSnapshot ?? 'Lavado') : 'Venta';
 
@@ -103,6 +107,28 @@ export default function SaleDetailPage() {
           {sale.voidedAt && <span>{saleDateFormat.format(new Date(sale.voidedAt))}</span>}
           {present(sale.voidReason) && (
             <span className="text-[var(--muted-foreground)]">Motivo: {sale.voidReason}</span>
+          )}
+          {isMaintenance && sale.maintenanceId && (
+            <Link
+              href={`/mantenimientos/${sale.maintenanceId}`}
+              className="w-fit font-medium underline underline-offset-4"
+            >
+              Ver mantenimiento
+            </Link>
+          )}
+        </section>
+      ) : isMaintenance ? (
+        <section className="flex flex-col gap-1 rounded-lg border border-[var(--border)] p-4 text-sm">
+          <p>
+            Este cobro se administra desde su mantenimiento: se anula al anular el mantenimiento.
+          </p>
+          {sale.maintenanceId && (
+            <Link
+              href={`/mantenimientos/${sale.maintenanceId}`}
+              className="w-fit font-medium underline underline-offset-4"
+            >
+              Ver mantenimiento
+            </Link>
           )}
         </section>
       ) : (

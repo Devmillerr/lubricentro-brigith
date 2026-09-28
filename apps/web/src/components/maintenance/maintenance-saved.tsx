@@ -8,21 +8,23 @@ import { callApi } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
 import { formatQuantity, type ProductWithStock } from '@/lib/inventory/format';
 import { DUE_RULE_LABELS, formatDate, formatKm } from '@/lib/maintenance/format';
+import { ChargeSummary } from './charge-fields';
 import type { SavedMaintenance } from './maintenance-form';
 
 /**
  * Confirmación tras guardar (07-UI-UX.md §3.3, "Después de guardar"): avisos
- * no bloqueantes que devolvió la API, el recordatorio creado y el saldo
- * actual de cada producto con control de stock que se usó.
+ * no bloqueantes que devolvió la API, el recordatorio creado, el cobro (R6)
+ * y el saldo actual de cada producto con control de stock que se usó.
  */
 export function MaintenanceSaved({
   saved,
   vehicleId,
 }: {
   saved: SavedMaintenance;
-  vehicleId: string;
+  /** Nulo en un mantenimiento sin vehículo (R6, DEC-73). */
+  vehicleId: string | null;
 }) {
-  const { maintenance, reminder, warnings } = saved.result;
+  const { maintenance, reminder, sale, warnings } = saved.result;
   const productName = (productId?: string) =>
     maintenance.items.find((item) => item.productId === productId)?.productNameSnapshot;
 
@@ -78,9 +80,16 @@ export function MaintenanceSaved({
           </>
         ) : (
           <span className="text-[var(--muted-foreground)]">
-            Sin recordatorio: no se indicó próximo km ni fecha.
+            {vehicleId
+              ? 'Sin recordatorio: no se indicó próximo km ni fecha.'
+              : 'Sin recordatorio: el mantenimiento no tiene vehículo.'}
           </span>
         )}
+      </section>
+
+      <section className="flex flex-col gap-2 rounded-lg border border-[var(--border)] p-4">
+        <h3 className="text-sm font-semibold">Cobro</h3>
+        <ChargeSummary sale={sale} />
       </section>
 
       {saved.stockProducts.length > 0 && (
@@ -100,10 +109,10 @@ export function MaintenanceSaved({
           Ver mantenimiento
         </Link>
         <Link
-          href={`/vehiculos/${vehicleId}`}
+          href={vehicleId ? `/vehiculos/${vehicleId}` : '/dashboard'}
           className={buttonVariants({ variant: 'outline', size: 'lg', className: 'flex-1' })}
         >
-          Volver al vehículo
+          {vehicleId ? 'Volver al vehículo' : 'Volver al inicio'}
         </Link>
       </div>
     </div>

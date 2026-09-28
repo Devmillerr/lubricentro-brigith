@@ -34,15 +34,18 @@ export function ProductPicker({
   excludedIds,
   onAdd,
 }: {
-  vehicleId: string;
+  /** Nulo en un mantenimiento sin vehículo (R6): no hay compatibles que sugerir. */
+  vehicleId: string | null;
   excludedIds: Set<string>;
   onAdd: (product: Product | ProductWithStock) => void;
 }) {
   const [search, setSearch] = useState('');
   const term = useDebouncedValue(search.trim(), 400);
 
-  const compatible = useApiQuery(`vehicle-compatible:${vehicleId}`, () =>
-    callApi(api.GET('/vehicles/{id}/compatible-products', { params: { path: { id: vehicleId } } })),
+  const compatible = useApiQuery(vehicleId ? `vehicle-compatible:${vehicleId}` : null, () =>
+    callApi(
+      api.GET('/vehicles/{id}/compatible-products', { params: { path: { id: vehicleId! } } }),
+    ),
   );
   const results = useApiQuery(term ? `maintenance-products:${term}` : null, () =>
     callApi(

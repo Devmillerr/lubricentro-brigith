@@ -4,16 +4,20 @@ import { Badge } from '@/components/ui/page-header';
 import {
   formatDate,
   formatKm,
+  type MaintenanceDetail,
   type MaintenanceType,
-  type MaintenanceWithItems,
 } from '@/lib/maintenance/format';
+import { PAYMENT_LABELS, formatMoney } from '@/lib/sales/format';
 
-/** Historial de mantenimientos de un vehículo (del más reciente al más antiguo, como la API). */
+/**
+ * Historial de mantenimientos de un vehículo (del más reciente al más
+ * antiguo, como la API), con su cobro (`sale`, R6) o "Sin cobro".
+ */
 export function MaintenanceList({
   maintenances,
   types,
 }: {
-  maintenances: MaintenanceWithItems[];
+  maintenances: MaintenanceDetail[];
   types: MaintenanceType[];
 }) {
   const typeName = (id: string) => types.find((type) => type.id === id)?.name ?? 'Mantenimiento';
@@ -28,6 +32,10 @@ export function MaintenanceList({
             : null,
         ].filter(Boolean);
         const voided = maintenance.status === 'VOIDED';
+        const sale = maintenance.sale;
+        const charge = sale
+          ? `${formatMoney(sale.total)} · ${PAYMENT_LABELS[sale.paymentMethod]}${sale.status === 'VOIDED' ? ' · cobro anulado' : ''}`
+          : 'Sin cobro';
         return (
           <li key={maintenance.id}>
             <Link
@@ -41,6 +49,7 @@ export function MaintenanceList({
                 <span className="truncate text-sm text-[var(--muted-foreground)]">
                   {[formatDate(maintenance.performedAt), ...details].join(' · ')}
                 </span>
+                <span className="truncate text-sm text-[var(--muted-foreground)]">{charge}</span>
               </span>
               {voided && <Badge>Anulado</Badge>}
               <ChevronRight
