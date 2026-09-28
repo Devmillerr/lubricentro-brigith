@@ -18,6 +18,7 @@ import {
   type NextDueValues,
 } from '@/lib/maintenance/format';
 import { NextDueFields } from './next-due-fields';
+import { useSubmitLock } from '@/lib/use-submit-lock';
 
 type Errors = Partial<Record<'odometerKm' | 'notes' | keyof NextDueValues, string>>;
 
@@ -46,6 +47,7 @@ export function MaintenanceEditForm({ maintenance }: { maintenance: MaintenanceW
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState<ApiFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const lock = useSubmitLock();
 
   const detailHref = `/mantenimientos/${maintenance.id}`;
 
@@ -91,6 +93,7 @@ export function MaintenanceEditForm({ maintenance }: { maintenance: MaintenanceW
       return;
     }
 
+    if (!lock.acquire()) return;
     setSubmitting(true);
     const result = await callApi(
       api.PATCH('/maintenances/{id}', { params: { path: { id: maintenance.id } }, body }),
@@ -99,6 +102,7 @@ export function MaintenanceEditForm({ maintenance }: { maintenance: MaintenanceW
       router.push(detailHref);
       return;
     }
+    lock.release();
     setSubmitting(false);
     const apiErrors = result.failure.fieldErrors;
     const code = result.failure.code;

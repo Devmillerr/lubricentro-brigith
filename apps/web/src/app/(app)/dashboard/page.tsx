@@ -1,103 +1,290 @@
 'use client';
 
-import { Bell, ChartColumn, Droplets, ShoppingCart, Users, Wrench } from 'lucide-react';
+import {
+  ChartColumn,
+  Droplets,
+  LoaderCircle,
+  PackagePlus,
+  RotateCw,
+  ShoppingCart,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
-import { Figure } from '@/components/pilot/indicators-view';
+import { useEffect, useRef, useState } from 'react';
+import { FormError } from '@/components/customers/form-error';
+import {
+  DashboardSkeleton,
+  IncomeSummary,
+  Panel,
+  RemindersDue,
+  SourceBreakdown,
+  StockAttention,
+  TopProducts,
+} from '@/components/dashboard/dashboard-sections';
+import { RevenueChart } from '@/components/dashboard/revenue-chart';
+import { Button } from '@/components/ui/button';
+import { ErrorState } from '@/components/ui/states';
 import { PlateSearch } from '@/components/vehicles/plate-search';
-import { buttonVariants } from '@/components/ui/button';
-import { ErrorState, LoadingState } from '@/components/ui/states';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
 import { useSession } from '@/lib/auth/session';
-import { describePeriod, periodFor } from '@/lib/pilot/period';
+import {
+  PERIOD_OPTIONS,
+  describeDashboardPeriod,
+  type Dashboard,
+  type DashboardPeriodKind,
+} from '@/lib/dashboard/format';
+import { cn } from '@/lib/utils';
+
+/** Refresco mientras Inicio está visible (DEC-84). */
+const REFRESH_MS = 60_000;
+/** Separación mínima entre dos refrescos automáticos. */
+const MIN_GAP_MS = 5_000;
 
 /**
- * Inicio (07-UI-UX.md §3.1). Muestra datos reales: la sesión (`GET /auth/me`),
- * la búsqueda por placa (`GET /vehicles/lookup`) y el resumen del mes de
- * `GET /pilot-indicators` (conteos, sin metas: BR-I4 pendiente).
+ * Inicio con el dashboard de R7 (07-UI-UX.md §3.1; `GET /dashboard`, 06-API.md
+ * §2). Mobile-first a 390 px. Datos con `useApiQuery` (DEC-84): se vuelven a
+ * pedir al volver a la pestaña, cada 60 s mientras está visible y al volver a
+ * Inicio después de una operación (la pantalla se monta de nuevo). Ante un 429
+ * no reintenta sola (07-UI-UX.md §5): espera a que el usuario toque Reintentar.
  */
 export default function DashboardPage() {
   const session = useSession();
-  const [now] = useState(() => new Date());
-  const period = periodFor('month', { from: '', to: '' }, now);
-  const indicators = useApiQuery(`pilot:${period.from}|${period.to}`, () =>
-    callApi(
-      api.GET('/pilot-indicators', {
-        params: { query: { from: period.from!, to: period.to! } },
-      }),
-    ),
+  const [kind, setKind] = useState<DashboardPeriodKind>('today');
+  const dashboard = useApiQuery(`dashboard:${kind}`, () =>
+    callApi(api.GET('/dashboard', { params: { query: { period: kind } } })),
   );
+  const { reload } = dashboard;
+  const rateLimited = dashboard.status === 'error' && dashboard.failure.status === 429;
+  usePassiveRefresh(reload, !rateLimited);
 
   if (session.status !== 'authenticated') return null;
   const { user, business } = session.me;
+  const data: Dashboard | undefined =
+    dashboard.status === 'success' ? dashboard.data : dashboard.previousData;
 
   return (
-    <div className="flex flex-col gap-6">
-      <section className="flex flex-col gap-1">
+    <div className="flex flex-col gap-5">
+      <section className="flex flex-col gap-0.5">
         <p className="text-sm text-[var(--muted-foreground)]">{business.name}</p>
         <h2 className="text-2xl font-semibold">Hola, {user.name}</h2>
       </section>
 
+      <nav aria-label="Acciones principales" className="grid grid-cols-2 gap-3">
+        <ActionTile href="/ventas/nueva" icon={ShoppingCart} label="Vender" />
+        <ActionTile href="/lavado" icon={Droplets} label="Lavado" />
+        <ActionTile
+          href="/mantenimientos/nuevo"
+          icon={Wrench}
+          label="Mantenimiento"
+          hint="Con placa: búscala abajo"
+        />
+        <ActionTile href="/inventario/recepciones/nueva" icon={PackagePlus} label="Recibir" />
+      </nav>
+
       <PlateSearch />
 
-      <section className="grid grid-cols-2 gap-3">
-        <Link href="/ventas/nueva" className={buttonVariants({ size: 'lg' })}>
-          <ShoppingCart className="mr-2 size-5" aria-hidden />
-          Vender
-        </Link>
-        <Link href="/lavado" className={buttonVariants({ size: 'lg' })}>
-          <Droplets className="mr-2 size-5" aria-hidden />
-          Lavado
-        </Link>
-        <Link
-          href="/mantenimientos/nuevo"
-          className={buttonVariants({ variant: 'outline', className: 'col-span-2' })}
-        >
-          <Wrench className="mr-2 size-4" aria-hidden />
-          Mantenimiento sin vehículo
-        </Link>
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <h3 className="text-lg font-semibold">Este mes</h3>
-          <span className="text-xs text-[var(--muted-foreground)]">{describePeriod(period)}</span>
-        </div>
-        {indicators.status === 'loading' && <LoadingState label="Cargando resumen…" />}
-        {indicators.status === 'error' && (
-          <ErrorState message={failureMessage(indicators.failure)} onRetry={indicators.reload} />
-        )}
-        {indicators.status === 'success' && (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Figure
-              value={indicators.data.adoption.activeMaintenances}
-              label="Mantenimientos registrados"
+      <section aria-labelledby="period-title" className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <h3 id="period-title" className="text-lg font-semibold">
+              Resumen
+            </h3>
+            <RefreshIndicator
+              refreshing={dashboard.status === 'loading' && data !== undefined}
+              onRefresh={reload}
             />
-            <Figure
-              value={indicators.data.maintenance.remindersOpenedInWhatsApp}
-              label="Avisos abiertos en WhatsApp"
-            />
-            <Figure value={indicators.data.inventory.totalMovements} label="Movimientos de stock" />
           </div>
+          <PeriodSelector value={kind} onChange={setKind} />
+          {data && data.period.kind === kind && (
+            <p className="text-sm text-[var(--muted-foreground)] first-letter:uppercase">
+              {describeDashboardPeriod(data.period)}
+            </p>
+          )}
+        </div>
+
+        {dashboard.status === 'error' && data && (
+          <FormError>
+            {rateLimited ? failureMessage(dashboard.failure) : 'No se pudo actualizar el resumen.'}{' '}
+            <button type="button" className="font-medium underline" onClick={reload}>
+              Reintentar
+            </button>
+          </FormError>
         )}
-        <Link href="/resumen" className={buttonVariants({ variant: 'outline' })}>
-          <ChartColumn className="mr-2 size-4" aria-hidden />
-          Ver resumen del piloto
-        </Link>
+
+        {!data && dashboard.status === 'loading' && <DashboardSkeleton />}
+        {!data && dashboard.status === 'error' && (
+          <ErrorState message={failureMessage(dashboard.failure)} onRetry={reload} />
+        )}
+        {data && <DashboardBody data={data} />}
       </section>
 
-      <section className="grid grid-cols-2 gap-3">
-        <Link href="/avisar" className={buttonVariants({ size: 'lg' })}>
-          <Bell className="mr-2 size-4" aria-hidden />
-          Avisar
-        </Link>
-        <Link href="/clientes" className={buttonVariants({ variant: 'outline', size: 'lg' })}>
-          <Users className="mr-2 size-4" aria-hidden />
-          Clientes
-        </Link>
-      </section>
+      <Link
+        href="/resumen"
+        className="flex min-h-11 items-center justify-center gap-2 text-sm font-medium text-[var(--muted-foreground)] underline-offset-4 hover:text-[var(--foreground)] hover:underline"
+      >
+        <ChartColumn className="size-4" aria-hidden />
+        Resumen del piloto
+      </Link>
     </div>
   );
+}
+
+function DashboardBody({ data }: { data: Dashboard }) {
+  const empty = data.totals.salesCount === 0 && data.maintenances.count === 0;
+  return (
+    <div className="flex flex-col gap-3">
+      {empty ? (
+        <Panel>
+          <div className="flex flex-col items-center gap-1 py-4 text-center">
+            <p className="font-medium">Sin ventas en este período</p>
+            <p className="max-w-xs text-sm text-[var(--muted-foreground)]">
+              Cuando cobres con Vender, Lavado o un mantenimiento, aparecerá aquí.
+            </p>
+          </div>
+        </Panel>
+      ) : (
+        <>
+          <IncomeSummary totals={data.totals} />
+          <SourceBreakdown
+            totals={data.totals}
+            washes={data.washes}
+            maintenances={data.maintenances}
+          />
+          <Panel title={data.period.kind === 'today' ? 'Ingresos por hora' : 'Ingresos por día'}>
+            <RevenueChart
+              key={`${data.period.kind}:${data.period.from}`}
+              series={data.series}
+              kind={data.period.kind}
+              timeZone={data.period.timezone}
+              periodTo={data.period.to}
+            />
+          </Panel>
+          <TopProducts items={data.topProducts} />
+        </>
+      )}
+      <RemindersDue dueNow={data.reminders.dueNow} />
+      <StockAttention stock={data.stock} />
+    </div>
+  );
+}
+
+function ActionTile({
+  href,
+  icon: Icon,
+  label,
+  hint,
+}: {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  hint?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex min-h-20 flex-col justify-center gap-1.5 rounded-xl bg-[var(--primary)] px-4 py-3 text-[var(--primary-foreground)] transition-opacity hover:opacity-90 active:opacity-80"
+    >
+      <Icon className="size-6" aria-hidden />
+      <span className="flex flex-col">
+        <span className="text-base leading-tight font-semibold">{label}</span>
+        {hint && <span className="text-xs leading-tight opacity-75">{hint}</span>}
+      </span>
+    </Link>
+  );
+}
+
+/** Hoy · Semana · Mes como control segmentado (un solo valor elegido). */
+function PeriodSelector({
+  value,
+  onChange,
+}: {
+  value: DashboardPeriodKind;
+  onChange: (kind: DashboardPeriodKind) => void;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Período"
+      className="grid grid-cols-3 gap-1 rounded-xl bg-[var(--muted)] p-1"
+    >
+      {PERIOD_OPTIONS.map((option) => {
+        const selected = option.kind === value;
+        return (
+          <button
+            key={option.kind}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(option.kind)}
+            className={cn(
+              'min-h-11 rounded-lg text-sm font-medium transition-colors',
+              selected
+                ? 'bg-[var(--background)] text-[var(--foreground)] shadow-sm'
+                : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]',
+            )}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function RefreshIndicator({
+  refreshing,
+  onRefresh,
+}: {
+  refreshing: boolean;
+  onRefresh: () => void;
+}) {
+  return (
+    <Button
+      variant="outline"
+      onClick={onRefresh}
+      disabled={refreshing}
+      aria-label={refreshing ? 'Actualizando' : 'Actualizar'}
+      className="h-10 w-10 px-0"
+    >
+      {refreshing ? (
+        <LoaderCircle className="size-4 animate-spin" aria-hidden />
+      ) : (
+        <RotateCw className="size-4" aria-hidden />
+      )}
+    </Button>
+  );
+}
+
+/**
+ * Refresco pasivo (DEC-84): al volver a la pestaña o a la app y cada 60 s
+ * mientras la página está visible. `enabled = false` (tras un 429) lo pausa
+ * hasta que el usuario reintenta a mano.
+ */
+function usePassiveRefresh(reload: () => void, enabled: boolean) {
+  const enabledRef = useRef(enabled);
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
+
+  useEffect(() => {
+    // Al volver a la app llegan `visibilitychange` y `focus` juntos: una sola petición.
+    let last = Date.now();
+    const refreshIfVisible = () => {
+      if (!enabledRef.current || document.visibilityState !== 'visible') return;
+      if (Date.now() - last < MIN_GAP_MS) return;
+      last = Date.now();
+      reload();
+    };
+    const timer = window.setInterval(refreshIfVisible, REFRESH_MS);
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    window.addEventListener('focus', refreshIfVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+      window.removeEventListener('focus', refreshIfVisible);
+    };
+  }, [reload]);
 }

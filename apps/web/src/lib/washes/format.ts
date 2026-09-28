@@ -29,6 +29,11 @@ export function parseAmount(raw: string): number | null {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+/** Tope de `WashPriceOption.amount`, Decimal(10,2) (06-API.md §4). */
+export const MAX_WASH_AMOUNT = 99_999_999.99;
+
+export const MAX_WASH_AMOUNT_MESSAGE = 'El monto máximo es S/ 99,999,999.99.';
+
 /** Monto para precargar un campo de edición: sin ceros de más ("8", "25.5"). */
 export function amountInput(amount: string): string {
   const value = Number(amount);

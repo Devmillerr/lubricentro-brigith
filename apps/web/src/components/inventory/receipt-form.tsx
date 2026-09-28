@@ -20,6 +20,7 @@ import {
   type InventoryReceipt,
 } from '@/lib/inventory/receipts';
 import { ReceiptProductPicker } from './receipt-product-picker';
+import { useSubmitLock } from '@/lib/use-submit-lock';
 
 interface Line {
   product: ProductWithStock;
@@ -67,6 +68,7 @@ export function ReceiptForm({
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState<ApiFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const lock = useSubmitLock();
   const idempotency = useIdempotencyKey();
 
   const quantities = new Map(lines.map((line) => [line.product.id, line.quantity]));
@@ -140,6 +142,7 @@ export function ReceiptForm({
     setErrors(found);
     setFailure(null);
     if (found.lines || found.line || found.occurredAt || found.note) return;
+    if (!lock.acquire()) return;
     setSubmitting(true);
 
     const body: Schemas['CreateReceiptDto'] = {
@@ -157,6 +160,7 @@ export function ReceiptForm({
         body,
       }),
     );
+    lock.release();
     setSubmitting(false);
 
     if (result.ok) {

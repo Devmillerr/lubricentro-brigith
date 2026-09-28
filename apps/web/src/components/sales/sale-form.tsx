@@ -24,6 +24,7 @@ import {
   type PaymentMethod,
 } from '@/lib/sales/format';
 import { cn } from '@/lib/utils';
+import { useSubmitLock } from '@/lib/use-submit-lock';
 
 export type CreateSaleResult = Schemas['CreateSaleResponse'];
 
@@ -68,6 +69,7 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
   const [formError, setFormError] = useState<string | null>(null);
   const [failure, setFailure] = useState<ApiFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const lock = useSubmitLock();
   const idempotency = useIdempotencyKey();
 
   const quantities = new Map(lines.map((line) => [line.product.id, line.quantity]));
@@ -156,6 +158,7 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
       ...(trimmedNote ? { note: trimmedNote } : {}),
     };
 
+    if (!lock.acquire()) return;
     setSubmitting(true);
     const result = await callApi(
       api.POST('/sales', {
@@ -163,6 +166,7 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
         body,
       }),
     );
+    lock.release();
     setSubmitting(false);
 
     if (result.ok) {

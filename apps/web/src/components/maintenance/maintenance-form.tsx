@@ -27,6 +27,7 @@ import type { PaymentMethod } from '@/lib/sales/format';
 import { CHARGE_AMOUNT_ERROR, ChargeFields, parseChargeAmount } from './charge-fields';
 import { NextDueFields } from './next-due-fields';
 import { ProductPicker, StockHint } from './product-picker';
+import { useSubmitLock } from '@/lib/use-submit-lock';
 
 /** Tipo sembrado por defecto (BR-M13): va primero en la lista (07-UI-UX.md §3.3.2). */
 const DEFAULT_TYPE_NAME = 'Cambio de aceite';
@@ -100,6 +101,7 @@ export function MaintenanceForm({
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState<ApiFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const lock = useSubmitLock();
   const idempotency = useIdempotencyKey();
 
   const typeList = [
@@ -212,6 +214,7 @@ export function MaintenanceForm({
     setErrors(found);
     setFailure(null);
     if (Object.keys(found).length) return;
+    if (!lock.acquire()) return;
     setSubmitting(true);
 
     const rule = effectiveDueRule(nextDue, businessDefault);
@@ -239,6 +242,7 @@ export function MaintenanceForm({
         body,
       }),
     );
+    lock.release();
     setSubmitting(false);
 
     if (result.ok) {

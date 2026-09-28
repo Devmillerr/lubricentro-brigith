@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage, type ApiFailure } from '@/lib/api/request';
 import { isOpen, type ReminderDetail } from '@/lib/reminders/format';
+import { useSubmitLock } from '@/lib/use-submit-lock';
 
 const MESSAGES = {
   byCode: {
@@ -41,18 +42,21 @@ export function ReminderActions({
   onContacted: (waLink: string) => void;
 }) {
   const [working, setWorking] = useState<'contact' | 'dismiss' | 'reopen' | null>(null);
+  const lock = useSubmitLock();
   const [confirmDismiss, setConfirmDismiss] = useState(false);
   const [failure, setFailure] = useState<{ failure: ApiFailure; action: string } | null>(null);
 
   async function openWhatsApp() {
     // Se abre dentro del gesto del usuario para que el navegador no la bloquee;
     // se dirige al enlace recién cuando la API registra el aviso.
+    if (!lock.acquire()) return;
     const popup = window.open('', '_blank');
     setWorking('contact');
     setFailure(null);
     const result = await callApi(
       api.POST('/reminders/{id}/contacts', { params: { path: { id: reminder.id } } }),
     );
+    lock.release();
     setWorking(null);
     if (!result.ok) {
       popup?.close();
@@ -70,11 +74,13 @@ export function ReminderActions({
 
   async function setStatus(status: 'PENDING' | 'DISMISSED') {
     const action = status === 'DISMISSED' ? 'dismiss' : 'reopen';
+    if (!lock.acquire()) return;
     setWorking(action);
     setFailure(null);
     const result = await callApi(
       api.PATCH('/reminders/{id}', { params: { path: { id: reminder.id } }, body: { status } }),
     );
+    lock.release();
     setWorking(null);
     if (!result.ok) {
       setFailure({ failure: result.failure, action });

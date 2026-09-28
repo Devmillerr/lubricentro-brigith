@@ -16,6 +16,7 @@ import {
   type Vehicle,
   type VehicleModel,
 } from '@/lib/customers/format';
+import { useSubmitLock } from '@/lib/use-submit-lock';
 
 type Values = { plate: string; vehicleModelId: string; year: string; color: string; notes: string };
 type FieldErrors = Partial<Record<keyof Values, string>>;
@@ -51,6 +52,7 @@ export function VehicleForm(
   const [errors, setErrors] = useState<FieldErrors>({});
   const [failure, setFailure] = useState<ApiFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const lock = useSubmitLock();
   const [createdModels, setCreatedModels] = useState<VehicleModel[]>([]);
 
   const modelsQuery = useApiQuery('vehicle-models', () => callApi(api.GET('/vehicle-models')));
@@ -89,6 +91,7 @@ export function VehicleForm(
     setErrors(found);
     setFailure(null);
     if (Object.values(found).some(Boolean)) return;
+    if (!lock.acquire()) return;
     setSubmitting(true);
 
     const year = values.year.trim() ? Number(values.year.trim()) : undefined;
@@ -138,6 +141,7 @@ export function VehicleForm(
       notes: apiErrors.notes,
     });
     if (result.failure.code !== 'PLATE_ALREADY_EXISTS') setFailure(result.failure);
+    lock.release();
     setSubmitting(false);
   }
 

@@ -9,6 +9,7 @@ import { api, type Schemas } from '@/lib/api/client';
 import { callApi, failureMessage, type ApiFailure } from '@/lib/api/request';
 import { present, type Customer } from '@/lib/customers/format';
 import { FormError } from './form-error';
+import { useSubmitLock } from '@/lib/use-submit-lock';
 
 type Values = { name: string; phone: string; notes: string };
 const FIELDS = ['name', 'phone', 'notes'] as const;
@@ -26,6 +27,7 @@ export function CustomerForm({ customer }: { customer?: Customer }) {
     notes: customer?.notes ?? '',
   });
   const [submitting, setSubmitting] = useState(false);
+  const lock = useSubmitLock();
   const [failure, setFailure] = useState<ApiFailure | null>(null);
 
   function update(field: keyof Values, value: string) {
@@ -35,6 +37,7 @@ export function CustomerForm({ customer }: { customer?: Customer }) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitting) return;
+    if (!lock.acquire()) return;
     setSubmitting(true);
     setFailure(null);
 
@@ -66,6 +69,7 @@ export function CustomerForm({ customer }: { customer?: Customer }) {
       return;
     }
     setFailure(result.failure);
+    lock.release();
     setSubmitting(false);
   }
 

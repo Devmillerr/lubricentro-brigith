@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronRight, Droplets, ShoppingCart } from 'lucide-react';
+import { ChevronRight, Droplets, ShoppingCart, Wrench } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
@@ -24,8 +24,29 @@ import {
   type SaleSource,
   type SaleSummary,
 } from '@/lib/sales/format';
+import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 20;
+
+const EMPTY: Record<SaleSource | 'ALL', { title: string; description: string }> = {
+  ALL: { title: 'Todavía no hay ventas', description: 'Los cobros aparecerán aquí.' },
+  COUNTER: {
+    title: 'Todavía no hay ventas de mostrador',
+    description: 'Las ventas cobradas desde Vender aparecerán aquí.',
+  },
+  WASH: { title: 'Todavía no hay lavados', description: 'Los lavados cobrados aparecerán aquí.' },
+  MAINTENANCE: {
+    title: 'Todavía no hay cobros de mantenimiento',
+    description: 'Se cobran desde cada mantenimiento y aparecerán aquí.',
+  },
+};
+
+/** Ícono de la fuente, además del texto, para distinguir las filas de un vistazo. */
+const SOURCE_ICONS: Record<SaleSource, typeof ShoppingCart> = {
+  COUNTER: ShoppingCart,
+  WASH: Droplets,
+  MAINTENANCE: Wrench,
+};
 
 /**
  * Historial genérico de ventas (B-135, 06-API.md §2 "Ventas"): de la más
@@ -128,12 +149,8 @@ function SalesList({ source }: { source: SaleSource | null }) {
   if (items.length === 0) {
     return (
       <EmptyState
-        title={source === 'WASH' ? 'Todavía no hay lavados' : 'Todavía no hay ventas'}
-        description={
-          source === 'WASH'
-            ? 'Los lavados cobrados aparecerán aquí.'
-            : 'Los cobros aparecerán aquí.'
-        }
+        title={EMPTY[source ?? 'ALL'].title}
+        description={EMPTY[source ?? 'ALL'].description}
       />
     );
   }
@@ -158,24 +175,37 @@ function SalesList({ source }: { source: SaleSource | null }) {
 function SaleRow({ sale }: { sale: SaleSummary }) {
   const voided = sale.status === 'VOIDED';
   const note = present(sale.note);
+  const Icon = SOURCE_ICONS[sale.source];
   return (
     <li>
       <Link
         href={`/ventas/${sale.id}`}
         className="flex min-h-16 items-center gap-3 px-4 py-3 hover:bg-[var(--muted)]"
       >
+        <span
+          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--muted)]"
+          aria-hidden
+        >
+          <Icon className="size-5 text-[var(--muted-foreground)]" />
+        </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex items-center gap-2">
-            <span className={voided ? 'font-medium line-through' : 'font-medium'}>
-              {formatMoney(sale.total)}
-            </span>
+            <span className="font-medium">{SOURCE_LABELS[sale.source]}</span>
             {voided && <Badge>Anulada</Badge>}
           </span>
           <span className="text-sm text-[var(--muted-foreground)]">
-            {SOURCE_LABELS[sale.source]} · {PAYMENT_LABELS[sale.paymentMethod]} ·{' '}
+            {PAYMENT_LABELS[sale.paymentMethod]} ·{' '}
             {saleDateFormat.format(new Date(sale.occurredAt))}
           </span>
           {note && <span className="truncate text-sm">{note}</span>}
+        </span>
+        <span
+          className={cn(
+            'shrink-0 text-base font-semibold tabular-nums',
+            voided && 'text-[var(--muted-foreground)] line-through',
+          )}
+        >
+          {formatMoney(sale.total)}
         </span>
         <ChevronRight className="size-5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
       </Link>

@@ -24,7 +24,8 @@ export function failureMessage(
   if (failure.code && byCode[failure.code]) return byCode[failure.code]!;
   if (failure.status === 404) return notFound ?? 'El registro ya no existe.';
   if (failure.status === 429) {
-    return 'Demasiadas solicitudes seguidas. Espera un minuto e inténtalo de nuevo.';
+    // 07-UI-UX.md §5: sin reintento automático; el usuario reintenta a mano.
+    return 'Demasiadas solicitudes. Espera un momento y vuelve a intentar.';
   }
   if (failure.status === 400) return 'Revisa los datos ingresados.';
   return describeError(failure.classified);

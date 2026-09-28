@@ -25,8 +25,8 @@ export const STATUS_LABELS: Record<SaleStatus, string> = {
   VOIDED: 'Anulada',
 };
 
-/** Fuentes que el historial deja filtrar. `MAINTENANCE` llega con R6. */
-export const HISTORY_SOURCES: SaleSource[] = ['COUNTER', 'WASH'];
+/** Fuentes que el historial deja filtrar (los cobros de mantenimiento, desde R6). */
+export const HISTORY_SOURCES: SaleSource[] = ['COUNTER', 'WASH', 'MAINTENANCE'];
 
 export function isSaleSource(value: string | null): value is SaleSource {
   return value !== null && value in SOURCE_LABELS;

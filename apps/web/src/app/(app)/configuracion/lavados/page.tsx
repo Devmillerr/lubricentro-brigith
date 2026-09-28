@@ -15,6 +15,8 @@ import { formatMoney } from '@/lib/sales/format';
 import {
   WASH_ERRORS,
   amountInput,
+  MAX_WASH_AMOUNT,
+  MAX_WASH_AMOUNT_MESSAGE,
   parseAmount,
   type WashPriceOption,
   type WashType,
@@ -447,6 +449,10 @@ function PriceForm({
     const parsed = parseAmount(amount);
     if (parsed === null) {
       setAmountError(AMOUNT_HINT);
+      return;
+    }
+    if (parsed > MAX_WASH_AMOUNT) {
+      setAmountError(MAX_WASH_AMOUNT_MESSAGE);
       return;
     }
     setAmountError(null);

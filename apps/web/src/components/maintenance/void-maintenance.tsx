@@ -9,6 +9,7 @@ import { api } from '@/lib/api/client';
 import { useIdempotencyKey } from '@/lib/api/idempotency';
 import { callApi, failureMessage } from '@/lib/api/request';
 import type { VoidMaintenanceResult } from '@/lib/maintenance/format';
+import { useSubmitLock } from '@/lib/use-submit-lock';
 
 /**
  * Anular (BR-M12): la API genera los movimientos inversos de sus productos y
@@ -31,6 +32,7 @@ export function VoidMaintenance({
   const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState('');
   const [working, setWorking] = useState(false);
+  const lock = useSubmitLock();
   const [error, setError] = useState<string | null>(null);
   const idempotency = useIdempotencyKey();
 
@@ -38,6 +40,7 @@ export function VoidMaintenance({
 
   async function confirm() {
     if (!trimmedReason) return;
+    if (!lock.acquire()) return;
     setWorking(true);
     setError(null);
     const body = { reason: trimmedReason };
@@ -50,6 +53,7 @@ export function VoidMaintenance({
         body,
       }),
     );
+    lock.release();
     setWorking(false);
     if (result.ok || result.failure.code === 'MAINTENANCE_ALREADY_VOIDED') {
       idempotency.reset();

@@ -128,7 +128,15 @@ function BottomTab({ item, active }: { item: NavItem; active: boolean }) {
       aria-current={active ? 'page' : undefined}
       className={cn(base, active ? 'text-[var(--foreground)]' : 'text-[var(--muted-foreground)]')}
     >
-      <Icon className={cn('size-5', active && 'stroke-[2.5]')} aria-hidden />
+      {/* Píldora detrás del ícono: la pestaña activa se ve sin depender solo del grosor. */}
+      <span
+        className={cn(
+          'flex h-8 w-14 items-center justify-center rounded-full transition-colors',
+          active && 'bg-[var(--muted)]',
+        )}
+      >
+        <Icon className={cn('size-5', active && 'stroke-[2.5]')} aria-hidden />
+      </span>
       {item.label}
     </Link>
   );

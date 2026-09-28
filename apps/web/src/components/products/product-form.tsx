@@ -14,6 +14,7 @@ import { rememberProducts } from '@/lib/products/product-lookup';
 import { AttributePicker } from './attribute-picker';
 import { CategoryPicker } from './category-picker';
 import { NewCategoryForm } from './new-category-form';
+import { useSubmitLock } from '@/lib/use-submit-lock';
 
 type Values = {
   name: string;
@@ -59,6 +60,7 @@ export function ProductForm({ product }: { product?: Product }) {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [failure, setFailure] = useState<ApiFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const lock = useSubmitLock();
   const [createdCategories, setCreatedCategories] = useState<ProductCategory[]>([]);
 
   const categoriesQuery = useApiQuery('product-categories', () =>
@@ -96,8 +98,10 @@ export function ProductForm({ product }: { product?: Product }) {
     const price = values.salePrice.trim().replace(',', '.');
     if (price) {
       const parsed = Number(price);
-      if (!Number.isFinite(parsed) || parsed < 0 || parsed > MAX_PRICE) {
+      if (!Number.isFinite(parsed) || parsed < 0) {
         found.salePrice = 'Ingresa un precio válido, mayor o igual a 0.';
+      } else if (parsed > MAX_PRICE) {
+        found.salePrice = 'El precio máximo es S/ 99,999,999.99.';
       } else if (!/^\d+(\.\d{1,2})?$/.test(price)) {
         found.salePrice = 'Usa como máximo 2 decimales.';
       }
@@ -112,6 +116,7 @@ export function ProductForm({ product }: { product?: Product }) {
     setErrors(found);
     setFailure(null);
     if (Object.values(found).some(Boolean)) return;
+    if (!lock.acquire()) return;
     setSubmitting(true);
 
     const price = values.salePrice.trim() ? Number(values.salePrice.replace(',', '.')) : null;
@@ -170,6 +175,7 @@ export function ProductForm({ product }: { product?: Product }) {
       salePrice: apiErrors.salePrice,
     });
     if (!codeTaken) setFailure(result.failure);
+    lock.release();
     setSubmitting(false);
   }
 

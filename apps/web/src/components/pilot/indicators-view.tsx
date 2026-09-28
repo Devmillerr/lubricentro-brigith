@@ -25,11 +25,18 @@ export function IndicatorsView({ indicators }: { indicators: PilotIndicators }) 
 
   return (
     <div className="flex flex-col gap-5">
+      {/* BR-I1 (DEC-85): cantidades reales por separado, sin metas ni porcentajes. */}
       <IndicatorSection title="Uso del sistema">
+        <Figure
+          value={adoption.counterSales}
+          label="Ventas de mostrador"
+          help="No cuenta las anuladas."
+        />
+        <Figure value={adoption.washes} label="Lavados" help="No cuenta los anulados." />
         <Figure
           value={adoption.activeMaintenances}
           label="Mantenimientos registrados"
-          help="No cuenta los anulados."
+          help="No cuenta los anulados. Su cobro no se cuenta aparte."
         />
       </IndicatorSection>
 

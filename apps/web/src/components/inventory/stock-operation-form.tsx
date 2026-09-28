@@ -20,6 +20,7 @@ import {
   type StockView,
 } from '@/lib/inventory/format';
 import { cn } from '@/lib/utils';
+import { useSubmitLock } from '@/lib/use-submit-lock';
 
 export type StockOperation = 'count' | 'adjustment';
 
@@ -102,6 +103,7 @@ export function StockOperationForm({
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState<ApiFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const lock = useSubmitLock();
   const idempotency = useIdempotencyKey();
 
   // Contar y Ajuste reciben lo mismo: la cantidad que hay en el estante.
@@ -142,6 +144,7 @@ export function StockOperationForm({
     setErrors(found);
     setFailure(null);
     if (Object.values(found).some(Boolean) || parsed === null) return;
+    if (!lock.acquire()) return;
     setSubmitting(true);
 
     let result: ApiResult<InventoryMovement>;
@@ -170,6 +173,7 @@ export function StockOperationForm({
       );
     }
 
+    lock.release();
     setSubmitting(false);
     if (result.ok) {
       idempotency.reset();

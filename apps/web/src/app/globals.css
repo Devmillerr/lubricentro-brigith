@@ -9,6 +9,19 @@
   --muted-foreground: #64748b;
   --border: #e2e8f0;
   --danger: #dc2626;
+  --danger-soft: #fef2f2;
+
+  /*
+   * Gráficos del dashboard (DEC-83). Colores de serie validados con el
+   * validador de paletas (daltonismo y contraste) contra el fondo de cada
+   * tema; la identidad nunca va solo por color: siempre con texto al lado.
+   */
+  --series-counter: #2a78d6;
+  --series-wash: #eb6834;
+  --series-maintenance: #1baf7a;
+  --series-cash: #008300;
+  --series-yape: #4a3aa7;
+  --chart-track: #f1f5f9;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -21,6 +34,15 @@
     --muted: #1e293b;
     --muted-foreground: #94a3b8;
     --border: #1e293b;
+    --danger: #f87171;
+    --danger-soft: #2a1414;
+
+    --series-counter: #3987e5;
+    --series-wash: #d95926;
+    --series-maintenance: #199e70;
+    --series-cash: #008300;
+    --series-yape: #9085e9;
+    --chart-track: #1e293b;
   }
 }
 

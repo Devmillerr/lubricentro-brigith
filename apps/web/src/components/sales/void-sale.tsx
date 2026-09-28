@@ -9,6 +9,7 @@ import { api } from '@/lib/api/client';
 import { useIdempotencyKey } from '@/lib/api/idempotency';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { MAX_SALE_TEXT, type Sale } from '@/lib/sales/format';
+import { useSubmitLock } from '@/lib/use-submit-lock';
 
 /**
  * Anular una venta (BR-V7, DEC-59): el motivo es obligatorio. La API devuelve
@@ -21,6 +22,7 @@ export function VoidSale({ sale, onVoided }: { sale: Sale; onVoided: () => void 
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
+  const lock = useSubmitLock();
   const [error, setError] = useState<string | null>(null);
   const idempotency = useIdempotencyKey();
   const isWash = sale.source === 'WASH';
@@ -32,6 +34,7 @@ export function VoidSale({ sale, onVoided }: { sale: Sale; onVoided: () => void 
       return;
     }
     setReasonError(null);
+    if (!lock.acquire()) return;
     setWorking(true);
     setError(null);
     const body = { reason: trimmed };
@@ -44,6 +47,7 @@ export function VoidSale({ sale, onVoided }: { sale: Sale; onVoided: () => void 
         body,
       }),
     );
+    lock.release();
     setWorking(false);
     if (result.ok || result.failure.code === 'SALE_ALREADY_VOIDED') {
       idempotency.reset();

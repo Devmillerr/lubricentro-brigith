@@ -20,6 +20,7 @@ import {
   type Sale,
 } from '@/lib/sales/format';
 import { cn } from '@/lib/utils';
+import { useSubmitLock } from '@/lib/use-submit-lock';
 
 /**
  * Monto del cobro de un mantenimiento: > 0 con hasta 2 decimales, como
@@ -145,6 +146,7 @@ export function ChargeLater({
   const [amountError, setAmountError] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
+  const lock = useSubmitLock();
   const idempotency = useIdempotencyKey();
 
   if (!open) {
@@ -161,6 +163,7 @@ export function ChargeLater({
     setError(method ? null : 'Elige Efectivo o Yape.');
     if (totalAmount === null || !method) return;
 
+    if (!lock.acquire()) return;
     setWorking(true);
     const body = { paymentMethod: method, totalAmount };
     const result = await callApi(
@@ -172,6 +175,7 @@ export function ChargeLater({
         body,
       }),
     );
+    lock.release();
     setWorking(false);
     if (result.ok) {
       idempotency.reset();

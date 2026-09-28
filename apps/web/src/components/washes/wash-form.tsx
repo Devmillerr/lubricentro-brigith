@@ -18,6 +18,7 @@ import {
 } from '@/lib/sales/format';
 import { WASH_ERRORS, type WashType } from '@/lib/washes/format';
 import { cn } from '@/lib/utils';
+import { useSubmitLock } from '@/lib/use-submit-lock';
 
 /** Códigos después de los cuales la lista de tipos y precios quedó vieja. */
 const STALE_CODES = new Set([
@@ -50,6 +51,7 @@ export function WashForm({
   const [payment, setPayment] = useState<PaymentMethod | null>(null);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const lock = useSubmitLock();
   const [error, setError] = useState<string | null>(null);
   const idempotency = useIdempotencyKey();
 
@@ -73,6 +75,7 @@ export function WashForm({
       paymentMethod: payment,
       ...(trimmedNote ? { note: trimmedNote } : {}),
     };
+    if (!lock.acquire()) return;
     setSaving(true);
     setError(null);
     const result = await callApi(
@@ -81,6 +84,7 @@ export function WashForm({
         body,
       }),
     );
+    lock.release();
     setSaving(false);
     if (result.ok) {
       idempotency.reset();
