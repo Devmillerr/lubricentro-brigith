@@ -215,7 +215,8 @@ export async function applyStockMovements(
                 : isPhysicalAdjustment(entry)
                   ? 'physicalQuantity'
                   : insufficientStockField,
-            message: `El saldo del producto ${productId} superaría el máximo admitido (999 999 999,999).`,
+            // Con el nombre, no con el id: el mensaje se muestra al usuario.
+            message: `El saldo de «${product.name}» superaría el máximo admitido (999 999 999,999).`,
           },
         ]);
       }

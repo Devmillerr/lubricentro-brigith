@@ -273,7 +273,12 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
         </Section>
 
         {formError && <FormError>{formError}</FormError>}
-        {failure && <FormError>{failureMessage(failure, ERROR_MESSAGES)}</FormError>}
+        {failure && (
+          <FormError>
+            {/* El total lo calcula la API y no tiene campo propio en el formulario. */}
+            {failure.fieldErrors.total ?? failureMessage(failure, ERROR_MESSAGES)}
+          </FormError>
+        )}
 
         <Button type="submit" size="lg" disabled={submitting}>
           {submitting

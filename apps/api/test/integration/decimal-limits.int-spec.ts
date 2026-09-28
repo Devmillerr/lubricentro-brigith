@@ -140,9 +140,16 @@ describe('Topes de cantidades contra Postgres (H4)', () => {
   it('recepción que dejaría el saldo por encima de Decimal(12,3): 400 en lines sin escribir', async () => {
     const productId = await createProduct({ counted: MAX_QUANTITY });
     const movements = await movementsOf(productId);
-    await expect(
-      inventory.createReceiptBatch(businessId, userId, { lines: [{ productId, quantity: 1 }] }),
-    ).rejects.toMatchObject(validationError('lines'));
+    const error: unknown = await inventory
+      .createReceiptBatch(businessId, userId, { lines: [{ productId, quantity: 1 }] })
+      .catch((e: unknown) => e);
+    expect(error).toMatchObject(validationError('lines'));
+    // El mensaje llega al usuario: nombra el producto y no expone su id.
+    const { name } = await prisma.product.findFirstOrThrow({ where: { id: productId } });
+    expect(error).toMatchObject({
+      errors: [{ field: 'lines', message: expect.stringContaining(`«${name}»`) }],
+    });
+    expect(JSON.stringify(error)).not.toContain(productId);
     expect(await movementsOf(productId)).toBe(movements);
     const product = await prisma.product.findFirstOrThrow({ where: { id: productId } });
     expect(product.stockQuantity.toString()).toBe('999999999.999');

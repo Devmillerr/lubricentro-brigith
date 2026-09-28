@@ -475,7 +475,10 @@ function validateCreateSale(input: CreateSaleInput): PricedLine[] {
   });
   const total = priced.reduce((sum, line) => sum.plus(line.subtotal), new Prisma.Decimal(0));
   if (errors.length === 0 && total.greaterThan(maxMoney)) {
-    errors.push({ field: 'total', message: MAX_MONEY_MESSAGE });
+    errors.push({
+      field: 'total',
+      message: `El total de la venta (S/ ${total.toFixed(2)}) supera el máximo por venta (S/ 99 999 999,99).`,
+    });
   }
   if (errors.length > 0) {
     throw new ValidationProblemException(errors);

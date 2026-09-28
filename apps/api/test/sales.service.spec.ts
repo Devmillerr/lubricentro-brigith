@@ -392,6 +392,47 @@ describe('SalesService.create', () => {
       expect(movements.size).toBe(0);
     });
 
+    it('total calculado mayor que el máximo: 400 con un mensaje que explica el total', async () => {
+      const { service, sales, movements } = setup();
+
+      await expect(
+        service.create(
+          'biz-a',
+          'user-a',
+          sale([
+            { productId: 'p-svc', quantity: 1, unitPrice: 99_999_999.99 },
+            { productId: 'p-b', quantity: 1, unitPrice: 0.01 },
+          ]),
+        ),
+      ).rejects.toMatchObject({
+        code: 'VALIDATION_ERROR',
+        status: 400,
+        errors: [
+          {
+            field: 'total',
+            message:
+              'El total de la venta (S/ 100000000.00) supera el máximo por venta (S/ 99 999 999,99).',
+          },
+        ],
+      });
+      expect(sales.size).toBe(0);
+      expect(movements.size).toBe(0);
+    });
+
+    it('total exactamente en el máximo (99 999 999,99): se acepta', async () => {
+      const { service } = setup();
+
+      const { sale: created } = await service.create(
+        'biz-a',
+        'user-a',
+        sale([
+          { productId: 'p-svc', quantity: 1, unitPrice: 99_999_999.98 },
+          { productId: 'p-b', quantity: 1, unitPrice: 0.01 },
+        ]),
+      );
+      expect(String(created.total)).toBe('99999999.99');
+    });
+
     it('acepta precio 0, 3 decimales en la cantidad y 2 en el precio', async () => {
       const { service } = setup();
 

@@ -205,6 +205,27 @@ describeIfTestDb('POST /api/v1/inventory/receipts (e2e)', () => {
     expect(await balanceOf(productId)).toBe(0);
   });
 
+  it('saldo que superaría Decimal(12,3): 400 VALIDATION_ERROR con el nombre del producto, sin su id', async () => {
+    const productId = await createProduct(businessId);
+    // Fixture: saldo ya en el máximo de la columna.
+    const product = await prisma.product.update({
+      where: { id: productId },
+      data: { stockQuantity: '999999999.999', isCounted: true },
+    });
+
+    const res = await post({ lines: [{ productId, quantity: 1 }] }).expect(400);
+
+    expect(res.body.code).toBe('VALIDATION_ERROR');
+    expect(res.body.errors).toEqual([
+      {
+        field: 'lines',
+        message: `El saldo de «${product.name}» superaría el máximo admitido (999 999 999,999).`,
+      },
+    ]);
+    expect(JSON.stringify(res.body)).not.toContain(productId);
+    expect(await balanceOf(productId)).toBe(999999999.999);
+  });
+
   it('el contrato anterior ({ productId, quantity }) ya no se acepta: 400', async () => {
     const productId = await createProduct(businessId);
 
