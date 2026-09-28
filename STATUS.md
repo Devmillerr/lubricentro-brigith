@@ -2,7 +2,27 @@
 
 **Actualizado:** 2026-09-28
 
-## Estado actual (2026-09-28): contrato de R6 cerrado en documentación, sin implementar
+## Estado actual (2026-09-28): R6 implementado, cerrado y desplegado en Supabase
+
+- **R6 (cobro de mantenimiento, anulación conjunta y mantenimiento sin vehículo): implementado y cerrado.** El contrato está en la sección siguiente.
+- **Commits de R6** (sobre `b159655`): `c02115b` "docs: actualizando contratos de R6", `9edd5b3` "fix: corrigiendo concurrencia al anular mantenimientos", `3564d0f` "feat: implementando cobro y anulación conjunta de mantenimientos" y `0f09aa5` "feat: implementando interfaz de mantenimientos de R6" (37 archivos respecto de `b159655`).
+  - Se trabajaron en la rama `origin/claude/admiring-pasteur-522mg8`. `main` local se llevó a `0f09aa5` por fast-forward (sin merge) y se publicó en `origin/main` (push `b159655..0f09aa5`). La rama remota sigue existiendo, ya contenida en `main`; no se borró.
+  - Con R6 publicado, `HEAD` = `main` = `origin/main` = `0f09aa5`, antes de este commit de `STATUS.md`.
+- **Validación de B-158** (hecha en la sesión de implementación de R6; no se repitió en esta): 11/11 flujos en navegador a 390×844; unitarias 401/401, integración 93/93, e2e 123/123; `typecheck` de API y web, `lint` y `build` OK.
+- **Migración de R6 aplicada en Supabase (2026-09-28, con autorización del usuario).** Destino confirmado antes de ejecutar: `DIRECT_URL` → `aws-0-us-east-1.pooler.supabase.com:5432/postgres` (pooler en modo sesión). Antes, `migrate status` mostraba pendiente solo `20260928010507_r6_maintenance_optional_vehicle` (`ALTER TABLE "maintenances" ALTER COLUMN "vehicleId" DROP NOT NULL`). Se ejecutó únicamente `prisma migrate deploy`, que aplicó solo esa.
+  - `_prisma_migrations`: **12 migraciones, 12 terminadas, 0 con rollback.** Checksum de R6 `5359c11a…93ac16` = sha256 de `migration.sql`. `maintenances.vehicleId` quedó nullable.
+  - `migrate status`: "Database schema is up to date!" (**sin migraciones pendientes**; el primer intento después del deploy falló por conexión con el pooler, el segundo pasó). `migrate diff` contra `schema.prisma`: "No difference detected".
+  - Sin seed ni cambios de datos.
+- **Deudas deliberadas para R7:**
+  - **A2:** atomicidad entre la reserva de la `Idempotency-Key` y el efecto (DEC-76).
+  - **Throttler:** rate limit de 20 req/min por endpoint (DEC-40; `10-OPERACION-REAL.md` lo ubica en R7).
+- **`apps/api/test/business-scope.coverage.spec.ts`:** sigue sin versionar, a propósito, en el entorno donde se trabajó R6. No existe en este working tree. No se toca ni se incluye en commits.
+- **R7 (dashboard, indicadores del piloto y throttler): no empezado.** Todavía no tiene contrato, decisiones ni ítems de backlog.
+- **Próximo paso:** cerrar el contrato de R7 solo en documentación (decisiones, `06`, `07`, `03` y `09`), con autorización. Decidir si se borra la rama `origin/claude/admiring-pasteur-522mg8`.
+
+## Contrato de R6 (2026-09-28)
+
+Registro del contrato tal como quedó antes de implementarlo. Las menciones "sin implementar", "sin migraciones" y "sin commit ni push" de esta sección son de ese momento: ver la sección anterior para el estado actual.
 
 - **Base:** `origin/main` = `b159655` ("docs: actualizando el cierre de R4 y R5 en STATUS"), que ya incluye `9702197` (R4 y R5) y `99df6c5`. Lo que la sección siguiente marca como pendiente de push ya está en `origin/main`.
 - **Decisiones de R6 cerradas (2026-09-28): DEC-69 a DEC-77** en `09-BACKLOG.md` §2 y `10-OPERACION-REAL.md` §3.2g. Contrato en `06-API.md` §2, Mantenimientos ("Cambios de R6"). Reglas: BR-M12, BR-M15, BR-M16 y BR-V7 en `03-BUSINESS-RULES.md`. Backlog: B-150 a B-158.
@@ -17,7 +37,7 @@
   - **Corte 0 antes de R6 (DEC-77, B-150):** anulación de mantenimiento con transición condicional y 409 `MAINTENANCE_ALREADY_VOIDED` (hallazgo A1). En R6, orden Maintenance → Sale.
 - **Sin cambios de código, sin migraciones, sin seed, sin Supabase, sin commit ni push.** R6 no tiene migraciones: la de `maintenances.vehicleId` nullable (B-151) se hará en R6.
 - **Archivo sin commit ajeno a este cambio:** `apps/api/test/business-scope.coverage.spec.ts` (prueba preventiva de cobertura de `BUSINESS_SCOPED_MODELS`).
-- **Próximo paso:** implementar solo el Corte 0 (B-150), con autorización.
+- **Próximo paso (en ese momento):** implementar el Corte 0 (B-150) y después R6. Hecho (ver "Estado actual").
 
 ## Estado al 2026-09-27: R4 (Ventas) y R5 (Lavados) cerrados y desplegados en Supabase
 
