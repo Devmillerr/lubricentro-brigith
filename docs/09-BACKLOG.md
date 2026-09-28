@@ -1,6 +1,6 @@
 # 09 — Backlog y registro de decisiones
 
-**Versión:** 0.8 · **Actualizado:** 2026-09-28 (contrato de R7 cerrado sin implementar: DEC-78 a DEC-87, B-160 a B-168; antes, R4 y R5 cerrados; contrato de R6 cerrado sin implementar: DEC-69 a DEC-77)
+**Versión:** 0.9 · **Actualizado:** 2026-09-28 (backend de R7 implementado, B-160 a B-166; pendientes la UI, B-167, y la validación final, B-168; contrato de R7: DEC-78 a DEC-87; antes, R4 y R5 cerrados; contrato de R6 cerrado sin implementar: DEC-69 a DEC-77)
 Etiquetas: ver `03-BUSINESS-RULES.md`. Prioridad: **M** Must · **S** Should · **C** Could.
 
 ## 1. Lo que bloquea el inicio del desarrollo
@@ -22,7 +22,7 @@ Los bloqueos 1 y 2 son del inicio del MVP. El MVP se construyó (`v1.0-mvp`) con
 | R4 — Ventas de mostrador, consultas, anulación y su UI | Ninguno. Decisiones cerradas el 2026-09-26: DEC-30 y el alcance de R4 (§2) | **Cerrado** (2026-09-27): commit `9702197` en `origin/main`, migración `20260926175402_r4_sales` aplicada en Supabase (ver `STATUS.md`) |
 | R5 — Lavados, su configuración y su UI | Ninguno. Contrato cerrado el 2026-09-26 (DEC-63 a DEC-67) y reparto con B-135 decidido (DEC-68) | **Cerrado** (2026-09-27): commit `9702197` en `origin/main`, migración `20260927023545_r5_washes` y seed de lavados de brigith aplicados en Supabase (ver `STATUS.md`) |
 | R6 — Cobro de mantenimiento, anulación conjunta y mantenimiento sin vehículo (DEC-31) | Antes, el **Corte 0** (DEC-77): anulación condicional de mantenimiento. Contrato cerrado el 2026-09-28: DEC-69 a DEC-77 (§2) | **Contrato documentado, sin implementar** (B-150 a B-158). Sin migraciones de R6 |
-| R7 — Dashboard, indicadores del piloto y throttler | Ninguno. Contrato cerrado el 2026-09-28: DEC-78 a DEC-87 (§2); DEC-40 resuelta por DEC-86 | **Contrato documentado, sin implementar** (B-160 a B-168). Sin migraciones de R7 |
+| R7 — Dashboard, indicadores del piloto y throttler | Ninguno. Contrato cerrado el 2026-09-28: DEC-78 a DEC-87 (§2); DEC-40 resuelta por DEC-86 | **Backend implementado** (B-160 a B-166, con commit, sin push). Pendientes: UI (B-167) y validación final (B-168). Sin migraciones de R7 |
 
 ## 2. Registro de decisiones
 
@@ -270,17 +270,17 @@ Diseño: `10-OPERACION-REAL.md` §2.2, §2.3 y §2.7 · contrato: `06-API.md` §
 ### R7 — Dashboard, indicadores del piloto y throttler
 Diseño: `10-OPERACION-REAL.md` §2.5, §2.7 y §2.8 · contrato: `06-API.md` §2, Dashboard, y §4 (rate limit) · pantallas: `07-UI-UX.md` §3.1, §3.8 y §5 · reglas: BR-I1 y BR-D1 a BR-D7 · decisiones: DEC-78 a DEC-87 (§2).
 
-**Estado:** contrato cerrado el 2026-09-28, **sin implementar**. Sin migraciones.
+**Estado:** backend implementado el 2026-09-28 (B-160 a B-166, commits locales sin push); **pendientes** la UI (B-167) y la validación final y cierre (B-168). Sin migraciones ni seed.
 
 | ID | Ítem | Prio | Estado |
 |---|---|---|---|
-| B-160 | Módulo `dashboard` y `GET /dashboard`: validación de `period` y `date` (400), rango `[from, to)` calculado en `Business.timezone` (DEC-78, DEC-79) | M | Pendiente |
-| B-161 | Agregaciones en SQL parametrizado con `businessId` explícito: `totals` (con `bySource`), `washes` (con `byType`), `maintenances` (cobrados y sin cobro) y `series` con buckets vacíos (DEC-80) | M | Pendiente |
-| B-162 | `productsSold` y `topProducts`: vendido desde líneas `PRODUCT`, consumo de mantenimiento desde `MAINTENANCE_USE`, aparte y sin monto (DEC-81) | M | Pendiente |
-| B-163 | `stock` y `reminders.dueNow` reutilizando la lógica de `GET /inventory/alerts` y de recordatorios vencidos (DEC-82) | M | Pendiente |
-| B-164 | Pruebas del dashboard: integración con Postgres real (23:30 y 00:10 de Lima, semana que empieza en lunes, mes, anuladas excluidas, cobro de mantenimiento en otro día, consumo de mantenimiento sin monto, aislamiento entre negocios en cada consulta cruda, montos como `string`); e2e (forma, 400, 401) | M | Pendiente |
-| B-165 | BR-I1 en `/pilot-indicators`: ventas de mostrador, lavados y mantenimientos por separado, sin quitar campos actuales (DEC-85) | M | Pendiente |
-| B-166 | Rate limit de DEC-86: por usuario en `GET` y en `POST`/`PATCH`, login por IP y por `username`, refresh por IP; 429 con `Retry-After` y `RATE_LIMITED`; pruebas | M | Pendiente |
+| B-160 | Módulo `dashboard` y `GET /dashboard`: validación de `period` y `date` (400), rango `[from, to)` calculado en `Business.timezone` (DEC-78, DEC-79) | M | Hecho: `57eea87` |
+| B-161 | Agregaciones en SQL parametrizado con `businessId` explícito: `totals` (con `bySource`), `washes` (con `byType`), `maintenances` (cobrados y sin cobro) y `series` con buckets vacíos (DEC-80) | M | Hecho: `57eea87` |
+| B-162 | `productsSold` y `topProducts`: vendido desde líneas `PRODUCT`, consumo de mantenimiento desde `MAINTENANCE_USE`, aparte y sin monto (DEC-81) | M | Hecho: `bef87e5` |
+| B-163 | `stock` y `reminders.dueNow` reutilizando la lógica de `GET /inventory/alerts` y de recordatorios vencidos (DEC-82) | M | Hecho: `14190e7` (deuda B-905 detectada, fuera de R7) |
+| B-164 | Pruebas del dashboard: integración con Postgres real (23:30 y 00:10 de Lima, semana que empieza en lunes, mes, anuladas excluidas, cobro de mantenimiento en otro día, consumo de mantenimiento sin monto, aislamiento entre negocios en cada consulta cruda, montos como `string`); e2e (forma, 400, 401) | M | Hecho: `57eea87`, `bef87e5` y `14190e7` (`dashboard*.spec`, `integration/dashboard*.int-spec`) |
+| B-165 | BR-I1 en `/pilot-indicators`: ventas de mostrador, lavados y mantenimientos por separado, sin quitar campos actuales (DEC-85) | M | Hecho: `14aff9c` (`counterSales` y `washes` en `adoption`) |
+| B-166 | Rate limit de DEC-86: por usuario en `GET` y en `POST`/`PATCH`, login por IP y por `username`, refresh por IP; 429 con `Retry-After` y `RATE_LIMITED`; pruebas | M | Hecho: `0f4d7c9` (`src/rate-limit/`, reemplaza `@nestjs/throttler`) |
 | B-167 | Web: Inicio con el dashboard (`07` §3.1), barras en SVG/CSS propio (DEC-83), refresco de DEC-84, adopción en el Resumen del piloto y mensaje de 429 sin reintento automático (`07` §5) | M | Pendiente |
 | B-168 | Validación final: `typecheck`, `lint`, `build`, unitarias, integración y e2e; prueba en navegador a 390 × 844 | M | Pendiente |
 

@@ -2,7 +2,25 @@
 
 **Actualizado:** 2026-09-28
 
-## Estado actual (2026-09-28): contrato de R7 cerrado en documentación, sin implementar
+## Estado actual (2026-09-28): backend de R7 implementado hasta B-166; R7 no cerrado
+
+- **R7 backend funcionalmente implementado (B-160 a B-166). R7 NO está cerrado:** faltan la UI (B-167) y la validación final y cierre (B-168).
+- **Commits locales, sin push** (sobre `origin/main` = `c697b96`): `35d8c03` (contrato de R7), `57eea87` (dashboard base: B-160, B-161), `bef87e5` (productos: B-162), `14190e7` (stock y recordatorios: B-163), `14aff9c` (BR-I1: B-165), `0f4d7c9` (throttler DEC-86: B-166) y el commit de documentación "docs: cerrando documentación del backend de R7" (06, 09 y este `STATUS.md`). B-164 (pruebas del dashboard) va repartido en `57eea87`, `bef87e5` y `14190e7`.
+- **Sin commit:** `apps/api/test/wash-types.e2e-spec.ts`. Al validar se vio que B-166 rompía 20 pruebas de ese archivo (429 en vez de 400: hace más de 30 escrituras con el mismo usuario y la misma app). Arreglo solo de prueba: el contador del rate limit se reinicia antes de cada prueba (el límite sigue activo). `src/` no cambió. Queda pendiente de commit, con el mensaje que indique el usuario.
+- **Contenido del backend de R7:**
+  - `GET /dashboard?period=today|week|month&date=`: rango `[from, to)` en `Business.timezone`; ingresos total/efectivo/Yape/ventas; `bySource` COUNTER/WASH/MAINTENANCE; series; lavados por tipo; mantenimientos cobrados/no cobrados por `performedAt`; productos vendidos y top 10 con el consumo de mantenimiento aparte y sin monto; alertas de stock (mismo método que `/inventory/alerts`, `tracksStock = true`); `reminders.dueNow`.
+  - `/pilot-indicators`: `adoption.counterSales` y `adoption.washes` (BR-I1), con los mismos `from`/`to` inclusivos y opcionales del endpoint.
+  - Rate limit DEC-86 en `src/rate-limit/` (reemplaza `@nestjs/throttler`): `GET` 120/min y escrituras 30/min por usuario, login 5/min por IP y por `username`, refresh 20/min por IP; ventana fija de 60 s en memoria; 429 con `Retry-After` y `RATE_LIMITED`.
+  - SQL crudo parametrizado con `businessId` explícito y pruebas de aislamiento; montos como `string` decimal.
+  - **Sin migraciones, sin seed y sin cambios en Supabase durante R7** (`apps/api/prisma/` sin cambios desde `c697b96`).
+- **Validación del backend (2026-09-28, contra `brigith_test` local, Postgres embebido en 55432), con el arreglo de `wash-types.e2e-spec.ts`:** unitarias 449/449 (30 suites), integración 130/130 (15), e2e 136/136 (11), `typecheck` y `build` de la API OK, `git diff --check` OK. `pnpm lint` sigue con los 5931 errores preexistentes de CRLF (`Delete ␍`) en 17 archivos que R7 no tocó; los archivos de R7 pasan.
+- **Documentación:** `06-API.md` refleja el contrato implementado (dashboard, BR-I1, alertas de stock y DEC-86 con claves, ventana, 429 y `Retry-After`). `09-BACKLOG.md`: B-160 a B-166 hechos; B-905 (`checkReminderDue` con la zona del servidor en vez de `Business.timezone`) sigue registrada como deuda fuera de R7, sin resolver.
+- **Pendiente:** commit del arreglo de `wash-types.e2e-spec.ts`; **B-167** (UI de Inicio con el dashboard, adopción en el Resumen del piloto y mensaje de 429 sin reintento) y **B-168** (validación final con `lint`, `build`, las tres suites y prueba en navegador a 390 × 844); push, con autorización.
+- **Próximo paso:** que el usuario indique cómo commitear el arreglo de la prueba; después, B-167.
+
+## Contrato de R7 cerrado en documentación (2026-09-28)
+
+Registro del estado antes de implementar R7. Las menciones "sin implementar" y "sin commit" de esta sección son de ese momento: ver la sección anterior.
 
 - **Base:** `origin/main` = `c697b96` ("docs: cerrando R6 en STATUS"). R3 a R6 cerrados y desplegados; Supabase al día (12 migraciones).
 - **R7 = Dashboard + indicadores del piloto + throttler.** Decisiones aprobadas por el usuario el 2026-09-28: **DEC-78 a DEC-87** (`09-BACKLOG.md` §2 y `10-OPERACION-REAL.md` §3.2h). Contrato en `06-API.md` §2, Dashboard, y §4 (rate limit); pantallas en `07-UI-UX.md` §3.1, §3.8 y §5; reglas BR-I1 y BR-D1 a BR-D7 en `03-BUSINESS-RULES.md`; backlog B-160 a B-168.

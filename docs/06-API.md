@@ -1,6 +1,6 @@
 # 06 — API REST
 
-**Versión:** 0.7 · **Actualizado:** 2026-09-28 (contrato de R7 cerrado en §2, Dashboard, y §4, sin implementar; contrato de R6 cerrado en §2, Mantenimientos, sin implementar; R4 y R5 en §2)
+**Versión:** 0.8 · **Actualizado:** 2026-09-28 (backend de R7 implementado: §2, Dashboard e Indicadores del piloto, y §4, rate limit; la UI de R7 sigue pendiente; contrato de R6 cerrado en §2, Mantenimientos, sin implementar; R4 y R5 en §2)
 Etiquetas: ver `03-BUSINESS-RULES.md`. Todo lo de este documento es [TÉCNICO] salvo lo indicado. La documentación viva será Swagger/OpenAPI generada por NestJS en `/api/docs`; este documento fija el diseño.
 
 ## 1. Convenciones
@@ -25,8 +25,8 @@ Códigos: 200/201 éxito · 400 validación · 401 sin sesión · 403 sin permis
 ### Autenticación
 | Método | Ruta | Descripción |
 |---|---|---|
-| POST | `/auth/login` | Token de acceso y de refresco. Límite propio: 5 intentos por minuto por IP; al superarlo, 429 (ver §4). **R7 (DEC-86):** además, 5 por minuto por `username` |
-| POST | `/auth/refresh` | Renueva el acceso. **R7 (DEC-86):** 20 por minuto por IP |
+| POST | `/auth/login` | Token de acceso y de refresco. Límite propio (DEC-86): 5 intentos por minuto por IP **y** 5 por minuto por `username`; al superarlo, 429 `RATE_LIMITED` (ver §4) |
+| POST | `/auth/refresh` | Renueva el acceso. Límite propio (DEC-86): 20 por minuto por IP |
 | POST | `/auth/logout` | Invalida el refresco |
 | GET | `/auth/me` | Usuario y negocio actuales |
 
@@ -193,11 +193,21 @@ Cobro de mantenimiento, anulación conjunta y mantenimiento sin vehículo (DEC-3
 ### Indicadores del piloto [DECISIÓN] Visión §6
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/pilot-indicators?from=&to=` | **Adopción:** mantenimientos activos (**R7, DEC-85:** además ventas de mostrador y lavados `ACTIVE`, por separado; ver abajo). **Mantenimiento:** mantenimientos con próximo km/fecha y avisos abiertos. **Inventario:** movimientos por tipo y productos con conteo y movimientos. Solo lectura (BR-I1 a BR-I3) |
+| GET | `/pilot-indicators?from=&to=` | **Adopción:** mantenimientos, ventas de mostrador y lavados `ACTIVE`, por separado (R7, DEC-85; ver abajo). **Mantenimiento:** mantenimientos con próximo km/fecha y avisos abiertos. **Inventario:** movimientos por tipo y productos con conteo y movimientos. Solo lectura (BR-I1 a BR-I3) |
 
-**Cambio de R7 en `/pilot-indicators` (DEC-85, BR-I1):** la sección de adopción pasa a devolver, para el período, `counterSales` (`Sale` `ACTIVE`, `source = COUNTER`), `washes` (`Sale` `ACTIVE`, `source = WASH`) y `maintenances` (mantenimientos `ACTIVE`, como hoy). El cobro de mantenimiento no se cuenta aparte. Solo conteos: sin porcentajes ni metas (BR-I4). Los demás indicadores (BR-I2, BR-I3) no cambian. Los nombres exactos de los campos se fijan al implementar (B-165), sin quitar los actuales.
+**BR-I1 desde R7 (DEC-85, implementado en B-165):** `adoption` devuelve tres conteos, sin quitar el campo que ya existía:
 
-### Dashboard (R7: contrato cerrado el 2026-09-28, sin implementar)
+| Campo | Qué cuenta | Fecha que se filtra |
+|---|---|---|
+| `adoption.activeMaintenances` | `Maintenance` `ACTIVE` (campo previo, sin cambios) | `performedAt` |
+| `adoption.counterSales` | `Sale` `ACTIVE` con `source = COUNTER` | `Sale.occurredAt` |
+| `adoption.washes` | `Sale` `ACTIVE` con `source = WASH` | `Sale.occurredAt` |
+
+- **Período:** los tres reutilizan exactamente los `from`/`to` del endpoint (ISO 8601, ambos **opcionales** e **inclusivos**: `>= from` y `<= to`; sin `from` no hay límite inferior y sin `to` no hay superior). La respuesta repite `from`/`to` tal como llegaron, o `null`. No usa `Business.timezone` ni la semántica `[from, to)` del dashboard.
+- El cobro de mantenimiento (`source = MAINTENANCE`) no se cuenta aparte: el mantenimiento ya está en `activeMaintenances`. Las anuladas no cuentan.
+- Solo conteos (enteros): sin porcentajes ni metas (BR-I4). `maintenance` (BR-I2) e `inventory` (BR-I3) no cambian.
+
+### Dashboard (R7: backend implementado el 2026-09-28, B-160 a B-164; UI pendiente, B-167)
 
 Decisiones: DEC-78 a DEC-84 (`09-BACKLOG.md` §2). Reglas: BR-D1 a BR-D7 (`03`). Un único módulo `dashboard` y un único endpoint, de solo lectura (sin `Idempotency-Key`).
 
@@ -215,27 +225,29 @@ Decisiones: DEC-78 a DEC-84 (`09-BACKLOG.md` §2). Reglas: BR-D1 a BR-D7 (`03`).
 DashboardResponse {
   period: { kind: 'today'|'week'|'month'; date: 'YYYY-MM-DD'; from: ISO8601; to: ISO8601; timezone: string }; // [from, to)
   totals: { total; cash; yape; salesCount; bySource: { counter; wash; maintenance } };                      // montos
-  washes: { count; amount; byType: [{ washTypeId; name; count; amount }] };
+  washes: { count; amount; byType: [{ washTypeId: string|null; name; count; amount }] };
   maintenances: { count; charged; uncharged };
   productsSold: { units };                                        // líneas PRODUCT de ventas ACTIVE
   topProducts: [{ productId; name; soldUnits; soldAmount; maintenanceUnits }];   // máx. 10
   series: [{ bucket: ISO8601; counter; wash; maintenance }];     // por hora (today) o por día (week, month)
-  stock: { outOfStock; negative; notCounted; items: StockAlertItem[] };          // items máx. 10
-  reminders: { dueNow };
+  stock: { outOfStock; negative; notCounted; items: StockAlertProduct[] };       // items máx. 10
+  reminders: { dueNow };                                          // no depende del período
 }
 ```
+
+Tipos: `salesCount`, `washes.count`, `byType[].count`, `maintenances.*`, `stock.outOfStock`, `stock.negative`, `stock.notCounted` y `reminders.dueNow` son enteros. Todos los montos (`totals.*`, `bySource.*`, `washes.amount`, `byType[].amount`, `soldAmount`, `series[].counter|wash|maintenance`) y las cantidades de producto (`productsSold.units`, `soldUnits`, `maintenanceUnits`) son `string` decimal. `StockAlertProduct` es el mismo elemento de `GET /inventory/alerts` (`productId`, `name`, `unit`, `balance`).
 
 **Reglas de cálculo:**
 - **Rango:** `from` y `to` son los límites local 00:00 del primer día y 00:00 del día siguiente al último, convertidos a UTC; se filtra `occurredAt >= from AND occurredAt < to`. Las series agrupan con `date_trunc(..., occurredAt AT TIME ZONE timezone)` e incluyen los buckets vacíos en cero (BR-D1).
 - **Ingresos (`totals`, `series`):** solo `Sale` `ACTIVE` (BR-D2), por `Sale.occurredAt`. `cash`/`yape` por `paymentMethod`; `bySource` por `source` (BR-D3). `salesCount` = número de ventas `ACTIVE` de todos los orígenes.
-- **Lavados:** ventas `ACTIVE` con `source = WASH`; `byType` agrupa por `SaleLine.washTypeId` con el nombre actual del tipo.
+- **Lavados:** ventas `ACTIVE` con `source = WASH`; `byType` agrupa por `SaleLine.washTypeId` con el nombre actual del tipo. `washTypeId` es `null` si el tipo ya no existe (FK `ON DELETE SET NULL`).
 - **Mantenimientos:** `Maintenance` `ACTIVE` por `performedAt` en el rango; `count` = `charged` + `uncharged`, con `charged` = con venta asociada `ACTIVE` y `uncharged` = sin venta (BR-D4). El cobro no suma otro mantenimiento. Su ingreso está solo en `bySource.maintenance` (y en `totals`/`series`), fechado por `Sale.occurredAt`, la hora real del cobro.
-- **Productos:** `productsSold.units` y `soldUnits`/`soldAmount` salen de las líneas `PRODUCT` de ventas `ACTIVE`. `maintenanceUnits` sale de `inventory_movements` `MAINTENANCE_USE` (`refType = 'Maintenance'`) de mantenimientos `ACTIVE`, como cantidad positiva; **no** suma a ningún monto (BR-D5). Orden: `soldUnits + maintenanceUnits` descendente, luego nombre.
-- **Stock:** la misma lógica de `GET /inventory/alerts` (BR-P19); `items` toma hasta 10 (primero negativos, luego agotados).
-- **Recordatorios:** `dueNow` = cantidad que devolvería `GET /reminders?due=now&status=PENDING` (misma lógica, sin duplicarla).
-- **Montos y cantidades:** `string` decimal (como el resto de la API), nunca `float`.
+- **Productos:** `productsSold.units` y `soldUnits`/`soldAmount` salen de las líneas `PRODUCT` de ventas `ACTIVE` (en la práctica, de mostrador), por `Sale.occurredAt`, controlen stock o no. `maintenanceUnits` sale de `inventory_movements` `MAINTENANCE_USE` (`refType = 'Maintenance'`) de mantenimientos `ACTIVE`, como cantidad positiva; **no** suma a ningún monto (BR-D5). Orden: `soldUnits + maintenanceUnits` descendente, luego nombre e `id`; máximo 10.
+- **Stock:** el mismo método que `GET /inventory/alerts` (BR-P19), así que las dos pantallas coinciden. `outOfStock` y `negative` cuentan productos activos con **`tracksStock = true`** y conteo inicial, con saldo `= 0` y `< 0`; `notCounted` cuenta los activos con `tracksStock = true` sin conteo. Un producto con `tracksStock = false` nunca es alerta (BR-P16). `items` toma hasta 10 (primero negativos, luego agotados, cada grupo por nombre). Es el saldo actual: no depende del período.
+- **Recordatorios:** `dueNow` = cantidad que devolvería `GET /reminders?due=now&status=PENDING` (el mismo método del servicio, sin duplicar la lógica). No depende del período. Hereda la deuda B-905 (`09-BACKLOG.md` §3): el "hoy" de `checkReminderDue` usa la zona del servidor, no `Business.timezone`.
+- **Montos y cantidades:** `string` decimal calculado en Postgres (`numeric`) y serializado sin pasar por `float` (como el resto de la API).
 - **Aislamiento y SQL:** las consultas SQL crudas no pasan por `forBusiness`: llevan `businessId` explícito, son parametrizadas (`$queryRaw` con plantilla, sin `$queryRawUnsafe` ni texto interpolado) y cada una tiene una prueba de aislamiento entre negocios.
-- **Índices:** alcanzan los existentes (`sales [businessId, status, occurredAt]`, `inventory_movements [businessId, productId, occurredAt]`, `maintenances` por `businessId`). Sin migración en R7; se revisa si el piloto muestra lentitud.
+- **Índices:** alcanzan los existentes (`sales [businessId, status, occurredAt]`, `inventory_movements [businessId, productId, occurredAt]`, `maintenances` por `businessId`). Sin migración en R7 (`prisma/` no cambió en R7); se revisa si el piloto muestra lentitud.
 
 **Errores:** 400 `VALIDATION_ERROR` · 401 · 429 `RATE_LIMITED`.
 
@@ -529,8 +541,7 @@ Los cinco puntos que estaban "Por definir" se cerraron con el usuario el 2026-09
 - Las lecturas son seguras de reintentar. Las escrituras críticas son idempotentes.
 - Ningún endpoint exige placa, teléfono ni cliente salvo donde `03` lo indique (BR-C1 a BR-C5).
 - Ningún endpoint modifica ni elimina movimientos de inventario.
-- Rate limit en memoria, por IP y por endpoint: 20 peticiones por minuto como protección general, y 5 por minuto en `POST /auth/login`. Al superarlo responde 429. No hay bloqueo de cuentas ni almacenamiento compartido (Redis). Sin `trust proxy`, detrás de un proxy todas las peticiones cuentan como la misma IP (DEC-10).
-- **Rate limit desde R7 (DEC-86, [TÉCNICO]; contrato cerrado el 2026-09-28, sin implementar).** Reemplaza al anterior. Valores de protección inicial, revisables con datos del piloto:
+- **Rate limit (DEC-86, [TÉCNICO]; implementado en R7, B-166).** Reemplazó al de `@nestjs/throttler` (20 por minuto por IP y endpoint, y 5 por minuto en login). No hay bloqueo de cuentas ni almacenamiento compartido (Redis). Valores de protección inicial, revisables con datos del piloto:
 
   | Tráfico | Límite | Clave |
   |---|---|---|
@@ -539,7 +550,15 @@ Los cinco puntos que estaban "Por definir" se cerraron con el usuario el 2026-09
   | `POST /auth/login` | 5 por minuto por IP **y** 5 por minuto por `username` | IP; `username` del cuerpo |
   | `POST /auth/refresh` | 20 por minuto | IP |
 
-  Ventana fija de 60 segundos, almacenamiento en memoria (válido para la arquitectura actual de una sola instancia de la API; con varias haría falta un almacenamiento compartido). Al exceder: **429** con cabecera `Retry-After` (segundos) y cuerpo en el formato de error de la API con `code: "RATE_LIMITED"`. La web no reintenta automáticamente (`07` §5). Los límites por IP siguen sujetos a la nota de `trust proxy` (DEC-10).
+  Ventana fija de 60 segundos, almacenamiento en memoria (válido para la arquitectura actual de una sola instancia de la API; con varias haría falta un almacenamiento compartido). Al exceder: **429** con cabecera `Retry-After` (segundos, mínimo 1) y cuerpo en el formato de error de la API con `code: "RATE_LIMITED"`. La web no reintenta automáticamente (`07` §5).
+
+  Detalles de la implementación (`src/rate-limit/`, guard global):
+  - Claves: `read:user:<userId>` y `write:user:<userId>` (el `sub` de un token de acceso válido); `login-ip:<ip>`, `login-username:<username>` y `refresh-ip:<ip>`. Las dos cuotas de login se cuentan a la vez; si falta `username` en el cuerpo, solo cuenta la de IP.
+  - `HEAD` cuenta como lectura y `PUT`/`DELETE` como escritura. Login y refresh tienen su propio límite y no suman a los generales.
+  - Sin token, o con uno inválido o vencido, la petición cuenta por IP (`read:ip:<ip>` / `write:ip:<ip>`) con los mismos límites, sin consumir la cuota del usuario del token; la ruta protegida responde luego 401.
+  - La ventana empieza con la primera petición de la clave y se reinicia entera al vencer. Una petición rechazada con 429 no suma.
+  - CORS expone `Retry-After` para que la web pueda leerla.
+  - Los límites por IP usan `req.ip`, sin `trust proxy`: detrás de un proxy todas las peticiones cuentan como la misma IP (DEC-10).
 
 ## 5. Puntos abiertos que afectan la API
 
