@@ -2,7 +2,23 @@
 
 **Actualizado:** 2026-09-28
 
-## Estado actual (2026-09-28): R6 implementado, cerrado y desplegado en Supabase
+## Estado actual (2026-09-28): contrato de R7 cerrado en documentación, sin implementar
+
+- **Base:** `origin/main` = `c697b96` ("docs: cerrando R6 en STATUS"). R3 a R6 cerrados y desplegados; Supabase al día (12 migraciones).
+- **R7 = Dashboard + indicadores del piloto + throttler.** Decisiones aprobadas por el usuario el 2026-09-28: **DEC-78 a DEC-87** (`09-BACKLOG.md` §2 y `10-OPERACION-REAL.md` §3.2h). Contrato en `06-API.md` §2, Dashboard, y §4 (rate limit); pantallas en `07-UI-UX.md` §3.1, §3.8 y §5; reglas BR-I1 y BR-D1 a BR-D7 en `03-BUSINESS-RULES.md`; backlog B-160 a B-168.
+  - `GET /dashboard?period=today|week|month&date=YYYY-MM-DD`, un único módulo, solo lectura. Sin comparación de períodos, metas ni stock mínimo (DEC-78).
+  - `Business.timezone` como fuente de verdad (`America/Lima`); día local `[00:00, 24:00)`, semana lunes a domingo, mes calendario; 23:30 de Lima cae en ese día (DEC-79).
+  - Solo `ACTIVE`; SQL crudo con `businessId` explícito y parametrizado; montos como `string`. Ingresos por `Sale.source` y `Sale.occurredAt` (el de mantenimiento, por la hora real del cobro, solo en la venta `MAINTENANCE`); mantenimientos contados por `performedAt`, cobrados o sin cobro, sin segundo conteo por el cobro (DEC-80, regla de fechas confirmada explícitamente por el usuario).
+  - Más vendidos con el consumo de mantenimientos desde `inventory_movements`, aparte y sin sumar a ventas (DEC-81). Stock y recordatorios reutilizan la lógica existente (DEC-82).
+  - Barras en SVG o CSS propio, sin dependencias (DEC-83). Sin TanStack Query: `useApiQuery` con refresco al enfocar, cada 60 s y al volver a Inicio (DEC-84).
+  - BR-I1 en `/pilot-indicators`: ventas de mostrador, lavados y mantenimientos por separado, sin metas (DEC-85).
+  - Rate limit [TÉCNICO] (DEC-86, resuelve DEC-40): `GET` 120/min y `POST`/`PATCH` 30/min por usuario; login 5/min por IP y 5/min por `username`; refresh 20/min por IP; ventana fija de 60 s en memoria; 429 con `Retry-After` y `RATE_LIMITED`; la web no reintenta sola. Revisable con datos del piloto.
+  - **A2 queda fuera de R7** (DEC-87): corte técnico separado, posterior a R7.
+- **`05-DATABASE.md` sin cambios:** los índices actuales alcanzan para el dashboard con el volumen del piloto; R7 no tiene migraciones.
+- **Sin cambios de código, sin migraciones, sin seed, sin Supabase.** Cambios de documentación **sin commit ni push**.
+- **Próximo paso:** revisión del diff por el usuario; con su autorización, commit de la documentación. Después, implementar R7 empezando por B-160 y B-161.
+
+## Estado al 2026-09-28: R6 implementado, cerrado y desplegado en Supabase
 
 - **R6 (cobro de mantenimiento, anulación conjunta y mantenimiento sin vehículo): implementado y cerrado.** El contrato está en la sección siguiente.
 - **Commits de R6** (sobre `b159655`): `c02115b` "docs: actualizando contratos de R6", `9edd5b3` "fix: corrigiendo concurrencia al anular mantenimientos", `3564d0f` "feat: implementando cobro y anulación conjunta de mantenimientos" y `0f09aa5` "feat: implementando interfaz de mantenimientos de R6" (37 archivos respecto de `b159655`).
@@ -13,12 +29,12 @@
   - `_prisma_migrations`: **12 migraciones, 12 terminadas, 0 con rollback.** Checksum de R6 `5359c11a…93ac16` = sha256 de `migration.sql`. `maintenances.vehicleId` quedó nullable.
   - `migrate status`: "Database schema is up to date!" (**sin migraciones pendientes**; el primer intento después del deploy falló por conexión con el pooler, el segundo pasó). `migrate diff` contra `schema.prisma`: "No difference detected".
   - Sin seed ni cambios de datos.
-- **Deudas deliberadas para R7:**
-  - **A2:** atomicidad entre la reserva de la `Idempotency-Key` y el efecto (DEC-76).
-  - **Throttler:** rate limit de 20 req/min por endpoint (DEC-40; `10-OPERACION-REAL.md` lo ubica en R7).
+- **Deudas deliberadas** (corregido el 2026-09-28 con el contrato de R7):
+  - **A2:** atomicidad entre la reserva de la `Idempotency-Key` y el efecto (DEC-76). **No** forma parte de R7: queda como corte técnico separado, posterior a R7 (DEC-87).
+  - **Throttler:** el rate limit actual (20 req/min por IP y endpoint) se reemplaza en R7 (DEC-86, resuelve DEC-40).
 - **`apps/api/test/business-scope.coverage.spec.ts`:** sigue sin versionar, a propósito, en el entorno donde se trabajó R6. No existe en este working tree. No se toca ni se incluye en commits.
-- **R7 (dashboard, indicadores del piloto y throttler): no empezado.** Todavía no tiene contrato, decisiones ni ítems de backlog.
-- **Próximo paso:** cerrar el contrato de R7 solo en documentación (decisiones, `06`, `07`, `03` y `09`), con autorización. Decidir si se borra la rama `origin/claude/admiring-pasteur-522mg8`.
+- **R7 (dashboard, indicadores del piloto y throttler): no empezado** en ese momento. Su contrato se cerró después (ver "Estado actual").
+- **Próximo paso (en ese momento):** cerrar el contrato de R7 en documentación (hecho, ver "Estado actual"). Sigue pendiente decidir si se borra la rama `origin/claude/admiring-pasteur-522mg8`.
 
 ## Contrato de R6 (2026-09-28)
 

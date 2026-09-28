@@ -1,6 +1,6 @@
 # 09 — Backlog y registro de decisiones
 
-**Versión:** 0.8 · **Actualizado:** 2026-09-28 (R4 y R5 cerrados; contrato de R6 cerrado sin implementar: DEC-69 a DEC-77)
+**Versión:** 0.8 · **Actualizado:** 2026-09-28 (contrato de R7 cerrado sin implementar: DEC-78 a DEC-87, B-160 a B-168; antes, R4 y R5 cerrados; contrato de R6 cerrado sin implementar: DEC-69 a DEC-77)
 Etiquetas: ver `03-BUSINESS-RULES.md`. Prioridad: **M** Must · **S** Should · **C** Could.
 
 ## 1. Lo que bloquea el inicio del desarrollo
@@ -22,6 +22,7 @@ Los bloqueos 1 y 2 son del inicio del MVP. El MVP se construyó (`v1.0-mvp`) con
 | R4 — Ventas de mostrador, consultas, anulación y su UI | Ninguno. Decisiones cerradas el 2026-09-26: DEC-30 y el alcance de R4 (§2) | **Cerrado** (2026-09-27): commit `9702197` en `origin/main`, migración `20260926175402_r4_sales` aplicada en Supabase (ver `STATUS.md`) |
 | R5 — Lavados, su configuración y su UI | Ninguno. Contrato cerrado el 2026-09-26 (DEC-63 a DEC-67) y reparto con B-135 decidido (DEC-68) | **Cerrado** (2026-09-27): commit `9702197` en `origin/main`, migración `20260927023545_r5_washes` y seed de lavados de brigith aplicados en Supabase (ver `STATUS.md`) |
 | R6 — Cobro de mantenimiento, anulación conjunta y mantenimiento sin vehículo (DEC-31) | Antes, el **Corte 0** (DEC-77): anulación condicional de mantenimiento. Contrato cerrado el 2026-09-28: DEC-69 a DEC-77 (§2) | **Contrato documentado, sin implementar** (B-150 a B-158). Sin migraciones de R6 |
+| R7 — Dashboard, indicadores del piloto y throttler | Ninguno. Contrato cerrado el 2026-09-28: DEC-78 a DEC-87 (§2); DEC-40 resuelta por DEC-86 | **Contrato documentado, sin implementar** (B-160 a B-168). Sin migraciones de R7 |
 
 ## 2. Registro de decisiones
 
@@ -105,6 +106,16 @@ Decisiones de R5, aprobadas por el usuario el 2026-09-26 (detalle en `10-OPERACI
 | DEC-75 | `Sale.occurredAt` del cobro = hora real del cobro, fijada por el servidor; el cobro no acepta `occurredAt` del cliente. `Maintenance.performedAt` sigue siendo el momento del servicio | **Aprobada** (2026-09-28) | R6 |
 | DEC-76 | R6 usa el `IdempotencyService` actual. La atomicidad entre la reserva de la clave y el efecto (hallazgo A2) queda como **deuda técnica** en un corte separado, fuera de R6 | **Aprobada** (2026-09-28) | Fuera de R6 |
 | DEC-77 | **Corte 0, antes de R6:** `POST /maintenances/:id/void` hace la transición `ACTIVE → VOIDED` condicional en la misma transacción; si no cambia ninguna fila, 409 `MAINTENANCE_ALREADY_VOIDED` sin movimientos (hallazgo A1). En R6, orden de bloqueo **Maintenance → Sale**; si la venta ya está `VOIDED`, la anulación continúa sin generar movimientos | **Aprobada** (2026-09-28) | Antes de R6 |
+| DEC-78 | **Dashboard de R7:** un único módulo y endpoint `GET /dashboard?period=today\|week\|month&date=YYYY-MM-DD`, de solo lectura. Muestra ingresos (total, efectivo, Yape, número de ventas y monto por origen), lavados (cantidad, monto y por tipo), mantenimientos del período (cobrados y sin cobro), productos más vendidos (hasta 10), stock que requiere atención y recordatorios por avisar. Período Hoy · Semana · Mes. **Sin** comparación con otro período, metas, stock mínimo ni métricas que el negocio no haya pedido (BR-D6) | **Aprobada** (2026-09-28) | R7 |
+| DEC-79 | **Zona horaria y día operativo:** `Business.timezone` es la fuente de verdad (`America/Lima` en brigith). Día local `[00:00, 24:00)`; semana de lunes a domingo; mes calendario. Una venta a las 23:30 de Lima cae en ese día. Series por hora (Hoy) o por día (Semana, Mes) (BR-D1) | **Aprobada** (2026-09-28) | R7 |
+| DEC-80 | **Agregación:** solo `Sale` y `Maintenance` `ACTIVE`. SQL crudo con `businessId` explícito, parametrizado y con prueba de aislamiento; montos y cantidades como `string` decimal, nunca `float`. Ingresos por `Sale.source` (`COUNTER`, `WASH`, `MAINTENANCE`) y `Sale.occurredAt` (el de mantenimiento, hora del cobro, DEC-75); mantenimientos contados por `performedAt`, cobrados o sin cobro; el cobro no genera un segundo conteo y su dinero solo vive en la venta `MAINTENANCE` (BR-D2 a BR-D4). Sin migración salvo que falte un índice necesario: con los existentes y el volumen del piloto, no falta ninguno | **Aprobada** (2026-09-28) | R7 |
+| DEC-81 | **Productos más vendidos:** incluyen el consumo en mantenimientos, contado desde `inventory_movements` (`MAINTENANCE_USE` de mantenimientos `ACTIVE`) y mostrado aparte de lo vendido (líneas `PRODUCT` de ventas `ACTIVE`). El consumo es inventario: **no** suma a ventas ni a ingresos, y la pantalla lo dice (BR-D5) | **Aprobada** (2026-09-28) | R7 |
+| DEC-82 | **Stock y recordatorios en el dashboard:** reutilizan la lógica de `GET /inventory/alerts` (BR-P19) y de `GET /reminders?due=now&status=PENDING`, sin criterios nuevos (BR-D7) | **Aprobada** (2026-09-28) | R7 |
+| DEC-83 | **Gráficos:** cifras más barras simples con SVG o CSS propio, **sin dependencias nuevas** | **Aprobada** (2026-09-28) | R7 |
+| DEC-84 | **Capa de datos:** TanStack Query (DEC-38) **no entra en R7**; se mantiene `useApiQuery`. El dashboard se vuelve a pedir al volver a la pestaña, cada 60 s mientras Inicio está visible y al volver a Inicio después de registrar una operación | **Aprobada** (2026-09-28) | R7 |
+| DEC-85 | **BR-I1 (adopción) entra en R7:** `/pilot-indicators` cuenta por separado ventas de mostrador, lavados (ventas `ACTIVE` por `source`) y mantenimientos no anulados del período. El cobro de mantenimiento no se cuenta aparte. Datos reales, sin porcentajes objetivo ni metas (BR-I4 sigue pendiente). `/pilot-indicators` no cambia en nada más | **Aprobada** (2026-09-28) | R7 |
+| DEC-86 | **Rate limit (resuelve DEC-40), [TÉCNICO]:** `GET` 120/min por usuario; `POST`/`PATCH` 30/min por usuario; login 5/min por IP y 5/min por `username`; refresh 20/min por IP. Ventana fija de 60 s, en memoria (una sola instancia de la API). Al exceder: 429 con `Retry-After` y `code: "RATE_LIMITED"`; la web no reintenta sola. Protección inicial, **revisable con datos del piloto**; el límite actual de 20/min por IP y endpoint fue solo la referencia | **Aprobada** (2026-09-28) | R7 |
+| DEC-87 | **A2 (DEC-76) queda fuera de R7:** corte técnico separado, posterior a R7. No se toca el `IdempotencyService` en R7 | **Aprobada** (2026-09-28) | Después de R7 |
 
 ## 3. Backlog por corte
 
@@ -255,6 +266,25 @@ Diseño: `10-OPERACION-REAL.md` §2.2, §2.3 y §2.7 · contrato: `06-API.md` §
 | B-158 | Pruebas: ninguna venta `MAINTENANCE` mueve stock; un solo cobro por mantenimiento; anulación conjunta sin doble `MAINTENANCE_VOID`; rechazo 400 sin vehículo; aislamiento entre negocios (unitarias, e2e e integración Postgres) | M | Pendiente |
 
 **Fuera de R6:** volver a cobrar un mantenimiento (DEC-69) · asignar un vehículo después (DEC-73) · clientes en la venta (R8, DEC-74) · atomicidad de la idempotencia (A2, DEC-76) · dashboard (R7).
+
+### R7 — Dashboard, indicadores del piloto y throttler
+Diseño: `10-OPERACION-REAL.md` §2.5, §2.7 y §2.8 · contrato: `06-API.md` §2, Dashboard, y §4 (rate limit) · pantallas: `07-UI-UX.md` §3.1, §3.8 y §5 · reglas: BR-I1 y BR-D1 a BR-D7 · decisiones: DEC-78 a DEC-87 (§2).
+
+**Estado:** contrato cerrado el 2026-09-28, **sin implementar**. Sin migraciones.
+
+| ID | Ítem | Prio | Estado |
+|---|---|---|---|
+| B-160 | Módulo `dashboard` y `GET /dashboard`: validación de `period` y `date` (400), rango `[from, to)` calculado en `Business.timezone` (DEC-78, DEC-79) | M | Pendiente |
+| B-161 | Agregaciones en SQL parametrizado con `businessId` explícito: `totals` (con `bySource`), `washes` (con `byType`), `maintenances` (cobrados y sin cobro) y `series` con buckets vacíos (DEC-80) | M | Pendiente |
+| B-162 | `productsSold` y `topProducts`: vendido desde líneas `PRODUCT`, consumo de mantenimiento desde `MAINTENANCE_USE`, aparte y sin monto (DEC-81) | M | Pendiente |
+| B-163 | `stock` y `reminders.dueNow` reutilizando la lógica de `GET /inventory/alerts` y de recordatorios vencidos (DEC-82) | M | Pendiente |
+| B-164 | Pruebas del dashboard: integración con Postgres real (23:30 y 00:10 de Lima, semana que empieza en lunes, mes, anuladas excluidas, cobro de mantenimiento en otro día, consumo de mantenimiento sin monto, aislamiento entre negocios en cada consulta cruda, montos como `string`); e2e (forma, 400, 401) | M | Pendiente |
+| B-165 | BR-I1 en `/pilot-indicators`: ventas de mostrador, lavados y mantenimientos por separado, sin quitar campos actuales (DEC-85) | M | Pendiente |
+| B-166 | Rate limit de DEC-86: por usuario en `GET` y en `POST`/`PATCH`, login por IP y por `username`, refresh por IP; 429 con `Retry-After` y `RATE_LIMITED`; pruebas | M | Pendiente |
+| B-167 | Web: Inicio con el dashboard (`07` §3.1), barras en SVG/CSS propio (DEC-83), refresco de DEC-84, adopción en el Resumen del piloto y mensaje de 429 sin reintento automático (`07` §5) | M | Pendiente |
+| B-168 | Validación final: `typecheck`, `lint`, `build`, unitarias, integración y e2e; prueba en navegador a 390 × 844 | M | Pendiente |
+
+**Fuera de R7:** comparación con otro período, metas y porcentajes objetivo (BR-I4), stock mínimo, TanStack Query (DEC-38, DEC-84), librerías de gráficos, WebSocket/SSE, cifras por empleado (P-12) y la atomicidad de la idempotencia (A2, DEC-76 y DEC-87: corte técnico posterior).
 
 ### Fase 2
 B-100 (venta rápida) y B-101 (métodos de pago) pasaron a R4 el 2026-09-26; B-102 (lavado) pasó a R5.

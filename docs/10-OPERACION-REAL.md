@@ -10,6 +10,8 @@ Etiquetas: ver `03-BUSINESS-RULES.md`. Nada de este documento está implementado
 
 **Cambios del 2026-09-26 (alcance de R4, aprobado por el usuario):** DEC-30 cerrada (un método de pago por venta); R4 fijado como ventas de mostrador + consultas + anulación + su UI; `ProductSaleUnit` fuera de R4; la venta aplica `BLOCK` fijo y no lee `Business.insufficientStockPolicy`. Ver §2.1, §2.5, §2.6, §2.7, §2.10 y §3.2e.
 
+**Cambios del 2026-09-28 (contrato de R7, aprobado por el usuario):** DEC-78 a DEC-87 (§3.2h); DEC-40 resuelta por DEC-86 (rate limit). Se alinean el dashboard de §2.5, `DashboardResponse` de §2.7 y la estrategia de §2.8. El contrato vigente está en `06-API.md` §2, Dashboard, y §4. Sin implementar.
+
 ---
 
 ## 0. Datos del dueño
@@ -143,9 +145,9 @@ Base sólida y verificada (190 tests unitarios, typecheck y lint limpios según 
 | Mantenimiento indivisible + recordatorio + anulación | Completo y bien probado | Reutilizar. **Modificar** para: cobro opcional (sin duplicar ingreso), vehículo opcional (decisión), extraer la lógica de stock a un servicio común |
 | Política de stock insuficiente | `ALLOW_WITH_WARNING` provisional (BR-P12) | **Choca** con el pedido "no permitir stock negativo salvo decisión explícita". Ver DEC-26 |
 | Recordatorios + WhatsApp `wa.me` | Completo | Reutilizar. Pendiente conocido: reabrir recordatorio descartado por anulación |
-| Indicadores del piloto | Completo | Carga **todas** las filas y filtra en memoria. Mantener para `/resumen`; el dashboard nuevo usa agregaciones en SQL. BR-I1 (adopción) debería contar también ventas y lavados |
+| Indicadores del piloto | Completo | Carga **todas** las filas y filtra en memoria. Mantener para `/resumen`; el dashboard nuevo usa agregaciones en SQL. BR-I1 (adopción) debería contar también ventas y lavados. **R7:** lo hace (DEC-85) |
 | Configuración del negocio | Completo | `currency` sigue nulo: los precios confirmados están en soles → proponer `PEN` |
-| Rate limit | 20 req/min **por IP y por endpoint**, en memoria | Con catálogo navegable + dashboard con refresco es fácil llegar a 429. Revisar antes del piloto |
+| Rate limit | 20 req/min **por IP y por endpoint**, en memoria | Con catálogo navegable + dashboard con refresco es fácil llegar a 429. Revisar antes del piloto. **R7:** reemplazado por límites por usuario (DEC-86) |
 | Tests | Unitarios con `fake-scoped-prisma` (Map en memoria, `$transaction` sin aislamiento, `$queryRaw` no-op); e2e solo `/health` | El fake **no puede** probar bloqueos, SQL de agregación ni zonas horarias. CI ya levanta Postgres 16 → agregar tests de integración reales |
 | Bug menor | `ListProductsQueryDto.includeStock` usa `@Type(() => Boolean)`: el string `"false"` se convierte en `true` | Corregir al tocar el DTO |
 
@@ -486,7 +488,7 @@ Flujo del mapa: Inicio → Vender → categorías → productos → carrito → 
 **Clientes y Avisar por WhatsApp:** ver §2.11.
 
 **Dashboard / Inicio**
-- Selector **Hoy · Semana · Mes** (zona horaria del negocio).
+- Selector **Hoy · Semana · Mes** (zona horaria del negocio; semana de lunes a domingo, mes calendario: DEC-79). Sin comparación con otro período (DEC-78).
 - Acciones grandes arriba: Vender · Lavado · Mantenimiento · Recibir.
 - Búsqueda rápida por **cliente, vehículo o placa** (reutiliza `GET /vehicles/lookup` y `GET /customers?search=`, que busca por nombre, teléfono o placa).
 - Cifras: ingresos totales · efectivo · Yape · productos vendidos (unidades) · lavados (cantidad y monto) · mantenimiento (un solo monto, §2.2) · mantenimientos sin cobro.
@@ -495,9 +497,10 @@ Flujo del mapa: Inicio → Vender → categorías → productos → carrito → 
   |---|---|
   | Barra apilada/donut Efectivo vs Yape | ¿Cuánto efectivo debería haber en caja y cuánto en Yape? |
   | Barras por hora (Hoy) / por día (Semana, Mes), apiladas por Productos / Lavado / Mantenimiento | ¿Cuándo entra el dinero y de qué? |
-  | Barras horizontales: productos más vendidos del período (unidades) | ¿Qué se agota más? (el dueño hoy no lo sabe; esto lo mide con datos reales, sin inventar una regla) |
+  | Barras horizontales: productos más vendidos del período (unidades), con lo usado en mantenimientos aparte y sin monto (DEC-81) | ¿Qué se agota más? (el dueño hoy no lo sabe; esto lo mide con datos reales, sin inventar una regla) |
 - **Stock que requiere atención** como lista (no gráfico): agotados (≤ 0), negativos (descuadre) y cuántos productos siguen sin conteo inicial. Sin stock mínimo (el dueño no tiene esa regla, §0.1).
 - Recordatorios pendientes (contador → Avisar).
+- **R7:** los gráficos son barras simples en SVG o CSS propio, sin librerías (DEC-83). Contrato de la pantalla en `07-UI-UX.md` §3.1.
 
 ### 2.6 Reglas de negocio que cambian o se agregan (propuesta)
 
@@ -595,17 +598,17 @@ CreateSaleResult = SaleResponse & { warnings: StockWarning[] }   // mismo format
 // POST /washes
 CreateWashDto { id?: uuid; washTypeId: uuid; priceOptionId: uuid; paymentMethod; occurredAt?: ISO8601; note?: string /* ≤ 500 */ }
 
-// GET /dashboard
+// GET /dashboard (R7, DEC-78 a DEC-82; contrato vigente en 06-API.md §2, Dashboard)
+// Sin byLineKind (repetía bySource) ni productsSold.lines; series sin cash/yape.
 DashboardResponse {
-  period: { kind: 'today'|'week'|'month'; from; to; timezone };
+  period: { kind: 'today'|'week'|'month'; date; from; to; timezone };     // [from, to)
   totals: { total; cash; yape; salesCount;
-            bySource: { counter; wash; maintenance };           // montos
-            byLineKind: { product; wash; service } };           // montos; service = cobros de mantenimiento (monto único)
-  productsSold: { units; lines };
+            bySource: { counter; wash; maintenance } };                   // montos
   washes: { count; amount; byType: [{ washTypeId; name; count; amount }] };
   maintenances: { count; charged; uncharged };
-  series: [{ bucket: ISO8601; counter; wash; maintenance; cash; yape }];   // hora (today) o día
-  topProducts: [{ productId; name; units; amount }];                       // máx. 10
+  productsSold: { units };
+  topProducts: [{ productId; name; soldUnits; soldAmount; maintenanceUnits }];   // máx. 10; maintenanceUnits sin monto
+  series: [{ bucket: ISO8601; counter; wash; maintenance }];               // hora (today) o día
   stock: { outOfStock; negative; notCounted; items: StockAlertItem[] (máx. 10) };
   reminders: { dueNow };
 }
@@ -621,8 +624,8 @@ Errores nuevos: `INSUFFICIENT_STOCK` (422, ya existe), `SALE_NOT_FOUND`, `SALE_A
 - **Tras cada escritura** (venta, lavado, mantenimiento, recepción, ajuste, anulación): el cliente invalida `dashboard`, `products`, `inventory` y `sales` → la pantalla se recalcula sola.
 - **Refresco de respaldo** (por si hay un segundo dispositivo): al volver a la pestaña/app y cada 60 s mientras Inicio esté visible.
 - **Sin WebSocket/SSE** por ahora: un solo usuario (H-04). Se reabre si aparecen empleados (P-12).
-- **Implementación cliente:** DEC-38 (recomendado: TanStack Query, que da caché, `invalidateQueries`, `refetchOnWindowFocus` y `refetchInterval` sin código propio).
-- **Gráficos:** librería liviana (propuesta: Recharts, o SVG propio si pesa demasiado en la PWA); se decide en la Fase 4 aplicando la guía de visualización.
+- **Implementación cliente:** DEC-38 (recomendado: TanStack Query, que da caché, `invalidateQueries`, `refetchOnWindowFocus` y `refetchInterval` sin código propio). **R7 (DEC-84):** TanStack Query no entra; se usa `useApiQuery` con refresco al volver a la pestaña, cada 60 s con Inicio visible y al volver a Inicio tras registrar.
+- **Gráficos:** librería liviana (propuesta: Recharts, o SVG propio si pesa demasiado en la PWA); se decide en la Fase 4 aplicando la guía de visualización. **R7 (DEC-83):** SVG o CSS propio, sin dependencias nuevas.
 
 ### 2.9 Navegación propuesta (mobile-first)
 
@@ -649,7 +652,7 @@ Barra inferior de 5:
 | R4 | Ventas de mostrador (`Sale`, `SaleLine`, `source = COUNTER`) + consultas + anulación **y su UI** (Vender, historial de ventas y anulación). Un método de pago por venta (DEC-30). Stock insuficiente: `BLOCK` fijo, sin leer `Business.insufficientStockPolicy`. **Fuera:** `ProductSaleUnit` y `saleUnitId`, `WASH` (R5), cobro de mantenimiento (R6), dashboard (R7), clientes (R8) y pago mixto. Ver §3.2e | Total calculado en servidor; stock baja una vez; anulación revierte; idempotencia; 422 por stock con rollback de toda la venta |
 | R5 | Lavados: `WashType` y `WashPriceOption` con su configuración (crear, editar, desactivar), `POST /washes` (una `Sale` `WASH` con una línea `WASH`, sin stock), historial, detalle y anulación por `/sales`, **y su UI**. Helper interno compartido para escribir la venta. **Fuera:** BR-L7/P-11, dashboard e indicadores (R7). Ver §3.2f | Precio de una opción activa del tipo; 409 por tipo o precio inactivo; ningún `InventoryMovement` al crear ni al anular; idempotencia; aislamiento entre negocios |
 | R6 | Cobro de mantenimiento + anulación conjunta + (DEC-31) | Sin doble descuento ni doble ingreso; anular mantenimiento anula venta; anular venta no toca stock |
-| R7 | Dashboard + indicadores del piloto + throttler | Agregación por zona horaria (integración: venta 23:30 Lima cae en el día correcto); excluye anuladas; aislamiento en SQL crudo |
+| R7 | Dashboard + indicadores del piloto (BR-I1) + throttler. Contrato cerrado el 2026-09-28 (DEC-78 a DEC-87, §3.2h), sin implementar. **Fuera:** A2 (DEC-87), TanStack Query (DEC-84), comparación de períodos (DEC-78) | Agregación por zona horaria (integración: venta 23:30 Lima cae en el día correcto); excluye anuladas; aislamiento en SQL crudo; 429 `RATE_LIMITED` por usuario |
 | R8 | Clientes + Avisar (independiente del dinero; puede adelantarse): búsqueda por placa, alta de cliente con vehículos, avisar desde un cliente (DEC-41–47) | Búsqueda por placa normalizada; no duplica cliente con el mismo teléfono (aviso); mensaje generado con cliente/placa/próximo km-fecha del vehículo elegido; aislamiento entre negocios |
 
 Se agrega una suite `test/integration` contra el Postgres de CI (ya existe en `ci.yml`) para lo que el fake no puede probar: bloqueos, SQL crudo, zonas horarias, índice único parcial.
@@ -806,13 +809,28 @@ Contrato en `06-API.md` §2, Mantenimientos ("Cambios de R6"); registro en `09-B
 | DEC-76 | Idempotencia atómica (A2): deuda técnica, fuera de R6 |
 | DEC-77 | Corte 0 antes de R6: anulación de mantenimiento condicional (409 `MAINTENANCE_ALREADY_VOIDED`); en R6, orden Maintenance → Sale y venta ya `VOIDED` sin movimientos |
 
+### 3.2h Aprobadas por el usuario para R7 (2026-09-28)
+
+Contrato en `06-API.md` §2, Dashboard, y §4 (rate limit); pantallas en `07-UI-UX.md` §3.1, §3.8 y §5; reglas BR-I1 y BR-D1 a BR-D7 en `03`; registro en `09-BACKLOG.md` §2.
+
+| ID | Decisión |
+|---|---|
+| DEC-78 | Un único `GET /dashboard?period=today\|week\|month&date=`: ingresos (total, efectivo, Yape, por origen), lavados, mantenimientos (cobrados y sin cobro), más vendidos, stock y recordatorios. Sin comparación de períodos, metas ni stock mínimo |
+| DEC-79 | `Business.timezone` como fuente de verdad (`America/Lima` en brigith); día local `[00:00, 24:00)`; semana lunes a domingo; mes calendario |
+| DEC-80 | Solo `ACTIVE`; SQL crudo con `businessId` explícito y parametrizado; montos como `string`; ingresos por `Sale.source` y `Sale.occurredAt` (el de mantenimiento, hora real del cobro); mantenimientos por `performedAt`, cobrados o no, sin segundo conteo por el cobro. Sin migración (los índices actuales alcanzan) |
+| DEC-81 | Más vendidos con el consumo de mantenimientos desde `inventory_movements`, aparte y sin sumar a ventas ni ingresos |
+| DEC-82 | Stock y recordatorios reutilizan `GET /inventory/alerts` y los recordatorios vencidos |
+| DEC-83 | Gráficos con SVG o CSS propio, sin dependencias nuevas |
+| DEC-84 | Sin TanStack Query en R7; `useApiQuery` con refresco al enfocar, cada 60 s y al volver a Inicio |
+| DEC-85 | BR-I1 en R7: ventas de mostrador, lavados y mantenimientos por separado, sin metas |
+| DEC-86 | Rate limit [TÉCNICO], resuelve DEC-40: `GET` 120/min y `POST`/`PATCH` 30/min por usuario; login 5/min por IP y por `username`; refresh 20/min por IP; ventana fija de 60 s en memoria; 429 con `Retry-After` y `RATE_LIMITED`, sin reintento automático. Revisable con datos del piloto |
+| DEC-87 | A2 (DEC-76) fuera de R7: corte técnico separado posterior |
+
 ### 3.3 Pendientes que todavía requieren decisión (del dueño o tuya)
 
 Numeración continúa `09-BACKLOG.md` §2. **Negritas = necesarias antes de empezar el corte indicado.** DEC-30 se cerró para R4 (§3.2e).
 
-| ID | Decisión | Recomendación | Quién | Antes de |
-|---|---|---|---|---|
-| DEC-40 | Rate limit | Por usuario autenticado, más alto en GET; login con límite propio | Tú | R7 |
+Ninguna para R7: DEC-40 (rate limit) se resolvió con DEC-86 (§3.2h).
 
 
 

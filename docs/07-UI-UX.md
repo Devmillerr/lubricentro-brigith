@@ -1,6 +1,6 @@
 # 07 — UI/UX
 
-**Versión:** 0.6 · **Actualizado:** 2026-09-28 (contrato de R6 en §3.3 y §3.9, sin implementar; Inventario de R3 en §3.6; Lavado de R5 en §3.9)
+**Versión:** 0.6 · **Actualizado:** 2026-09-28 (contrato de R7: dashboard en §3.1, Resumen del piloto en §3.8 y 429 en §5, sin implementar; contrato de R6 en §3.3 y §3.9, sin implementar; Inventario de R3 en §3.6; Lavado de R5 en §3.9)
 Etiquetas: ver `03-BUSINESS-RULES.md`. Este documento describe **flujos y pantallas**, no diseño visual. Los flujos son [TÉCNICO] y se validan con Brigith antes de cerrar el diseño (guía en Discovery §5). Mobile-first [DECISIÓN] D-01.
 
 ## 1. Principios
@@ -30,6 +30,29 @@ Barra inferior:
 - Resultado: vehículo, cliente (si lo hay), último mantenimiento y estado del recordatorio.
 - Sin resultado: "Crear vehículo con esta placa".
 - Acción principal visible: **Nuevo mantenimiento**.
+
+#### Cambios de R7: dashboard en Inicio (contrato cerrado el 2026-09-28, sin implementar)
+
+Decisiones DEC-78 a DEC-84 (`09-BACKLOG.md` §2); reglas BR-D1 a BR-D7; datos de `GET /dashboard` (`06` §2, Dashboard). Mobile-first, diseñado para 390 px de ancho, sin desborde horizontal.
+
+Orden de arriba abajo:
+1. **Acciones grandes:** Vender · Lavado · Mantenimiento · Recibir (las que ya existen).
+2. **Búsqueda** por placa o cliente (la actual, sin cambios).
+3. **Selector de período:** Hoy · Semana · Mes (zona horaria del negocio, BR-D1). Semana = lunes a domingo; Mes = calendario. Muestra el rango ("lun 22 – dom 28 sep").
+4. **Cifras en tarjetas:** Ingresos totales · Efectivo · Yape (responde "¿cuánto debería haber en caja y cuánto en Yape?") · Mostrador · Lavados (cantidad y monto) · Mantenimiento (un solo monto, del día del cobro) · Mantenimientos del período (por fecha del servicio) y cuántos siguen sin cobro (como recordatorio, no como error).
+5. **Efectivo frente a Yape:** una barra horizontal dividida con los dos montos.
+6. **Barras por hora (Hoy) o por día (Semana, Mes)**, apiladas por Mostrador / Lavado / Mantenimiento ("¿cuándo entra el dinero y de qué?").
+7. **Productos más vendidos** (hasta 10): unidades vendidas y, aparte y con otra etiqueta, **"usado en mantenimientos"**. El texto deja claro que el consumo de mantenimiento es inventario y no suma a las ventas (BR-D5).
+8. **Stock que requiere atención** (lista, no gráfico): negativos, agotados y cuántos productos siguen sin conteo, con acceso a Inventario.
+9. **Recordatorios por avisar:** contador con acceso a Avisar.
+
+**Gráficos (DEC-83):** barras simples hechas con SVG o CSS propio, sin librerías nuevas. Cada barra lleva su valor en texto (no solo color), con buen contraste en tema claro y oscuro.
+
+**Actualización (DEC-84):** con la capa actual (`useApiQuery`), sin TanStack Query. La pantalla vuelve a pedir el dashboard al volver a la pestaña o a la app, cada 60 s mientras Inicio está visible, y al volver a Inicio después de registrar una operación.
+
+**Estados:** cargando (esqueleto de tarjetas) · período sin operaciones ("Sin ventas en este período", con las acciones grandes a mano) · error ("No se pudo cargar" + Reintentar) · 429 (§5).
+
+**Fuera de R7:** comparación con otro período, metas, stock mínimo, filtros por empleado.
 
 ### 3.2 Ficha del vehículo
 Placa, modelo, cliente y teléfono (ambos opcionales), último km conocido, próximo km/fecha del último mantenimiento, historial y productos compatibles confirmados. Acción principal: **Nuevo mantenimiento**.
@@ -99,6 +122,8 @@ Plantilla de WhatsApp con vista previa, días de anticipación, regla por defect
 ### 3.8 Resumen del piloto
 Pantalla de solo lectura con los tres indicadores aprobados: adopción, mantenimiento e inventario (BR-I1 a BR-I3), por período.
 
+**Cambio de R7 (DEC-85, sin implementar):** la adopción muestra por separado ventas de mostrador, lavados y mantenimientos del período, como cantidades reales, sin porcentajes objetivo ni metas.
+
 ### 3.9 Lavado (R5: implementado el 2026-09-26, sin commit)
 
 La UI forma parte de R5 (DEC-60). Sigue el patrón actual del frontend: sin TanStack Query ni cambios de arquitectura. Diseño: `10-OPERACION-REAL.md` §2.5 (flujo del mapa) y §0.3 (tipos y precios). Contrato: `06-API.md` §2, Lavados.
@@ -147,6 +172,7 @@ Venta de mostrador (`source = COUNTER`), sin cliente, placa, lavado ni mantenimi
 | Conexión lenta | Indicador de progreso. El botón no se puede pulsar dos veces |
 | Sesión vencida | Renovar en segundo plano. Si no es posible, volver a iniciar sesión sin perder el formulario |
 | Error del servidor | Mensaje simple y reintento |
+| Demasiadas solicitudes (429 `RATE_LIMITED`, R7) | "Demasiadas solicitudes. Espera un momento y vuelve a intentar." Sin reintento automático; el usuario reintenta a mano. En un formulario, no se pierde lo escrito |
 | Validación | Mensaje junto al campo |
 | Lista vacía | Estado vacío con la acción siguiente |
 

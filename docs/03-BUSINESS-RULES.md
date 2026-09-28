@@ -1,6 +1,6 @@
 # 03 — Reglas de negocio
 
-**Versión:** 0.7 · **Actualizado:** 2026-09-28 (contrato de R6: BR-M12, BR-M15, BR-M16 y BR-V7; antes, R4: BR-P21 y BR-V4; R5: BR-L7, BR-L9 y BR-L10)
+**Versión:** 0.7 · **Actualizado:** 2026-09-28 (contrato de R7: BR-I1 y BR-D1 a BR-D7, sin implementar; antes, contrato de R6: BR-M12, BR-M15, BR-M16 y BR-V7; antes, R4: BR-P21 y BR-V4; R5: BR-L7, BR-L9 y BR-L10)
 **Fuentes de verdad:** [`/research/BRIGITH-DISCOVERY.md`](../research/BRIGITH-DISCOVERY.md) y [`01-VISION.md`](01-VISION.md).
 
 ## Etiquetas (iguales en todos los documentos)
@@ -139,10 +139,24 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 
 | ID | Regla | Estado |
 |---|---|---|
-| BR-I1 | **Adopción:** operaciones reales registradas. En el MVP, cuenta mantenimientos no anulados del negocio real. | [DECISIÓN] Visión §6 · definición [TÉCNICO] |
+| BR-I1 | **Adopción:** operaciones reales registradas en el período. En el MVP contaba solo mantenimientos no anulados. **Desde R7 (DEC-85)** cuenta, por separado: ventas de mostrador (`Sale` `ACTIVE` con `source = COUNTER`), lavados (`Sale` `ACTIVE` con `source = WASH`) y mantenimientos no anulados. El cobro de un mantenimiento no se cuenta aparte (sería contarlo dos veces). Muestra datos reales, sin porcentajes objetivo ni metas (BR-I4 sigue pendiente). | [DECISIÓN] Visión §6 · definición [DECISIÓN] DEC-85 (R7) |
 | BR-I2 | **Mantenimiento:** mantenimientos con próximo km/fecha registrado y recordatorios enviados. "Enviados" se mide como avisos abiertos en WhatsApp (BR-R10). | [DECISIÓN] Visión §6 · definición [TÉCNICO] |
 | BR-I3 | **Inventario:** stock actualizado mediante movimientos. Se mide como movimientos registrados y cantidad de productos con conteo y movimientos en el período. | [DECISIÓN] Visión §6 · definición [TÉCNICO] |
 | BR-I4 | Umbrales de éxito de cada indicador. | [DECISIÓN PENDIENTE] (acordar con Brigith durante el piloto) |
+
+## BR-D — Dashboard (R7)
+
+Contrato cerrado el 2026-09-28, **sin implementar**. Decisiones DEC-78 a DEC-84 (`09-BACKLOG.md` §2).
+
+| ID | Regla | Estado |
+|---|---|---|
+| BR-D1 | **Día operativo:** el día calendario en la zona horaria del negocio (`Business.timezone`; `America/Lima` en brigith), de 00:00 a 24:00 (`[inicio, fin)`). Una venta a las 23:30 de Lima cuenta en ese día aunque en UTC sea el día siguiente; una a las 00:10 cuenta en el día nuevo. **Semana:** de lunes a domingo. **Mes:** calendario. | [DECISIÓN] DEC-79 |
+| BR-D2 | **Solo operaciones vigentes:** el dashboard suma ventas `ACTIVE` y cuenta mantenimientos `ACTIVE`. Lo anulado no aparece en cifras, series ni rankings. | [DECISIÓN] DEC-80 |
+| BR-D3 | **Un solo libro de dinero:** todo ingreso sale de `Sale` (`10-OPERACION-REAL.md` §2.2), separado por origen: mostrador (`COUNTER`), lavado (`WASH`) y mantenimiento (`MAINTENANCE`, un solo monto, sin repartir entre producto y mano de obra). El ingreso se fecha con `Sale.occurredAt`; el de mantenimiento, con la hora del cobro (DEC-75). | [DECISIÓN] DEC-80 |
+| BR-D4 | **Mantenimientos del período:** se cuentan por `Maintenance.performedAt`, tanto los cobrados como los **sin cobro**. El cobro no genera un segundo conteo de mantenimiento: su dinero pertenece solo a la venta `MAINTENANCE`, fechada por `Sale.occurredAt` (BR-D3). "Sin cobro" es un recordatorio, no un error (§2.2 de `10`). Un mantenimiento del lunes cobrado el martes cuenta como mantenimiento el lunes y como ingreso el martes. | [DECISIÓN] DEC-80 |
+| BR-D5 | **Productos más vendidos:** las unidades vendidas salen de las líneas `PRODUCT` de ventas vigentes. Las unidades **consumidas en mantenimientos** salen de `inventory_movements` (`MAINTENANCE_USE` de mantenimientos vigentes) y se muestran aparte: son consumo de inventario, **no** suman a ventas ni a ingresos. | [DECISIÓN] DEC-81 |
+| BR-D6 | **Sin métricas inventadas:** sin comparación con otro período, sin metas, sin stock mínimo (§0.1 de `10`) y sin cifras que el negocio no haya pedido. | [DECISIÓN] DEC-78 |
+| BR-D7 | **Stock que requiere atención y recordatorios:** reutilizan las reglas existentes (BR-P19 y los recordatorios vencidos de BR-R5); el dashboard no define criterios nuevos. | [DECISIÓN] DEC-82 |
 
 ## BR-V — Ventas (Fase 2)
 
