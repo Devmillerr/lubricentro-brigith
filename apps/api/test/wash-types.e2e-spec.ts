@@ -8,6 +8,7 @@ import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filt
 import { applyGlobalPrefix } from '../src/common/openapi/openapi-document';
 import { validationExceptionFactory } from '../src/common/validation-exception-factory';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { FixedWindowStore } from '../src/rate-limit/fixed-window.store';
 import { WashTypesService } from '../src/washes/wash-types.service';
 
 /**
@@ -16,9 +17,10 @@ import { WashTypesService } from '../src/washes/wash-types.service';
  * errores). Crea negocios y usuarios desechables, así que solo corre contra
  * una base de prueba (nombre terminado en "_test").
  *
- * El rate limit global es de 20 peticiones por minuto por endpoint: este
- * archivo hace menos de 20 a cada ruta. Los tipos y precios que solo sirven
- * de fixture se crean con el servicio.
+ * El rate limit (DEC-86) permite 30 escrituras por minuto por usuario, sumando
+ * todas las rutas, y este archivo hace más con el mismo usuario: el contador
+ * se reinicia antes de cada prueba (ninguna llega al límite por sí sola). Los
+ * tipos y precios que solo sirven de fixture se crean con el servicio.
  */
 const isTestDatabase = /\/[^/?]*_test(\?|$)/.test(process.env.DATABASE_URL ?? '');
 const describeIfTestDb = isTestDatabase ? describe : describe.skip;
@@ -59,10 +61,21 @@ describeIfTestDb('Tipos de lavado /api/v1/wash-types (e2e)', () => {
 
   const uniqueName = (prefix: string) => `${prefix} ${randomUUID().slice(0, 8)}`;
 
+  // Contador real del rate limit, reemplazado por uno nuevo en cada prueba.
+  let rateLimitStore = new FixedWindowStore();
+  beforeEach(() => {
+    rateLimitStore = new FixedWindowStore();
+  });
+
   beforeAll(async () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(FixedWindowStore)
+      .useValue({
+        hit: (...args: Parameters<FixedWindowStore['hit']>) => rateLimitStore.hit(...args),
+      })
+      .compile();
     app = moduleRef.createNestApplication();
     applyGlobalPrefix(app);
     app.useGlobalPipes(
