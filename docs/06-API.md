@@ -120,7 +120,7 @@ Errores de R3:
 | POST | `/maintenance-types` | Crear tipo |
 | POST | `/maintenances` | Crea un mantenimiento **completo** en una sola petición: `vehicleId`, `maintenanceTypeId`, `performedAt`, `odometerKm?`, `items[]`, `nextDueKm?`, `nextDueDate?`, `dueRule?`, `notes?`. Requiere `Idempotency-Key`. Es una transacción (BR-M10): crea movimientos, evalúa stock y actualiza recordatorios |
 | GET | `/maintenances/:id` | Detalle |
-| PATCH | `/maintenances/:id` | Corrige solo campos que no afectan el stock (BR-M11). Desde R6, sin vehículo: 400 con `odometerKm`, `nextDueKm`, `nextDueDate` o `dueRule` (DEC-73) |
+| PATCH | `/maintenances/:id` | Corrige solo campos que no afectan el stock (BR-M11). Desde R6, sin vehículo: 400 con `odometerKm`, `nextDueKm`, `nextDueDate` o `dueRule` (DEC-73). Un mantenimiento `VOIDED` no se corrige: 409 `MAINTENANCE_VOIDED`, también si una anulación concurrente se confirma mientras el `PATCH` está en curso (la escritura está condicionada a `status = ACTIVE`; no se escribe nada) |
 | POST | `/maintenances/:id/void` | `{ reason }` **obligatorio desde R6** (DEC-71; hoy opcional). Anula, revierte movimientos, descarta el recordatorio y anula el cobro asociado si existe (BR-M12). Ver "Cambios de R6" |
 | POST | `/maintenances/:id/charge` | **R6, sin implementar.** Cobro posterior de un mantenimiento. Ver "Cambios de R6" |
 
@@ -175,7 +175,7 @@ Cobro de mantenimiento, anulación conjunta y mantenimiento sin vehículo (DEC-3
 |---|---|---|
 | `VALIDATION_ERROR` | 400 | `POST /maintenances` sin `vehicleId`, o `PATCH /maintenances/:id` de un mantenimiento sin vehículo, con `odometerKm`, `nextDueKm`, `nextDueDate` o `dueRule` (DEC-73); `POST /maintenances/:id/void` sin `reason` (DEC-71); `charge`/cobro con `totalAmount` inválido |
 | `MAINTENANCE_NOT_FOUND` | 404 | `POST /maintenances/:id/charge` sobre un mantenimiento inexistente o de otro negocio |
-| `MAINTENANCE_VOIDED` | 409 | `POST /maintenances/:id/charge` sobre un mantenimiento `VOIDED`: no se cobra ni se vuelve a cobrar (DEC-69) |
+| `MAINTENANCE_VOIDED` | 409 | `POST /maintenances/:id/charge` sobre un mantenimiento `VOIDED`: no se cobra ni se vuelve a cobrar (DEC-69). `PATCH /maintenances/:id` sobre un mantenimiento `VOIDED`, incluido el que se anula mientras el `PATCH` está en curso: no se escribe nada |
 | `MAINTENANCE_ALREADY_CHARGED` | 409 | `POST /maintenances/:id/charge` sobre un mantenimiento que ya tiene una venta, `ACTIVE` o `VOIDED` (DEC-69) |
 | `MAINTENANCE_ALREADY_VOIDED` | 409 | Segunda anulación del mismo mantenimiento (Corte 0, DEC-77) |
 | `SALE_MANAGED_BY_MAINTENANCE` | 409 | `POST /sales/:id/void` sobre una venta con `source = MAINTENANCE` (DEC-70) |
@@ -541,6 +541,17 @@ Los cinco puntos que estaban "Por definir" se cerraron con el usuario el 2026-09
 - Las lecturas son seguras de reintentar. Las escrituras críticas son idempotentes.
 - Ningún endpoint exige placa, teléfono ni cliente salvo donde `03` lo indique (BR-C1 a BR-C5).
 - Ningún endpoint modifica ni elimina movimientos de inventario.
+- **Topes de los campos `Decimal` [TÉCNICO].** Límites técnicos de las columnas de Postgres, no reglas de negocio: un valor que no cabe responde **400 `VALIDATION_ERROR`** (con el campo en `errors[]`) en vez de un 500, sin escribir nada.
+
+  | Columna | Máximo | Campos de entrada |
+  |---|---|---|
+  | `Decimal(10,2)` (dinero) | 99 999 999,99 | `lines[].unitPrice` de `POST /sales`; `totalAmount` del cobro (`charge` de `POST /maintenances` y `POST /maintenances/:id/charge`); `salePrice` de `POST`/`PATCH /products`; `amount` de los precios de lavado (ya existía, B-141) |
+  | `Decimal(12,3)` (cantidades) | 999 999 999,999 | `lines[].quantity` de `POST /sales` y de la recepción en lote; `countedQuantity` del conteo; `physicalQuantity` del ajuste; `items[].quantity` de `POST /maintenances` |
+
+  También se controlan los valores que calcula el servidor, aunque cada dato suelto sea válido:
+  - **Venta:** el subtotal de cada línea (`quantity × unitPrice`) y el total deben caber en `Decimal(10,2)`; si no, 400 con el campo `lines.<i>.subtotal` o `total`.
+  - **Stock:** el saldo resultante y la diferencia de cada movimiento deben caber en `Decimal(12,3)` (en valor absoluto). Si no, 400 con el campo `countedQuantity` (conteo), `physicalQuantity` (ajuste), `lines` (venta y recepción) o `items` (mantenimiento).
+- **`internal/idempotency-test` no es parte de la API.** Es un controlador interno para probar el mecanismo de idempotencia de punta a punta. Solo se monta con `NODE_ENV=test` exactamente: sin `NODE_ENV`, con `production`, `development` o cualquier otro valor, la ruta no existe (404). Tampoco aparece en OpenAPI. La web no lo usa.
 - **Rate limit (DEC-86, [TÉCNICO]; implementado en R7, B-166).** Reemplazó al de `@nestjs/throttler` (20 por minuto por IP y endpoint, y 5 por minuto en login). No hay bloqueo de cuentas ni almacenamiento compartido (Redis). Valores de protección inicial, revisables con datos del piloto:
 
   | Tráfico | Límite | Clave |
