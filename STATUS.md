@@ -1,10 +1,28 @@
 # STATUS — Estado del proyecto
 
-**Actualizado:** 2026-09-26
+**Actualizado:** 2026-09-27
 
-## Estado actual (2026-09-26, al cierre de la sesión): R4 y R5 implementados (API, seed y UI), sin commit
+## Estado actual (2026-09-27): R4 (Ventas) y R5 (Lavados) cerrados y desplegados en Supabase
 
-- **`HEAD` = `3fe9913`** ("docs: alineando el contrato de R4"). **No hay commit ni push de nada de lo que sigue.**
+- **R4 (Ventas): implementado, probado y cerrado.** **R5 (Lavados): implementado, probado y cerrado.** El detalle de la implementación y las pruebas está en la sección siguiente.
+- **Commits:**
+  - `9702197455ebe50d39c2b6cd833aadf0e095a61c` "feat: implementando ventas y lavados de R4 y R5" (62 archivos: API, migraciones, seed, pruebas, UI y docs de R4 y R5). **Ya está en `origin/main`**: el push `bf61419..9702197` subió también `12e4912` y `3fe9913` (docs de R4).
+  - `99df6c5d6bf68edde9c11b75534dc910d40ea93e` "chore: protegiendo variables de entorno": `.gitignore` ignora cualquier `.env*` y solo permite `.env.example` (`apps/api/.env.example` y `apps/web/.env.example` siguen versionados; `CLAUDE.md` y `.claude/` siguen ignorados). **Solo local: el push está pendiente.**
+- **Desplegado en Supabase (2026-09-27, con autorización del usuario).** Destino confirmado antes de ejecutar: `DIRECT_URL` → `aws-0-us-east-1.pooler.supabase.com:5432/postgres` (pooler en modo sesión). Antes, `migrate status` mostraba pendientes solo R4 y R5. Se ejecutó únicamente `prisma migrate deploy`, que aplicó solo esas dos.
+  - `_prisma_migrations`: **11 migraciones, 11 terminadas, 0 con rollback.**
+  - Checksums coincidentes con el sha256 de cada `migration.sql`: R4 `20260926175402_r4_sales` `cd08d589…0eeb` y R5 `20260927023545_r5_washes` `a895b2f4…d1448`.
+  - `migrate status`: "Database schema is up to date!". `migrate diff` contra `schema.prisma`: "No difference detected". Existen `sales`, `sale_lines`, `wash_types` y `wash_price_options` (`sales` y `sale_lines` vacías).
+  - **No hay migraciones de R6** (ni en el repo ni aplicadas).
+- **Seed de lavados ejecutado en Supabase** (`seedBrigithWashes`, **solo** para brigith, en una transacción, con un script fuera del repo; no se corrió `seed.ts` completo). Antes: 0 tipos y 0 precios. Resultado: **9 tipos y 8 precios, coincidiendo con BR-L6**: Moto lineal S/8 y S/10, Tico S/15, Auto S/15, Mototaxi S/15, Camioneta S/30 y S/40, Furgón S/30; Minibán, Combi y Moto carguera activos y sin precio. El negocio demo no se tocó.
+  - Anomalía menor: el primer intento del script falló al compilar en local (TS5109, antes de conectarse a la base, sin escrituras); se repitió con el `tsconfig` de la API.
+- **Pendiente:** push de `99df6c5` (y del commit de este `STATUS.md`, si se hace). CI de `9702197` no revisada en esta sesión.
+- **Próximo paso:** con autorización, commit de `STATUS.md` y push a `origin/main`. R6 **no** está empezado: antes de empezarlo, revisar `09-BACKLOG.md` §1.
+
+## Implementación de R4 y R5 (2026-09-26)
+
+Registro de la implementación tal como quedó antes del commit y del despliegue. Las menciones "sin commit" y "Supabase no se tocó" de esta sección son de ese momento: ver la sección anterior para el estado actual.
+
+- **`HEAD` era `3fe9913`** ("docs: alineando el contrato de R4"). En ese momento no había commit ni push de nada de lo que sigue.
 - **R4, API implementada y validada localmente (sin commit):** `Sale` y `SaleLine` con la migración `20260926175402_r4_sales` (aplicada **solo** en `brigith_test`, no en Supabase), `src/sales/` (`POST /sales`, `GET /sales`, `GET /sales/:id`, `POST /sales/:id/void`), `insufficientStockField` en el `StockLedger`, `Sale`/`SaleLine` en `BUSINESS_SCOPED_MODELS` y `updateMany` en el fake. Pruebas: `test/sales.service.spec.ts`, `test/sales.e2e-spec.ts` y `test/integration/sales.int-spec.ts` (paso 4: T4, anulación concurrente, bloqueos del ledger, invariantes y aislamiento).
 - **R4, UI:** historial, detalle y anulación genéricos de ventas (B-135) y **Vender (B-134)** hechos (ver más abajo). R4 queda implementado localmente; se cierra con el commit y la migración en Supabase.
 - **R5 (Lavados): decisiones cerradas y documentación alineada** (después implementado; ver B-140 a B-149 más abajo). DEC-53 a DEC-62 en `09-BACKLOG.md` §2 y `10-OPERACION-REAL.md` §3.2f; contrato en `06-API.md` §2, Lavados; pantallas en `07-UI-UX.md` §3.9; reglas BR-L7, BR-L9 y BR-L10; backlog B-140 a B-149. Se corrigieron `POST /wash-records` (ahora `POST /washes`), la placa opcional del lavado, `WashType` con "precio por vehículo" (ahora `WashPriceOption`) y "Deshacer" (ahora **Anular** con motivo).
@@ -45,7 +63,7 @@
   - Validación: web `typecheck` y `lint` OK (solo el warning de siempre en `eslint.config.mjs`), `next build` OK, prettier OK en los archivos tocados. La web no tiene pruebas automáticas; no hay e2e de navegador en el repo.
   - **Prueba en navegador** (Chrome con la extensión, `next start` en el puerto 3000 y la API compilada en el 4000, ambas contra `brigith_test`), sobre el negocio desechable "R5 QA 27dd3b4d" (usuario `qa-27dd3b4d`), sembrado con `seedBrigithWashes`. Todo OK: el cobro muestra 6 tipos (los 3 sin precio ocultos); Moto lineal S/10 con Yape y nota; Auto S/15 con Efectivo, saltando el precio; historial `source=WASH`; detalle; anular sin motivo (bloqueado) y con motivo (queda Anulada); en Configuración, un precio S/20,50 en Combi lo hace aparecer al cobrar y, al desactivarlo, desaparece; Tico inactivo desaparece; el 409 por tipo desactivado recarga la lista. Sin desborde horizontal a 390 px en ninguna pantalla (medido en un iframe, porque la ventana no bajaba de 1536 px). La pestaña pasó a segundo plano a mitad de la prueba: desde la anulación en adelante los clics se hicieron por el DOM (`element.click()`), no con clics reales.
   - En `brigith_test` quedan datos desechables del negocio QA: 2 lavados (S/15 activo y S/10 anulado) y un precio inactivo de S/20,50 en Combi. No van al seed ni a Supabase.
-- **Supabase:** no se tocó. Ni la migración de R4 ni nada de R5 (incluido el seed de lavados) está aplicado ahí.
+- **Supabase (en ese momento):** no se tocó. Se aplicó después, el 2026-09-27 (ver "Estado actual").
 - **Mejora futura (registrada en `09` §3, R5):** nombre del tipo de lavado en las filas del historial; requiere que `GET /sales` devuelva las líneas o su descripción (cambio de backend).
 - **B-134 hecho (2026-09-26, sin commit): Vender.** `/ventas/nueva` (Inicio → **Vender**, y **Vender** en `/ventas`): buscador de productos activos de Recibir (`ReceiptProductPicker`, ahora con `searchLabel`), líneas con −/+, precio editable, subtotal y quitar; total de vista previa con el redondeo de la API; Efectivo/Yape; nota; **Cobrar S/ X** con `Idempotency-Key`; confirmación con **Nueva venta**, **Ver detalle** y **Volver al inicio**. 422 `INSUFFICIENT_STOCK` marca la línea y no presenta la venta como cobrada. Sin cambios de backend.
   - Archivos: `apps/web/src/app/(app)/ventas/nueva/page.tsx`, `components/sales/sale-form.tsx` y `sale-saved.tsx`; cambios en `lib/sales/format.ts`, `components/inventory/receipt-product-picker.tsx`, Inicio y `/ventas`. Docs: `07` §3.10 (nueva), `06`, `09` (B-100, B-101, B-134 y R4) y `10` §2.5.
@@ -53,7 +71,7 @@
   - Prueba en Chrome (`next start` + API compilada contra `brigith_test`, negocio QA "R5 QA 27dd3b4d"): 3 productos QA (aceite contado con saldo 2, filtro sin conteo, servicio sin stock y sin precio). Cada toque suma 1; subtotales y total (S/ 103.50, y S/ 78.50 tras −1) correctos; sin precio o sin pago, no envía; 3 L de aceite → 422 con "Saldo actual 2, cantidad pedida 3", sin venta y saldo intacto; con 2 L → una venta de S/ 78.50 en Efectivo (aceite 2 → 0; filtro con aviso "sin conteo"); **Nueva venta** con Yape y doble clic en Cobrar → una sola venta. Sin desborde a 390 px (iframe).
   - La idempotencia por reintento tras un fallo de red **no** se simuló en el navegador (el cliente `openapi-fetch` guarda su referencia a `fetch`): la cubren las pruebas e2e e integración de ventas de la API, y la UI usa el mismo `useIdempotencyKey` que el resto de las escrituras.
   - En `brigith_test` quedan del negocio QA 3 productos "QA …" y 2 ventas de mostrador.
-- **Próximo paso:** revisión del diff por el usuario y, si lo pide, commit de R4 + R5. Después, con autorización, aplicar las migraciones de R4 y R5 (y el seed de lavados) en Supabase.
+- **Próximo paso (en ese momento):** commit de R4 + R5 y despliegue en Supabase. Hechos el 2026-09-27 (ver "Estado actual").
 
 ## Estado al 2026-09-26: R3 cerrado
 
