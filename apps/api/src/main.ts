@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { applyGlobalPrefix, createOpenApiDocument } from './common/openapi/openapi-document';
@@ -10,8 +11,13 @@ import { ProblemDetailsFilter } from './common/filters/problem-details.filter';
 import type { Env } from './config/env.validation';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService<Env, true>);
+
+  // Detrás de un proxy (Vercel), `req.ip` debe salir de `X-Forwarded-For`
+  // para que el rate limit por IP (DEC-86) no cuente a todos como uno solo.
+  const trustProxy = config.get('TRUST_PROXY', { infer: true });
+  if (trustProxy > 0) app.set('trust proxy', trustProxy);
 
   applyGlobalPrefix(app);
 

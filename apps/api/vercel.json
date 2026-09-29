@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nestjs",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm prisma:generate && pnpm build",
+  "regions": ["iad1"],
+  "crons": [{ "path": "/health", "schedule": "0 13 * * *" }]
+}

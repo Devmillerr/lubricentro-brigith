@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { RateLimitStore } from './rate-limit.store';
 
 export interface HitResult {
   allowed: boolean;
@@ -16,12 +17,11 @@ interface Window {
 /**
  * Contador de ventana fija en memoria (DEC-86): la ventana empieza con la
  * primera petición de la clave y se reinicia entera al vencer. Vale para una
- * sola instancia de la API; con varias haría falta un almacenamiento
- * compartido. Una petición rechazada no suma. Las ventanas vencidas se
+ * sola instancia de la API; con varias se usa `PostgresFixedWindowStore`. Una petición rechazada no suma. Las ventanas vencidas se
  * limpian de forma perezosa, sin temporizadores.
  */
 @Injectable()
-export class FixedWindowStore {
+export class FixedWindowStore implements RateLimitStore {
   private readonly windows = new Map<string, Window>();
   private nextSweepAt = 0;
 

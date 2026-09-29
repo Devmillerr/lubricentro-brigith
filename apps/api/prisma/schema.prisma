@@ -779,3 +779,15 @@ model ReminderContact {
 
   @@map("reminder_contacts")
 }
+
+/// Ventanas del rate limit de DEC-86 cuando `RATE_LIMIT_STORE=database`
+/// (varias instancias de la API). Datos efímeros, sin relación con ningún
+/// negocio: una fila por clave (`login-ip:<ip>`, `read:user:<id>`…).
+model RateLimitWindow {
+  key     String   @id
+  count   Int
+  resetAt DateTime
+
+  @@index([resetAt])
+  @@map("rate_limit_windows")
+}

@@ -6,13 +6,13 @@ import type { Request, Response } from 'express';
 import type { AccessTokenPayload } from '../auth/types/jwt-payload';
 import { ProblemException } from '../common/exceptions/problem.exception';
 import type { Env } from '../config/env.validation';
-import { FixedWindowStore } from './fixed-window.store';
 import {
   RATE_LIMITS,
   RATE_LIMIT_POLICY_KEY,
   RATE_LIMIT_WINDOW_MS,
   type RateLimitPolicy,
 } from './rate-limit.constants';
+import { RateLimitStore } from './rate-limit.store';
 
 const READ_METHODS = new Set(['GET', 'HEAD']);
 const WRITE_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
@@ -26,8 +26,8 @@ interface Bucket {
  * Rate limit de DEC-86 (06-API.md §4), global. Corre antes que `JwtAuthGuard`,
  * así que verifica el token por su cuenta para contar por `userId`: un token
  * inválido o ausente cuenta por IP con los mismos límites (y la ruta
- * protegida luego responde 401). Los límites por IP usan `req.ip`, sin
- * `trust proxy` (DEC-10).
+ * protegida luego responde 401). Los límites por IP usan `req.ip`, que
+ * detrás de un proxy depende de `TRUST_PROXY` (ver `main.ts`).
  *
  * Al exceder: 429 con `Retry-After` (segundos) y `code: "RATE_LIMITED"` en el
  * formato de error de la API.
@@ -38,7 +38,7 @@ export class RateLimitGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService<Env, true>,
-    private readonly store: FixedWindowStore,
+    private readonly store: RateLimitStore,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -54,7 +54,7 @@ export class RateLimitGuard implements CanActivate {
       ]) ?? 'default';
 
     for (const bucket of await this.bucketsFor(policy, request)) {
-      const result = this.store.hit(bucket.key, bucket.limit, RATE_LIMIT_WINDOW_MS);
+      const result = await this.store.hit(bucket.key, bucket.limit, RATE_LIMIT_WINDOW_MS);
       if (!result.allowed) {
         response.setHeader('Retry-After', String(result.retryAfterSeconds));
         throw new ProblemException({
