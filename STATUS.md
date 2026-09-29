@@ -14,8 +14,15 @@
   - Cron diario de Vercel a `/health` para que Supabase Free no pause el proyecto.
   - Documentación: README §Producción, DEC-89 (resuelve DEC-10), `06-API.md` §4.
 - **Verificación:** unitarias 488/488, integración 145/145 (6 nuevas del almacén en Postgres), e2e 150/150; typecheck, build de API y web, ESLint y Prettier de los archivos tocados y `git diff --check` OK (siguen los errores preexistentes de CRLF). En producción: `/health` con base arriba; sesión completa con la cuenta de prueba `demo` (login, perfil, negocio, catálogo, alertas, dashboard, token inválido 401, logout y refresh revocado 401); CORS solo para la web; 404 de la web; rutas protegidas redirigen al login. Datos reales de Supabase idénticos antes y después (huellas md5). La contraseña de `saul` no se usó ni cambió.
-- **Bloqueo:** las dos migraciones nuevas **no están aplicadas en Supabase** (el permiso para ejecutar `prisma migrate deploy` contra producción fue denegado en la sesión). Hasta aplicarlas: RLS sigue desactivado y el rate limit funciona solo en memoria por instancia (la API lo registra como advertencia). Comando: `pnpm --filter @brigith/api prisma:deploy` con `DIRECT_URL` en `apps/api/.env`.
-- **Próximo paso:** aplicar las migraciones, revisar y fusionar el PR, y que Saúl pruebe su login real.
+- **Migraciones aplicadas en Supabase (2026-09-29, con autorización del usuario):** `20260929215900_rate_limit_windows` y luego `20260929220000_enable_rls`, con `pnpm --filter @brigith/api prisma:deploy` (usa `DIRECT_URL`, session pooler `aws-0-us-east-1.pooler.supabase.com:5432`). Sin SQL manual ni `migrate resolve`.
+  - `_prisma_migrations`: ambas registradas como terminadas, sin errores ni reversión; 15 migraciones en total, ninguna incompleta. `prisma migrate status`: "Database schema is up to date!".
+  - RLS habilitado en las **23 tablas** de `public`, incluida `rate_limit_windows` (existe con `key`, `count`, `resetAt`, su clave primaria y el índice de `resetAt`).
+  - Sin políticas RLS, a propósito: la API accede solo mediante Prisma, conectada como `postgres` (dueño de las tablas y con `BYPASSRLS`); `anon` y `authenticated` quedan sin acceso.
+  - Asesor de seguridad de Supabase: solo el INFO esperado "RLS enabled, no policy" en esas 23 tablas.
+  - Datos de negocio sin cambios: huellas md5 idénticas antes y después (`businesses`, `users`, `products`, `product_categories`, `sales`, `customers`, `inventory_movements`).
+  - No hizo falta redeploy: la API desplegada usa `rate_limit_windows` desde la siguiente petición.
+- **Bloqueos:** ninguno.
+- **Próximo paso:** revisar y fusionar el PR hacia `main`, y que Saúl pruebe su login real.
 
 ## Estado al 2026-09-29: auditoría final integral y calidad de interfaz
 
