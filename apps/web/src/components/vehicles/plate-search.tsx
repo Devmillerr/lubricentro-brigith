@@ -44,7 +44,8 @@ export function PlateSearch() {
 
   return (
     <section className="flex flex-col gap-3">
-      <label htmlFor="plate-search" className="text-lg font-semibold">
+      {/* Compacto en Inicio: la lupa y el ejemplo bastan; la etiqueta queda para lectores de pantalla. */}
+      <label htmlFor="plate-search" className="sr-only">
         Buscar por placa
       </label>
       <div className="relative">
@@ -57,14 +58,14 @@ export function PlateSearch() {
           type="search"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Ej. ABC-123"
+          placeholder="Buscar placa, ej. ABC-123"
           maxLength={20}
           autoCapitalize="characters"
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
           enterKeyHint="search"
-          className="h-14 pl-11 text-xl font-medium tracking-wide"
+          className="pl-11 text-lg font-medium tracking-wide"
         />
       </div>
 
