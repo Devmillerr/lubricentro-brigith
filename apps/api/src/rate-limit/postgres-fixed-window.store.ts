@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
-import type { HitResult } from './fixed-window.store';
+import type { FixedWindowStore, HitResult } from './fixed-window.store';
 import type { RateLimitStore } from './rate-limit.store';
 
 /** Proporción de peticiones que además borran ventanas vencidas. */
@@ -13,13 +13,17 @@ const SWEEP_PROBABILITY = 0.01;
  * de la base para que todas las instancias usen el mismo reloj. El contador
  * se detiene en `limit + 1`, así que una petición rechazada no suma.
  *
- * Si la base falla, deja pasar la petición (el rate limit es una protección,
- * no debe tumbar la API) y lo registra.
+ * Si la base falla (o la tabla aún no existe), cuenta en memoria con
+ * `fallback` y lo registra: el rate limit no debe tumbar la API, pero
+ * tampoco desaparecer.
  */
 export class PostgresFixedWindowStore implements RateLimitStore {
   private readonly logger = new Logger(PostgresFixedWindowStore.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly fallback: FixedWindowStore,
+  ) {}
 
   async hit(key: string, limit: number, windowMs: number): Promise<HitResult> {
     try {
@@ -50,11 +54,11 @@ export class PostgresFixedWindowStore implements RateLimitStore {
       };
     } catch (error) {
       this.logger.warn(
-        `Rate limit sin almacenamiento, se deja pasar la petición: ${
+        `Rate limit en memoria por un error de la base: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
-      return { allowed: true, count: 0, retryAfterSeconds: 1 };
+      return this.fallback.hit(key, limit, windowMs);
     }
   }
 

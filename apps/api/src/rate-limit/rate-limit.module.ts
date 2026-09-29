@@ -28,7 +28,7 @@ import { RateLimitStore } from './rate-limit.store';
         moduleRef: ModuleRef,
       ): RateLimitStore =>
         config.get('RATE_LIMIT_STORE', { infer: true }) === 'database'
-          ? new PostgresFixedWindowStore(moduleRef.get(PrismaService, { strict: false }))
+          ? new PostgresFixedWindowStore(moduleRef.get(PrismaService, { strict: false }), memory)
           : memory,
     },
     { provide: APP_GUARD, useClass: RateLimitGuard },

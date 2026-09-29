@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { ConfigService } from '@nestjs/config';
 import type { Env } from '../../src/config/env.validation';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { FixedWindowStore } from '../../src/rate-limit/fixed-window.store';
 import { PostgresFixedWindowStore } from '../../src/rate-limit/postgres-fixed-window.store';
 
 /**
@@ -37,7 +38,7 @@ afterAll(async () => {
 
 describe('PostgresFixedWindowStore (DEC-86)', () => {
   it('permite hasta el límite y rechaza el siguiente sin sumarlo', async () => {
-    const store = new PostgresFixedWindowStore(prisma);
+    const store = new PostgresFixedWindowStore(prisma, new FixedWindowStore());
     const k = key();
     for (let i = 1; i <= 3; i += 1) {
       expect(await store.hit(k, 3, WINDOW)).toMatchObject({ allowed: true, count: i });
@@ -50,8 +51,8 @@ describe('PostgresFixedWindowStore (DEC-86)', () => {
   });
 
   it('dos instancias comparten el mismo contador', async () => {
-    const a = new PostgresFixedWindowStore(prisma);
-    const b = new PostgresFixedWindowStore(prisma);
+    const a = new PostgresFixedWindowStore(prisma, new FixedWindowStore());
+    const b = new PostgresFixedWindowStore(prisma, new FixedWindowStore());
     const k = key();
     expect((await a.hit(k, 2, WINDOW)).allowed).toBe(true);
     expect((await b.hit(k, 2, WINDOW)).allowed).toBe(true);
@@ -59,14 +60,14 @@ describe('PostgresFixedWindowStore (DEC-86)', () => {
   });
 
   it('peticiones concurrentes no superan el límite', async () => {
-    const store = new PostgresFixedWindowStore(prisma);
+    const store = new PostgresFixedWindowStore(prisma, new FixedWindowStore());
     const k = key();
     const results = await Promise.all(Array.from({ length: 12 }, () => store.hit(k, 5, WINDOW)));
     expect(results.filter((r) => r.allowed)).toHaveLength(5);
   });
 
   it('la ventana se reinicia entera al vencer', async () => {
-    const store = new PostgresFixedWindowStore(prisma);
+    const store = new PostgresFixedWindowStore(prisma, new FixedWindowStore());
     const k = key();
     expect((await store.hit(k, 1, 300)).allowed).toBe(true);
     expect((await store.hit(k, 1, 300)).allowed).toBe(false);
@@ -75,7 +76,7 @@ describe('PostgresFixedWindowStore (DEC-86)', () => {
   });
 
   it('cada clave tiene su propia cuota y la limpieza borra solo ventanas vencidas', async () => {
-    const store = new PostgresFixedWindowStore(prisma);
+    const store = new PostgresFixedWindowStore(prisma, new FixedWindowStore());
     const expired = key();
     const live = key();
     await store.hit(expired, 1, 100);
@@ -84,5 +85,15 @@ describe('PostgresFixedWindowStore (DEC-86)', () => {
     await store.sweep();
     const rows = await prisma.rateLimitWindow.findMany({ where: { key: { in: [expired, live] } } });
     expect(rows.map((r) => r.key)).toEqual([live]);
+  });
+
+  it('si la base falla, cuenta en memoria en vez de dejar pasar todo', async () => {
+    const broken = {
+      $queryRaw: () => Promise.reject(new Error('relation "rate_limit_windows" does not exist')),
+    } as unknown as PrismaService;
+    const store = new PostgresFixedWindowStore(broken, new FixedWindowStore());
+    const k = key();
+    expect((await store.hit(k, 1, WINDOW)).allowed).toBe(true);
+    expect((await store.hit(k, 1, WINDOW)).allowed).toBe(false);
   });
 });
