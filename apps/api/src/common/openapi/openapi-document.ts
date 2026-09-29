@@ -16,8 +16,8 @@ export function applyGlobalPrefix(app: INestApplication): void {
  */
 export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
   const config = new DocumentBuilder()
-    .setTitle('Brigith OS API')
-    .setDescription('API de Brigith OS. Ver /docs en el repositorio para el diseño completo.')
+    .setTitle('Brigith API')
+    .setDescription('API de Brigith. Ver /docs en el repositorio para el diseño completo.')
     .setVersion('0.1.0')
     .addServer(`/${API_PREFIX}`)
     .addBearerAuth()

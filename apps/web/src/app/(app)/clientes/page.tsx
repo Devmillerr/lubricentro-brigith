@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronRight, Plus, Search } from 'lucide-react';
+import { ChevronRight, Plus, Search, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { FormError } from '@/components/customers/form-error';
@@ -107,6 +107,7 @@ export default function CustomersPage() {
 
       {firstPage.status === 'success' && items.length === 0 && (
         <EmptyState
+          icon={Users}
           title={term ? `Sin resultados para «${term}»` : 'Todavía no hay clientes'}
           description={
             term
@@ -122,7 +123,7 @@ export default function CustomersPage() {
       )}
 
       {items.length > 0 && (
-        <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+        <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
           {items.map((customer) => (
             <li key={customer.id}>
               <Link

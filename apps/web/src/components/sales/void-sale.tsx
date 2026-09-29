@@ -74,7 +74,7 @@ export function VoidSale({ sale, onVoided }: { sale: Sale; onVoided: () => void 
     <section className="flex flex-col gap-3 border-t border-[var(--border)] pt-5">
       {error && <FormError>{error}</FormError>}
       {confirming ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-[var(--danger)] p-4">
+        <div className="flex flex-col gap-3 rounded-lg border border-[var(--danger)]/60 bg-[var(--danger-soft)] p-4">
           <p className="text-sm">
             {isWash
               ? 'El lavado queda en el historial como anulado. No cambia el stock.'
@@ -91,11 +91,7 @@ export function VoidSale({ sale, onVoided }: { sale: Sale; onVoided: () => void 
             />
           </Field>
           <div className="flex gap-2">
-            <Button
-              onClick={confirm}
-              disabled={working}
-              className="flex-1 bg-[var(--danger)] text-white"
-            >
+            <Button onClick={confirm} disabled={working} variant="destructive" className="flex-1">
               {working ? 'Anulando…' : 'Sí, anular'}
             </Button>
             <Button variant="outline" onClick={() => setConfirming(false)} disabled={working}>

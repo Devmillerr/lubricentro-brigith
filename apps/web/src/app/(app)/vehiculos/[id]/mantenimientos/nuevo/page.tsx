@@ -55,11 +55,7 @@ export default function NewMaintenancePage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader
-        title={saved ? 'Mantenimiento registrado' : 'Nuevo mantenimiento'}
-        subtitle={subtitle}
-        back={back}
-      />
+      <PageHeader title="Nuevo mantenimiento" subtitle={subtitle} back={back} />
       {saved ? (
         <MaintenanceSaved saved={saved} vehicleId={data.id} />
       ) : (

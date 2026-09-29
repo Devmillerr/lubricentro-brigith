@@ -23,7 +23,7 @@ import {
   TopProducts,
 } from '@/components/dashboard/dashboard-sections';
 import { RevenueChart } from '@/components/dashboard/revenue-chart';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { ErrorState } from '@/components/ui/states';
 import { PlateSearch } from '@/components/vehicles/plate-search';
 import { api } from '@/lib/api/client';
@@ -61,16 +61,13 @@ export default function DashboardPage() {
   usePassiveRefresh(reload, !rateLimited);
 
   if (session.status !== 'authenticated') return null;
-  const { user, business } = session.me;
+  const { user } = session.me;
   const data: Dashboard | undefined =
     dashboard.status === 'success' ? dashboard.data : dashboard.previousData;
 
   return (
     <div className="flex flex-col gap-5">
-      <section className="flex flex-col gap-0.5">
-        <p className="text-sm text-[var(--muted-foreground)]">{business.name}</p>
-        <h2 className="text-2xl font-semibold">Hola, {user.name}</h2>
-      </section>
+      <h2 className="text-[1.75rem] leading-tight font-bold">Hola, {user.name}</h2>
 
       <nav aria-label="Acciones principales" className="grid grid-cols-2 gap-3">
         <ActionTile href="/ventas/nueva" icon={ShoppingCart} label="Vender" />
@@ -89,7 +86,7 @@ export default function DashboardPage() {
       <section aria-labelledby="period-title" className="flex flex-col gap-3">
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-3">
-            <h3 id="period-title" className="text-lg font-semibold">
+            <h3 id="period-title" className="text-lg font-bold">
               Resumen
             </h3>
             <RefreshIndicator
@@ -123,7 +120,10 @@ export default function DashboardPage() {
 
       <Link
         href="/resumen"
-        className="flex min-h-11 items-center justify-center gap-2 text-sm font-medium text-[var(--muted-foreground)] underline-offset-4 hover:text-[var(--foreground)] hover:underline"
+        className={buttonVariants({
+          variant: 'ghost',
+          className: 'gap-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]',
+        })}
       >
         <ChartColumn className="size-4" aria-hidden />
         Resumen del piloto
@@ -185,11 +185,13 @@ function ActionTile({
   return (
     <Link
       href={href}
-      className="flex min-h-20 flex-col justify-center gap-1.5 rounded-xl bg-[var(--primary)] px-4 py-3 text-[var(--primary-foreground)] transition-opacity hover:opacity-90 active:opacity-80"
+      className="flex min-h-24 flex-col justify-between gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-[var(--primary-foreground)] transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] active:opacity-80"
     >
-      <Icon className="size-6" aria-hidden />
+      <span className="flex size-10 items-center justify-center rounded-md bg-[var(--primary-foreground)]/12">
+        <Icon className="size-6" aria-hidden />
+      </span>
       <span className="flex flex-col">
-        <span className="text-base leading-tight font-semibold">{label}</span>
+        <span className="font-display text-xl leading-tight font-bold">{label}</span>
         {hint && <span className="text-xs leading-tight opacity-75">{hint}</span>}
       </span>
     </Link>
@@ -222,7 +224,7 @@ function PeriodSelector({
             className={cn(
               'min-h-11 rounded-lg text-sm font-medium transition-colors',
               selected
-                ? 'bg-[var(--background)] text-[var(--foreground)] shadow-sm'
+                ? 'bg-[var(--segment-selected)] text-[var(--foreground)] shadow-sm'
                 : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]',
             )}
           >
@@ -247,7 +249,7 @@ function RefreshIndicator({
       onClick={onRefresh}
       disabled={refreshing}
       aria-label={refreshing ? 'Actualizando' : 'Actualizar'}
-      className="h-10 w-10 px-0"
+      size="icon"
     >
       {refreshing ? (
         <LoaderCircle className="size-4 animate-spin" aria-hidden />

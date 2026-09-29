@@ -1,5 +1,6 @@
 'use client';
 
+import { Wrench } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { MaintenanceEditForm } from '@/components/maintenance/maintenance-edit-form';
@@ -42,6 +43,7 @@ export default function EditMaintenancePage() {
       {query.status === 'success' &&
         (query.data.status === 'VOIDED' ? (
           <EmptyState
+            icon={Wrench}
             title="Este mantenimiento está anulado"
             description="Un mantenimiento anulado no se puede corregir."
             action={

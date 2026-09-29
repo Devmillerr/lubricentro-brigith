@@ -1,13 +1,15 @@
 'use client';
 
-import { ChevronRight, PhoneOff } from 'lucide-react';
+import { Bell, ChevronRight, PhoneOff } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { FormError } from '@/components/customers/form-error';
 import { Button } from '@/components/ui/button';
+import { chipClass } from '@/components/ui/chip';
 import { Select } from '@/components/ui/field';
 import { Badge, PageHeader } from '@/components/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
+import { Plate } from '@/components/ui/plate';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
@@ -91,7 +93,10 @@ export default function RemindersPage() {
       <PageHeader title="Avisar" />
 
       <div className="flex flex-col gap-3">
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1" role="tablist">
+        <div
+          className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          role="tablist"
+        >
           {DUE_FILTERS.map((value) => (
             <button
               key={value}
@@ -99,12 +104,7 @@ export default function RemindersPage() {
               role="tab"
               aria-selected={due === value}
               onClick={() => setDue(value)}
-              className={cn(
-                'h-9 shrink-0 rounded-full border px-3 text-sm font-medium',
-                due === value
-                  ? 'border-[var(--foreground)] bg-[var(--foreground)] text-[var(--background)]'
-                  : 'border-[var(--border)] text-[var(--muted-foreground)]',
-              )}
+              className={chipClass(due === value)}
             >
               {DUE_FILTER_LABELS[value]}
             </button>
@@ -132,6 +132,7 @@ export default function RemindersPage() {
 
       {firstPage.status === 'success' && items.length === 0 && (
         <EmptyState
+          icon={Bell}
           title={due === 'now' ? 'No hay a quién avisar ahora' : 'Sin recordatorios'}
           description={
             due === 'now'
@@ -142,7 +143,7 @@ export default function RemindersPage() {
       )}
 
       {items.length > 0 && (
-        <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+        <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
           {items.map((reminder) => (
             <ReminderRow
               key={reminder.id}
@@ -179,8 +180,8 @@ function ReminderRow({
         className="flex min-h-16 items-center gap-3 px-4 py-3 hover:bg-[var(--muted)]"
       >
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="flex items-baseline gap-2">
-            <span className="font-semibold tracking-wide">{reminder.plate}</span>
+          <span className="flex items-center gap-2">
+            <Plate plate={reminder.plate} size="sm" />
             <span className="truncate text-sm text-[var(--muted-foreground)]">
               {reminder.customerName ?? 'Sin cliente'}
             </span>
@@ -199,8 +200,14 @@ function ReminderRow({
           )}
         </span>
         <span className="flex shrink-0 flex-col items-end gap-1">
-          {reminder.status !== 'PENDING' && <Badge>{STATUS_LABELS[reminder.status]}</Badge>}
-          {!reminder.hasPhone && reminder.reason !== 'NO_PHONE' && <Badge>Sin teléfono</Badge>}
+          {reminder.status !== 'PENDING' && (
+            <Badge tone={reminder.status === 'DONE' ? 'success' : 'neutral'}>
+              {STATUS_LABELS[reminder.status]}
+            </Badge>
+          )}
+          {!reminder.hasPhone && reminder.reason !== 'NO_PHONE' && (
+            <Badge tone="warning">Sin teléfono</Badge>
+          )}
         </span>
         <ChevronRight className="size-5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
       </Link>

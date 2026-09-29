@@ -26,7 +26,7 @@ export function ReceiptDetail({
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-2 rounded-lg border border-[var(--border)] p-4 text-sm">
+      <div className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
         <p className="flex items-center gap-2">
           <CalendarClock className="size-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
           {receiptDateFormat.format(new Date(receipt.occurredAt))}
@@ -44,8 +44,8 @@ export function ReceiptDetail({
       </div>
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-lg font-semibold">Productos recibidos</h3>
-        <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+        <h3 className="text-lg font-bold">Productos recibidos</h3>
+        <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
           {receipt.lines.map((line) => {
             const product = products.get(line.productId);
             const details = product

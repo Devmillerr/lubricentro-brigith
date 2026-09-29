@@ -229,9 +229,9 @@ export function SettingsForm({ business: initial }: { business: Business }) {
       {justSaved && (
         <p
           role="status"
-          className="flex items-start gap-2 rounded-md border border-[var(--border)] bg-[var(--muted)] px-3 py-2 text-sm"
+          className="flex items-start gap-2 rounded-md border border-[var(--success)]/40 bg-[var(--success-soft)] px-3 py-2.5 text-sm font-medium"
         >
-          <CircleCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <CircleCheck className="mt-0.5 size-4 shrink-0 text-[var(--success)]" aria-hidden />
           Cambios guardados.
         </p>
       )}
@@ -246,7 +246,7 @@ export function SettingsForm({ business: initial }: { business: Business }) {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-lg font-semibold">{title}</h3>
+      <h3 className="text-lg font-bold">{title}</h3>
       {children}
     </section>
   );

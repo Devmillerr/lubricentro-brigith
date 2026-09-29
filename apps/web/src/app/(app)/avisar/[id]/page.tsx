@@ -87,16 +87,19 @@ function ReminderView({
     <>
       <PageHeader
         title={reminder.plate}
+        asPlate
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
             {reminder.customerName ?? 'Sin cliente'}
-            <Badge>{STATUS_LABELS[reminder.status]}</Badge>
+            <Badge tone={reminder.status === 'DONE' ? 'success' : 'neutral'}>
+              {STATUS_LABELS[reminder.status]}
+            </Badge>
           </span>
         }
         back={back}
       />
 
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border border-[var(--border)] p-4 text-sm">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
         <Detail label="Mantenimiento">{typeName ?? null}</Detail>
         <Detail label="Aviso">{DUE_RULE_LABELS[reminder.dueRule]}</Detail>
         <Detail label="Próxima fecha">{formatDate(reminder.dueDate)}</Detail>
@@ -111,7 +114,7 @@ function ReminderView({
         <Detail label="Vehículo">
           <Link
             href={`/vehiculos/${reminder.vehicleId}`}
-            className="underline-offset-4 hover:underline"
+            className="font-medium underline underline-offset-4"
           >
             Ver ficha
           </Link>
@@ -134,7 +137,7 @@ function ReminderView({
       {open && !reminder.hasPhone && (
         <div
           role="status"
-          className="flex flex-col gap-2 rounded-lg border border-[var(--danger)] p-4 text-sm"
+          className="flex flex-col gap-2 rounded-lg border border-[var(--danger)]/60 bg-[var(--danger-soft)] p-4 text-sm"
         >
           <p className="flex items-center gap-2 font-medium text-[var(--danger)]">
             <PhoneOff className="size-4" aria-hidden />
@@ -158,13 +161,13 @@ function ReminderView({
       <ReminderActions reminder={reminder} onChanged={onChanged} onContacted={onContacted} />
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-lg font-semibold">Avisos abiertos en WhatsApp</h3>
+        <h3 className="text-lg font-bold">Avisos abiertos en WhatsApp</h3>
         {reminder.contacts.length === 0 ? (
           <p className="text-sm text-[var(--muted-foreground)]">
             Todavía no se abrió ningún aviso.
           </p>
         ) : (
-          <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+          <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
             {reminder.contacts.map((contact) => (
               <li key={contact.id} className="flex flex-col gap-1 px-4 py-3 text-sm">
                 <span className="font-medium">{formatDateTime(contact.openedAt)}</span>
@@ -187,7 +190,7 @@ function ReminderView({
 function MessagePreview({ message }: { message: string }) {
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="text-sm font-semibold">Mensaje que se abrirá en WhatsApp</h3>
+      <h3 className="text-base font-semibold">Mensaje que se abrirá en WhatsApp</h3>
       {message ? (
         <p className="rounded-lg rounded-tl-none bg-[var(--muted)] p-3 text-sm whitespace-pre-line">
           {message}

@@ -3,6 +3,7 @@
 import { CircleAlert, Info } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState, type FormEvent } from 'react';
+import { BrandEmblem } from '@/components/brand/brand-mark';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/states';
@@ -70,17 +71,20 @@ function LoginForm() {
 
   return (
     <div className="flex flex-1 flex-col justify-center gap-6">
-      <div className="text-center">
-        <h1 className="text-2xl font-semibold">Brigith OS</h1>
-        <p className="text-sm text-[var(--muted-foreground)]">Inicia sesión para continuar</p>
+      <div className="flex flex-col items-center gap-3 text-center">
+        <BrandEmblem size={168} priority />
+        <div className="flex flex-col gap-0.5">
+          <h1 className="text-[2rem] leading-tight font-bold tracking-wide uppercase">Brigith</h1>
+          <p className="text-sm text-[var(--muted-foreground)]">Inicia sesión para continuar</p>
+        </div>
       </div>
 
       {expired && !failure && (
         <p
           role="status"
-          className="flex items-start gap-2 rounded-md border border-[var(--border)] bg-[var(--muted)] px-3 py-2 text-sm"
+          className="flex items-start gap-2.5 rounded-md border border-[var(--accent)]/60 bg-[var(--accent-soft)] px-3 py-2.5 text-sm font-medium"
         >
-          <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <Info className="mt-0.5 size-4 shrink-0 text-[var(--accent-strong)]" aria-hidden />
           Tu sesión venció. Vuelve a iniciar sesión.
         </p>
       )}
@@ -88,7 +92,7 @@ function LoginForm() {
       {failure && (
         <p
           role="alert"
-          className="flex items-start gap-2 rounded-md border border-[var(--danger)] px-3 py-2 text-sm text-[var(--danger)]"
+          className="flex items-start gap-2.5 rounded-md border border-[var(--danger)]/50 bg-[var(--danger-soft)] px-3 py-2.5 text-sm font-medium text-[var(--danger)]"
         >
           <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
           {FAILURE_MESSAGES[failure]}
@@ -97,7 +101,7 @@ function LoginForm() {
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="username" className="text-sm font-medium">
+          <label htmlFor="username" className="text-sm font-semibold">
             Usuario
           </label>
           <Input
@@ -115,7 +119,7 @@ function LoginForm() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="password" className="text-sm font-medium">
+          <label htmlFor="password" className="text-sm font-semibold">
             Contraseña
           </label>
           <Input

@@ -12,6 +12,7 @@ import {
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { buttonVariants } from '@/components/ui/button';
+import { cardVariants } from '@/components/ui/card';
 import {
   formatAmount,
   formatCentsMoney,
@@ -24,7 +25,7 @@ import { formatQuantity } from '@/lib/inventory/format';
 import { cn } from '@/lib/utils';
 import { Swatch } from './revenue-chart';
 
-/** Tarjeta base del Inicio: mismo borde, radio y relleno en todas las secciones. */
+/** Tarjeta del Inicio: la `Card` del sistema como `<section>` con título. */
 export function Panel({
   title,
   action,
@@ -37,9 +38,7 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <section
-      className={cn('flex flex-col gap-3 rounded-xl border border-[var(--border)] p-4', className)}
-    >
+    <section className={cn(cardVariants(), className)}>
       {(title || action) && (
         <div className="flex items-center justify-between gap-3">
           {title && <h3 className="text-base font-semibold">{title}</h3>}
@@ -62,8 +61,10 @@ export function IncomeSummary({ totals }: { totals: Dashboard['totals'] }) {
   return (
     <Panel>
       <div className="flex flex-col gap-0.5">
-        <span className="text-sm text-[var(--muted-foreground)]">Ingresos totales</span>
-        <span className="text-4xl font-semibold tracking-tight">{formatAmount(totals.total)}</span>
+        <span className="text-sm font-medium text-[var(--muted-foreground)]">Ingresos totales</span>
+        <span className="font-display text-5xl leading-none font-bold tracking-tight">
+          {formatAmount(totals.total)}
+        </span>
         <span className="text-sm text-[var(--muted-foreground)]">
           {plural(totals.salesCount, 'venta cobrada', 'ventas cobradas')}
         </span>
@@ -392,7 +393,7 @@ function Count({
         'inline-flex items-baseline gap-1 rounded-full border px-3 py-1',
         danger
           ? 'border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)]'
-          : 'border-[var(--border)]',
+          : 'border-[var(--border)] bg-[var(--surface)]',
       )}
     >
       <span className="font-semibold tabular-nums">{value}</span>
@@ -406,9 +407,20 @@ export function RemindersDue({ dueNow }: { dueNow: number }) {
   return (
     <Link
       href="/avisar"
-      className="flex min-h-16 items-center gap-3 rounded-xl border border-[var(--border)] p-4 hover:bg-[var(--muted)]"
+      className={cn(
+        'flex min-h-16 items-center gap-3 rounded-lg border p-4 transition-colors',
+        // Con recordatorios pendientes, amarillo aceite: atención, no error.
+        dueNow > 0
+          ? 'border-[var(--accent)] bg-[var(--accent-soft)] hover:brightness-[0.98]'
+          : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--muted)]',
+      )}
     >
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--muted)]">
+      <span
+        className={cn(
+          'flex size-10 shrink-0 items-center justify-center rounded-full',
+          dueNow > 0 ? 'bg-[var(--accent)] text-[var(--accent-foreground)]' : 'bg-[var(--muted)]',
+        )}
+      >
         <Bell className="size-5" aria-hidden />
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
@@ -430,13 +442,13 @@ export function RemindersDue({ dueNow }: { dueNow: number }) {
 export function DashboardSkeleton() {
   return (
     <div role="status" aria-label="Cargando el resumen" className="flex flex-col gap-3">
-      <div className="h-40 animate-pulse rounded-xl bg-[var(--muted)]" />
+      <div className="h-40 animate-pulse rounded-lg bg-[var(--muted)]" />
       <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-3">
         {[0, 1, 2].map((key) => (
-          <div key={key} className="h-16 animate-pulse rounded-xl bg-[var(--muted)]" />
+          <div key={key} className="h-16 animate-pulse rounded-lg bg-[var(--muted)]" />
         ))}
       </div>
-      <div className="h-56 animate-pulse rounded-xl bg-[var(--muted)]" />
+      <div className="h-56 animate-pulse rounded-lg bg-[var(--muted)]" />
     </div>
   );
 }

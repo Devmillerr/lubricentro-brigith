@@ -1,6 +1,6 @@
 'use client';
 
-import { Boxes, Plus, Search } from 'lucide-react';
+import { Boxes, Package, Plus, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { FormError } from '@/components/customers/form-error';
@@ -241,6 +241,7 @@ export default function ProductsPage() {
 
       {firstPage.status === 'success' && items.length === 0 && (
         <EmptyState
+          icon={Package}
           title={filtered ? 'Sin resultados' : 'Todavía no hay productos'}
           description={
             filtered
@@ -282,7 +283,7 @@ function ProductCard({ product }: { product: Product }) {
   return (
     <Link
       href={`/productos/${product.id}`}
-      className="flex h-full flex-col gap-2 rounded-lg border border-[var(--border)] p-3 hover:bg-[var(--muted)]"
+      className="flex h-full flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 hover:bg-[var(--muted)]"
     >
       <ProductImage product={product} />
       <span className="line-clamp-2 text-sm font-medium break-words">{product.name}</span>
@@ -292,7 +293,11 @@ function ProductCard({ product }: { product: Product }) {
         </span>
       )}
       <span className="mt-auto flex flex-wrap items-center gap-1">
-        {price ? <span className="text-sm font-semibold">{price}</span> : <Badge>Sin precio</Badge>}
+        {price ? (
+          <span className="text-sm font-semibold">{price}</span>
+        ) : (
+          <Badge tone="warning">Sin precio</Badge>
+        )}
         {!product.isActive && <Badge>Inactivo</Badge>}
       </span>
     </Link>

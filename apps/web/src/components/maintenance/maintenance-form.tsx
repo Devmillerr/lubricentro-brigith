@@ -478,7 +478,7 @@ export function MaintenanceForm({
 function Section({ title, children }: { title?: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
-      {title && <h3 className="text-sm font-semibold">{title}</h3>}
+      {title && <h3 className="text-base font-semibold">{title}</h3>}
       {children}
     </section>
   );
@@ -506,7 +506,7 @@ function ItemRow({
     stock.balance - quantity < 0;
 
   return (
-    <li className="flex flex-col gap-2 rounded-lg border border-[var(--border)] p-3">
+    <li className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-1">
           <span className="font-medium break-words">{item.product.name}</span>
@@ -553,11 +553,14 @@ function ItemRow({
 
 function Hints({ hints }: { hints: string[] }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-md border border-[var(--border)] bg-[var(--muted)] p-3 text-sm">
-      <span className="font-medium">Revisa antes de guardar (no impide guardar)</span>
+    <div className="flex flex-col gap-1.5 rounded-md border border-[var(--accent)]/60 bg-[var(--accent-soft)] p-3 text-sm">
+      <span className="font-semibold">Revisa antes de guardar (no impide guardar)</span>
       {hints.map((hint) => (
         <p key={hint} className="flex items-start gap-1.5">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <TriangleAlert
+            className="mt-0.5 size-4 shrink-0 text-[var(--accent-strong)]"
+            aria-hidden
+          />
           {hint}
         </p>
       ))}
@@ -578,7 +581,7 @@ function BlockedByStock({
   return (
     <div
       role="alert"
-      className="flex flex-col gap-2 rounded-lg border border-[var(--danger)] p-4 text-sm"
+      className="flex flex-col gap-2 rounded-lg border border-[var(--danger)]/60 bg-[var(--danger-soft)] p-4 text-sm"
     >
       <p className="flex items-start gap-2 font-medium text-[var(--danger)]">
         <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -613,7 +616,7 @@ function NewTypeForm({ onCreated }: { onCreated: (type: MaintenanceType) => void
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex w-fit items-center gap-1 py-1 text-sm font-medium underline-offset-4 hover:underline"
+        className="inline-flex min-h-11 w-fit items-center gap-1 text-sm font-medium underline-offset-4 hover:underline"
       >
         <Plus className="size-4" aria-hidden />
         Agregar un tipo
@@ -644,7 +647,7 @@ function NewTypeForm({ onCreated }: { onCreated: (type: MaintenanceType) => void
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-[var(--border)] p-3">
+    <div className="flex flex-col gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
       <Field id="new-type-name" label="Nuevo tipo" error={error ?? undefined}>
         <Input
           id="new-type-name"

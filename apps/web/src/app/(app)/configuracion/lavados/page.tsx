@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowDown, ArrowUp, Pencil, Plus } from 'lucide-react';
+import { ArrowDown, ArrowUp, Droplets, Pencil, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { FormError } from '@/components/customers/form-error';
 import { Button } from '@/components/ui/button';
@@ -113,11 +113,14 @@ export default function WashTypesSettingsPage() {
       />
 
       {types.length === 0 ? (
-        <EmptyState title="Todavía no hay tipos de lavado" />
+        <EmptyState icon={Droplets} title="Todavía no hay tipos de lavado" />
       ) : (
         <ul className="flex flex-col gap-3">
           {types.map((type, index) => (
-            <li key={type.id} className="rounded-lg border border-[var(--border)]">
+            <li
+              key={type.id}
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface)]"
+            >
               <WashTypeCard
                 type={type}
                 busy={busy}
@@ -255,7 +258,9 @@ function WashTypeCard({
           <span className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="font-semibold break-words">{type.name}</span>
             {!type.isActive && <Badge>Inactivo</Badge>}
-            {type.isActive && activePrices === 0 && <Badge>Sin precio: no se cobra</Badge>}
+            {type.isActive && activePrices === 0 && (
+              <Badge tone="warning">Sin precio: no se cobra</Badge>
+            )}
           </span>
         )}
         {!editing && (

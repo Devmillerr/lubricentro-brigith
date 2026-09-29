@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { IndicatorsView } from '@/components/pilot/indicators-view';
+import { chipClass } from '@/components/ui/chip';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
@@ -16,7 +17,6 @@ import {
   PRESET_LABELS,
   type PeriodPreset,
 } from '@/lib/pilot/period';
-import { cn } from '@/lib/utils';
 
 const PRESETS: PeriodPreset[] = ['month', 'last7', 'last30', 'all', 'custom'];
 
@@ -57,7 +57,7 @@ export default function PilotSummaryPage() {
       />
 
       <div
-        className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1"
+        className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         role="tablist"
         aria-label="Período"
       >
@@ -68,12 +68,7 @@ export default function PilotSummaryPage() {
             role="tab"
             aria-selected={preset === value}
             onClick={() => setPreset(value)}
-            className={cn(
-              'h-9 shrink-0 rounded-full border px-3 text-sm font-medium',
-              preset === value
-                ? 'border-[var(--foreground)] bg-[var(--foreground)] text-[var(--background)]'
-                : 'border-[var(--border)] text-[var(--muted-foreground)]',
-            )}
+            className={chipClass(preset === value)}
           >
             {PRESET_LABELS[value]}
           </button>

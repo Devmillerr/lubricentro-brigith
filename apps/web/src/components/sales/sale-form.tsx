@@ -255,8 +255,8 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
                   className={cn(
                     'flex min-h-14 items-center justify-center gap-2 rounded-lg border px-3 text-base font-semibold',
                     selected
-                      ? 'border-[var(--foreground)] bg-[var(--foreground)] text-[var(--background)]'
-                      : 'border-[var(--border)] hover:bg-[var(--muted)]',
+                      ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]'
+                      : 'border-[var(--border-strong)] bg-[var(--surface)] hover:bg-[var(--muted)]',
                   )}
                 >
                   <Icon className="size-5" aria-hidden />
@@ -303,7 +303,7 @@ function countLabel(count: number): string {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-sm font-semibold">{title}</h3>
+      <h3 className="text-base font-semibold">{title}</h3>
       {children}
     </section>
   );
@@ -328,7 +328,7 @@ function LineRow({
   const errorId = `sale-line-${product.id}-error`;
 
   return (
-    <li className="flex flex-col gap-2 rounded-lg border border-[var(--border)] p-3">
+    <li className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-1">
           <span className="font-medium break-words">{product.name}</span>

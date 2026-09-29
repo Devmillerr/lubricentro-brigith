@@ -108,7 +108,7 @@ export function CompatibilitiesSection({ productId }: { productId: string }) {
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-lg font-semibold">Modelos compatibles</h3>
+      <h3 className="text-lg font-bold">Modelos compatibles</h3>
 
       {actionError && <FormError>{actionError}</FormError>}
 
@@ -118,12 +118,13 @@ export function CompatibilitiesSection({ productId }: { productId: string }) {
       )}
       {compatible.status === 'success' && compatible.data.length === 0 && (
         <EmptyState
+          icon={Car}
           title="Sin modelos compatibles"
           description="Marca con qué modelos de vehículo se usa este producto."
         />
       )}
       {compatible.status === 'success' && compatible.data.length > 0 && (
-        <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+        <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
           {compatible.data.map((model) => {
             const compatibilityId = createdIds[model.id];
             return (
@@ -157,7 +158,7 @@ export function CompatibilitiesSection({ productId }: { productId: string }) {
       {compatible.status === 'success' && (
         <form
           onSubmit={handleAdd}
-          className="flex flex-col gap-3 rounded-lg border border-[var(--border)] p-4"
+          className="flex flex-col gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4"
         >
           <p className="text-sm font-medium">Agregar modelo compatible</p>
           {allModels.status === 'error' ? (

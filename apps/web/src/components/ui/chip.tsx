@@ -35,18 +35,24 @@ export function Chip({
       ref={ref}
       type="button"
       aria-pressed={selected}
-      className={cn(
-        'inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors',
-        selected
-          ? 'border-[var(--foreground)] bg-[var(--foreground)] text-[var(--background)]'
-          : 'border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--muted)]',
-        'disabled:opacity-50',
-        className,
-      )}
+      className={cn(chipClass(selected), className)}
       {...props}
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * Estilo de chip, compartido con los filtros que se anuncian como pestañas
+ * (Avisar, Inventario): mismo alto táctil y mismo estado elegido.
+ */
+export function chipClass(selected: boolean): string {
+  return cn(
+    'inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full border px-4 text-sm font-semibold whitespace-nowrap transition-colors disabled:opacity-50',
+    selected
+      ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]'
+      : 'border-[var(--border-strong)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--muted)]',
   );
 }
 
@@ -56,7 +62,7 @@ export function ChipRow({ label, children }: { label: string; children: ReactNod
     <div
       role="group"
       aria-label={label}
-      className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:thin]"
+      className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {children}
     </div>

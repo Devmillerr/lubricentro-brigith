@@ -1,4 +1,4 @@
-// Service worker mínimo de Brigith OS (04-ARCHITECTURE.md §8).
+// Service worker mínimo de Brigith (04-ARCHITECTURE.md §8).
 // Solo cachea la carcasa de la app para poder mostrar /offline sin red.
 // A propósito NO cachea datos de negocio ni respuestas de /api/*.
 

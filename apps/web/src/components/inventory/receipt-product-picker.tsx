@@ -231,7 +231,7 @@ export function ReceiptProductPicker({
       )}
 
       {items.length > 0 && (
-        <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+        <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
           {items.map((product) => (
             <PickerRow
               key={product.id}

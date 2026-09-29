@@ -23,7 +23,7 @@ export function MaintenanceList({
   const typeName = (id: string) => types.find((type) => type.id === id)?.name ?? 'Mantenimiento';
 
   return (
-    <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+    <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
       {maintenances.map((maintenance) => {
         const details = [
           formatKm(maintenance.odometerKm),
@@ -51,7 +51,7 @@ export function MaintenanceList({
                 </span>
                 <span className="truncate text-sm text-[var(--muted-foreground)]">{charge}</span>
               </span>
-              {voided && <Badge>Anulado</Badge>}
+              {voided && <Badge tone="danger">Anulado</Badge>}
               <ChevronRight
                 className="size-5 shrink-0 text-[var(--muted-foreground)]"
                 aria-hidden

@@ -17,7 +17,7 @@ export default function NewSalePage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title={saved ? 'Venta cobrada' : 'Vender'}
+        title="Vender"
         subtitle={saved ? undefined : 'Venta de mostrador: sin cliente ni placa'}
         back={{ href: '/dashboard', label: 'Inicio' }}
       />

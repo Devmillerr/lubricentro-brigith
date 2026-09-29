@@ -1,4 +1,5 @@
 import type { Schemas } from '@/lib/api/client';
+import { dateTimeFormat } from '@/lib/utils';
 
 export type Maintenance = Schemas['MaintenanceResponse'];
 export type MaintenanceWithItems = Schemas['MaintenanceWithItemsResponse'];
@@ -20,17 +21,14 @@ export const DUE_RULE_LABELS: Record<DueRule, string> = {
 };
 
 const dateFormat = new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium' });
-const dateTimeFormat = new Intl.DateTimeFormat('es-PE', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
+const dateTimeFormatter = dateTimeFormat();
 
 export function formatDate(value: string | null): string | null {
   return value ? dateFormat.format(new Date(value)) : null;
 }
 
 export function formatDateTime(value: string): string {
-  return dateTimeFormat.format(new Date(value));
+  return dateTimeFormatter.format(new Date(value));
 }
 
 export function formatKm(value: number | null): string | null {

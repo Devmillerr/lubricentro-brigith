@@ -83,7 +83,7 @@ export function IndicatorsView({ indicators }: { indicators: PilotIndicators }) 
 function IndicatorSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-lg font-semibold">{title}</h3>
+      <h3 className="text-lg font-bold">{title}</h3>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{children}</div>
     </section>
   );
@@ -91,8 +91,10 @@ function IndicatorSection({ title, children }: { title: string; children: ReactN
 
 export function Figure({ value, label, help }: { value: number; label: string; help?: string }) {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-[var(--border)] p-4">
-      <span className="text-3xl font-semibold tabular-nums">{value.toLocaleString('es-PE')}</span>
+    <div className="flex flex-col gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+      <span className="font-display text-4xl leading-none font-bold tabular-nums">
+        {value.toLocaleString('es-PE')}
+      </span>
       <span className="text-sm font-medium">{label}</span>
       {help && <span className="text-xs text-[var(--muted-foreground)]">{help}</span>}
     </div>

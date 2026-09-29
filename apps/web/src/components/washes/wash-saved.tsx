@@ -21,13 +21,13 @@ export function WashSaved({ sale, onNew }: { sale: Sale; onNew: () => void }) {
     <div className="flex flex-col gap-5">
       <p
         role="status"
-        className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--muted)] p-4 font-medium"
+        className="flex items-center gap-3 rounded-lg border border-[var(--success)]/40 bg-[var(--success-soft)] p-4 text-lg font-bold"
       >
-        <CircleCheck className="mt-0.5 size-5 shrink-0" aria-hidden />
+        <CircleCheck className="size-7 shrink-0 text-[var(--success)]" aria-hidden />
         Lavado cobrado.
       </p>
 
-      <dl className="flex flex-col gap-2 rounded-lg border border-[var(--border)] p-4 text-sm">
+      <dl className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
         <Row label="Vehículo">{line?.descriptionSnapshot ?? 'Lavado'}</Row>
         <Row label="Monto">
           <span className="text-base font-semibold">{formatMoney(sale.total)}</span>

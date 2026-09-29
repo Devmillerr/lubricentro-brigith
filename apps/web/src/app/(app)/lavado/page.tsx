@@ -1,6 +1,6 @@
 'use client';
 
-import { History } from 'lucide-react';
+import { Droplets, History } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { FormError } from '@/components/customers/form-error';
@@ -41,7 +41,7 @@ export default function WashPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title={saved ? 'Lavado cobrado' : 'Nuevo lavado'}
+        title="Nuevo lavado"
         back={{ href: '/dashboard', label: 'Inicio' }}
         action={history}
       />
@@ -68,6 +68,7 @@ export default function WashPage() {
               if (types.length === 0) {
                 return (
                   <EmptyState
+                    icon={Droplets}
                     title="No hay lavados para cobrar"
                     description="Ningún tipo de lavado activo tiene precio. Agrégalo en Configuración."
                     action={

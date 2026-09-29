@@ -67,7 +67,7 @@ export default function ProductDetailPage() {
 
       <ProductImage product={product} size="lg" />
 
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border border-[var(--border)] p-4 text-sm">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
         <Detail label="Marca">{present(product.brand)}</Detail>
         <Detail label="Código">{present(product.code)}</Detail>
         <Detail label="Viscosidad">{present(product.viscosity)}</Detail>
@@ -133,7 +133,7 @@ function DeactivateProduct({ product, onDone }: { product: Product; onDone: () =
     <section className="flex flex-col gap-3 border-t border-[var(--border)] pt-5">
       {error && <FormError>{error}</FormError>}
       {confirming ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-[var(--danger)] p-4">
+        <div className="flex flex-col gap-3 rounded-lg border border-[var(--danger)]/60 bg-[var(--danger-soft)] p-4">
           <p className="text-sm">
             El producto dejará de estar activo. No se borra: su historial se conserva.
           </p>
@@ -141,7 +141,8 @@ function DeactivateProduct({ product, onDone }: { product: Product; onDone: () =
             <Button
               onClick={deactivate}
               disabled={working}
-              className="flex-1 bg-[var(--danger)] text-white"
+              variant="destructive"
+              className="flex-1"
             >
               {working ? 'Desactivando…' : 'Sí, desactivar'}
             </Button>

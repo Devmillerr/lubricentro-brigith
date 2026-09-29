@@ -196,7 +196,7 @@ export function StockOperationForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-col gap-4 rounded-lg border border-[var(--border)] p-4"
+      className="flex flex-col gap-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4"
       noValidate
     >
       <div
@@ -213,7 +213,7 @@ export function StockOperationForm({
           aria-label="Ingreso: abre Recibir con este producto"
           className={cn(
             OPERATION_CLASS,
-            'text-[var(--muted-foreground)] hover:bg-[var(--background)]/60',
+            'text-[var(--muted-foreground)] hover:bg-[var(--surface)]/60',
           )}
         >
           Ingreso
@@ -403,7 +403,7 @@ function AdjustmentUnavailable({
   );
 }
 
-const OPERATION_CLASS = 'flex h-10 items-center justify-center gap-1 rounded text-sm font-medium';
+const OPERATION_CLASS = 'flex h-11 items-center justify-center gap-1 rounded text-sm font-medium';
 
 function OperationButton({
   selected,
@@ -421,7 +421,7 @@ function OperationButton({
       onClick={onClick}
       className={cn(
         OPERATION_CLASS,
-        selected ? 'bg-[var(--background)] shadow-sm' : 'text-[var(--muted-foreground)]',
+        selected ? 'bg-[var(--segment-selected)] shadow-sm' : 'text-[var(--muted-foreground)]',
       )}
     >
       {children}

@@ -1,6 +1,6 @@
 'use client';
 
-import { Pencil, Phone, Plus, User } from 'lucide-react';
+import { Pencil, Phone, Plus, User, Wrench } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import type { ReactNode } from 'react';
@@ -64,6 +64,7 @@ export default function VehiclePage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title={data.plate}
+        asPlate
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
             {data.vehicleModel ? vehicleModelLabel(data.vehicleModel) : 'Sin modelo'}
@@ -92,7 +93,7 @@ export default function VehiclePage() {
         Nuevo mantenimiento
       </Link>
 
-      <dl className="grid gap-3 rounded-lg border border-[var(--border)] p-4 text-sm">
+      <dl className="grid gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
         <Row icon={<User className="size-4" aria-hidden />} label="Cliente">
           {data.customer ? (
             <Link
@@ -135,7 +136,7 @@ export default function VehiclePage() {
       )}
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-lg font-semibold">Historial</h3>
+        <h3 className="text-lg font-bold">Historial</h3>
         {history.status === 'loading' && <LoadingState label="Cargando historial…" />}
         {history.status === 'error' && (
           <ErrorState message={failureMessage(history.failure)} onRetry={history.reload} />
@@ -143,6 +144,7 @@ export default function VehiclePage() {
         {history.status === 'success' &&
           (history.data.length === 0 ? (
             <EmptyState
+              icon={Wrench}
               title="Sin mantenimientos"
               description="Registra el primero con «Nuevo mantenimiento»."
             />
@@ -155,7 +157,7 @@ export default function VehiclePage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-lg font-semibold">Productos compatibles</h3>
+        <h3 className="text-lg font-bold">Productos compatibles</h3>
         {compatible.status === 'loading' && <LoadingState label="Cargando…" />}
         {compatible.status === 'error' && (
           <ErrorState message={failureMessage(compatible.failure)} onRetry={compatible.reload} />
@@ -168,7 +170,7 @@ export default function VehiclePage() {
                 : 'Asigna un modelo al vehículo para ver sus productos compatibles.'}
             </p>
           ) : (
-            <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+            <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
               {compatible.data.map((product) => (
                 <li key={product.id}>
                   <Link

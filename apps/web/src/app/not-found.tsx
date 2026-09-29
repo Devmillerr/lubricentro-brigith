@@ -1,5 +1,5 @@
-import { SearchX } from 'lucide-react';
 import Link from 'next/link';
+import { BrandEmblem } from '@/components/brand/brand-mark';
 import { buttonVariants } from '@/components/ui/button';
 
 /**
@@ -9,10 +9,10 @@ import { buttonVariants } from '@/components/ui/button';
 export default function NotFound() {
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-5 px-6 text-center">
-      <SearchX className="size-10 text-[var(--muted-foreground)]" aria-hidden />
+      <BrandEmblem size={112} />
       <div className="flex flex-col gap-2">
         <p className="text-sm font-medium text-[var(--muted-foreground)]">Error 404</p>
-        <h1 className="text-2xl font-semibold">Esta página no existe</h1>
+        <h1 className="text-[1.75rem] leading-tight font-bold">Esta página no existe</h1>
         <p className="max-w-sm text-sm text-[var(--muted-foreground)]">
           Puede que el enlace esté mal o que la página se haya movido.
         </p>

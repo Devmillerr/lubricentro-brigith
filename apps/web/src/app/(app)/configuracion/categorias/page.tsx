@@ -106,7 +106,10 @@ export default function CategoriesSettingsPage() {
 
       <ul className="flex flex-col gap-3">
         {tree.map((node, index) => (
-          <li key={node.id} className="rounded-lg border border-[var(--border)]">
+          <li
+            key={node.id}
+            className="rounded-lg border border-[var(--border)] bg-[var(--surface)]"
+          >
             <CategoryRow
               category={node}
               parents={parents}

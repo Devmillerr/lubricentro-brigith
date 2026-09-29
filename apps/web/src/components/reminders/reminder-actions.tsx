@@ -120,7 +120,7 @@ export function ReminderActions({
 
       {open &&
         (confirmDismiss ? (
-          <div className="flex flex-col gap-3 rounded-lg border border-[var(--danger)] p-4">
+          <div className="flex flex-col gap-3 rounded-lg border border-[var(--danger)]/60 bg-[var(--danger-soft)] p-4">
             <p className="text-sm">
               El recordatorio se cerrará sin avisar. Podrás reabrirlo después.
             </p>
@@ -128,7 +128,8 @@ export function ReminderActions({
               <Button
                 onClick={() => setStatus('DISMISSED')}
                 disabled={working !== null}
-                className="flex-1 bg-[var(--danger)] text-white"
+                variant="destructive"
+                className="flex-1"
               >
                 {working === 'dismiss' ? 'Descartando…' : 'Sí, descartar'}
               </Button>

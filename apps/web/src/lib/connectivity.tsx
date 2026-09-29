@@ -40,7 +40,7 @@ export function OfflineBanner() {
   return (
     <div
       role="status"
-      className="w-full bg-[var(--danger)] px-4 py-2 text-center text-sm font-medium text-white"
+      className="w-full bg-[var(--accent)] px-4 py-2 text-center text-sm font-semibold text-[var(--accent-foreground)]"
     >
       Sin conexión. Lo que escribas se conserva; revisa tu red para guardar.
     </div>

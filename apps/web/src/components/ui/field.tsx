@@ -4,6 +4,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react';
+import { controlClass } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
 /** Etiqueta, control, ayuda y error de un campo (07-UI-UX.md §5: "mensaje junto al campo"). */
@@ -24,7 +25,7 @@ export function Field({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium">
+      <label htmlFor={id} className="text-sm font-semibold">
         {label}
         {optional && (
           <span className="ml-1 font-normal text-[var(--muted-foreground)]">(opcional)</span>
@@ -32,7 +33,7 @@ export function Field({
       </label>
       {children}
       {error ? (
-        <p id={`${id}-error`} role="alert" className="text-sm text-[var(--danger)]">
+        <p id={`${id}-error`} role="alert" className="text-sm font-medium text-[var(--danger)]">
           {error}
         </p>
       ) : (
@@ -41,9 +42,6 @@ export function Field({
     </div>
   );
 }
-
-const controlClass =
-  'w-full rounded-md border border-[var(--border)] bg-transparent px-3 text-base placeholder:text-[var(--muted-foreground)] focus-visible:outline-none focus-visible:ring-2 aria-[invalid=true]:border-[var(--danger)]';
 
 export const Textarea = forwardRef<
   HTMLTextAreaElement,
@@ -55,11 +53,7 @@ Textarea.displayName = 'Textarea';
 
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(
   ({ className, ...props }, ref) => (
-    <select
-      ref={ref}
-      className={cn(controlClass, 'h-11 bg-[var(--background)]', className)}
-      {...props}
-    />
+    <select ref={ref} className={cn(controlClass, 'h-12', className)} {...props} />
   ),
 );
 Select.displayName = 'Select';

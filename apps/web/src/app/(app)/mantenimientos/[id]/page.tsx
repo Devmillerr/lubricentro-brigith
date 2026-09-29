@@ -78,7 +78,7 @@ export default function MaintenanceDetailPage() {
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
             {subtitleParts.filter(Boolean).join(' · ')}
-            {voided && <Badge>Anulado</Badge>}
+            {voided && <Badge tone="danger">Anulado</Badge>}
           </span>
         }
         back={back}
@@ -119,30 +119,30 @@ export default function MaintenanceDetailPage() {
       )}
 
       {data.vehicleId ? (
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border border-[var(--border)] p-4 text-sm">
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
           <Detail label="Km">{formatKm(data.odometerKm)}</Detail>
           <Detail label="Próximo km">{formatKm(data.nextDueKm)}</Detail>
           <Detail label="Próxima fecha">{formatDate(data.nextDueDate)}</Detail>
           <Detail label="Aviso">{data.dueRule ? DUE_RULE_LABELS[data.dueRule] : null}</Detail>
         </dl>
       ) : (
-        <p className="rounded-lg border border-[var(--border)] p-4 text-sm text-[var(--muted-foreground)]">
+        <p className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--muted-foreground)]">
           Sin vehículo: no tiene km, próximo mantenimiento ni recordatorio.
         </p>
       )}
 
-      <section className="flex flex-col gap-3 rounded-lg border border-[var(--border)] p-4">
-        <h3 className="text-lg font-semibold">Cobro</h3>
+      <section className="flex flex-col gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+        <h3 className="text-lg font-bold">Cobro</h3>
         <ChargeSummary sale={sale} />
         {!voided && !sale && <ChargeLater maintenanceId={data.id} onDone={query.reload} />}
       </section>
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-lg font-semibold">Productos usados</h3>
+        <h3 className="text-lg font-bold">Productos usados</h3>
         {data.items.length === 0 ? (
           <p className="text-sm text-[var(--muted-foreground)]">Sin productos.</p>
         ) : (
-          <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+          <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
             {data.items.map((item) => (
               <li key={item.id} className="flex items-baseline justify-between gap-3 px-4 py-3">
                 <span className="flex min-w-0 flex-col">
@@ -167,7 +167,7 @@ export default function MaintenanceDetailPage() {
 
       {present(data.notes) && (
         <section className="flex flex-col gap-1 text-sm">
-          <h3 className="text-lg font-semibold">Notas</h3>
+          <h3 className="text-lg font-bold">Notas</h3>
           <p className="whitespace-pre-line">{data.notes}</p>
         </section>
       )}

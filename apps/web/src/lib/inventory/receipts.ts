@@ -3,6 +3,7 @@ import { callApi, type ApiResult } from '@/lib/api/request';
 import { findProduct } from '@/lib/products/product-lookup';
 import type { Product } from '@/lib/products/format';
 import { parseQuantity, QUANTITY_DECIMALS, type ProductWithStock } from './format';
+import { dateTimeFormat } from '@/lib/utils';
 
 export type InventoryReceipt = Schemas['InventoryReceiptResponse'];
 export type InventoryReceiptSummary = Schemas['InventoryReceiptSummaryResponse'];
@@ -13,10 +14,7 @@ export const MAX_RECEIPT_NOTE = 500;
 /** Decimal(12,3) en la base: la parte entera admite hasta 9 dígitos. */
 export const MAX_RECEIPT_QUANTITY = 999_999_999.999;
 
-export const receiptDateFormat = new Intl.DateTimeFormat('es-PE', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
+export const receiptDateFormat = dateTimeFormat();
 
 export function productCountLabel(count: number): string {
   return count === 1 ? '1 producto' : `${count} productos`;

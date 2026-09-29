@@ -149,6 +149,7 @@ function SalesList({ source }: { source: SaleSource | null }) {
   if (items.length === 0) {
     return (
       <EmptyState
+        icon={ShoppingCart}
         title={EMPTY[source ?? 'ALL'].title}
         description={EMPTY[source ?? 'ALL'].description}
       />
@@ -157,7 +158,7 @@ function SalesList({ source }: { source: SaleSource | null }) {
 
   return (
     <>
-      <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+      <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
         {items.map((sale) => (
           <SaleRow key={sale.id} sale={sale} />
         ))}
@@ -191,7 +192,7 @@ function SaleRow({ sale }: { sale: SaleSummary }) {
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex items-center gap-2">
             <span className="font-medium">{SOURCE_LABELS[sale.source]}</span>
-            {voided && <Badge>Anulada</Badge>}
+            {voided && <Badge tone="danger">Anulada</Badge>}
           </span>
           <span className="text-sm text-[var(--muted-foreground)]">
             {PAYMENT_LABELS[sale.paymentMethod]} ·{' '}

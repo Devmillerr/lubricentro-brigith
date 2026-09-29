@@ -1,5 +1,6 @@
 'use client';
 
+import { History } from 'lucide-react';
 import { useState } from 'react';
 import { FormError } from '@/components/customers/form-error';
 import { Button } from '@/components/ui/button';
@@ -14,9 +15,10 @@ import {
   MOVEMENT_LABELS,
   type InventoryMovement,
 } from '@/lib/inventory/format';
+import { dateTimeFormat } from '@/lib/utils';
 
 const PAGE_SIZE = 20;
-const dateFormat = new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short' });
+const dateFormat = dateTimeFormat();
 
 /**
  * Historial de movimientos del producto, solo lectura (07-UI-UX.md §3.6;
@@ -71,7 +73,7 @@ export function MovementHistory({ productId, version }: { productId: string; ver
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-lg font-semibold">Movimientos</h3>
+      <h3 className="text-lg font-bold">Movimientos</h3>
 
       {firstPage.status === 'loading' && <LoadingState label="Cargando movimientos…" />}
       {firstPage.status === 'error' && (
@@ -79,12 +81,13 @@ export function MovementHistory({ productId, version }: { productId: string; ver
       )}
       {firstPage.status === 'success' && items.length === 0 && (
         <EmptyState
+          icon={History}
           title="Sin movimientos"
           description="Registra un conteo para cargar el stock inicial."
         />
       )}
       {items.length > 0 && (
-        <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+        <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
           {items.map((movement) => (
             <MovementRow key={movement.id} movement={movement} />
           ))}

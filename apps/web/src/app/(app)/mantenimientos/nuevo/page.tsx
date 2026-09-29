@@ -16,7 +16,7 @@ export default function NewMaintenanceWithoutVehiclePage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title={saved ? 'Mantenimiento registrado' : 'Nuevo mantenimiento'}
+        title="Nuevo mantenimiento"
         subtitle="Sin vehículo"
         back={{ href: '/dashboard', label: 'Inicio' }}
       />

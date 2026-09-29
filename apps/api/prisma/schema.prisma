@@ -1,4 +1,4 @@
-// Brigith OS — esquema de base de datos
+// Brigith — esquema de base de datos
 // C0: negocio, usuarios, sesión e idempotencia. C1: clientes y vehículos.
 // El resto de tablas de dominio (Product, Maintenance, ...) se agregan en los
 // cortes siguientes, ver /docs/05-DATABASE.md.

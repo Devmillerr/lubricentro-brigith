@@ -1,4 +1,4 @@
-# Brigith OS
+# Brigith
 
 Sistema móvil (PWA mobile-first) para un lubricentro y lavado de vehículos en Perú. Primer cliente piloto: Brigith. Reduce el desorden operativo **sin interrumpir el trabajo**.
 

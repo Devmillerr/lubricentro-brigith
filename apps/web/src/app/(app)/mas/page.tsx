@@ -34,14 +34,16 @@ export default function MorePage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Más" />
-      <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+      <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
         {SECTIONS.map((section) => {
           const Icon = section.icon;
           const body = (
             <>
-              <Icon className="size-5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-[var(--muted)]">
+                <Icon className="size-5" aria-hidden />
+              </span>
               <span className="flex min-w-0 flex-1 flex-col">
-                <span className="font-medium">{section.label}</span>
+                <span className="font-semibold">{section.label}</span>
                 <span className="text-sm text-[var(--muted-foreground)]">
                   {section.description}
                 </span>

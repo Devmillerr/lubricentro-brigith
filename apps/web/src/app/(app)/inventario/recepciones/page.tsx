@@ -80,13 +80,14 @@ export default function ReceiptsPage() {
       )}
       {firstPage.status === 'success' && items.length === 0 && (
         <EmptyState
+          icon={PackagePlus}
           title="Todavía no hay recepciones"
           description="Cuando llegue mercadería, regístrala con Recibir."
         />
       )}
 
       {items.length > 0 && (
-        <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+        <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
           {items.map((receipt) => (
             <ReceiptRow key={receipt.id} receipt={receipt} />
           ))}

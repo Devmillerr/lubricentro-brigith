@@ -2,7 +2,7 @@
   "name": "@brigith/web",
   "private": true,
   "version": "0.0.0",
-  "description": "Brigith OS — Web (Next.js, PWA)",
+  "description": "Brigith — Web (Next.js, PWA)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

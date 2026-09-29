@@ -60,7 +60,7 @@ export default function SaleDetailPage() {
         subtitle={
           <span className="flex items-center gap-2">
             {SOURCE_LABELS[sale.source]}
-            {voided && <Badge>Anulada</Badge>}
+            {voided && <Badge tone="danger">Anulada</Badge>}
           </span>
         }
         back={{
@@ -69,7 +69,7 @@ export default function SaleDetailPage() {
         }}
       />
 
-      <dl className="flex flex-col gap-2 rounded-lg border border-[var(--border)] p-4 text-sm">
+      <dl className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
         <Row label="Total">
           <span
             className={voided ? 'text-base font-semibold line-through' : 'text-base font-semibold'}
@@ -84,8 +84,8 @@ export default function SaleDetailPage() {
 
       {!isWash && (
         <section className="flex flex-col gap-2">
-          <h3 className="font-semibold">Detalle</h3>
-          <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+          <h3 className="text-base font-semibold">Detalle</h3>
+          <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
             {sale.lines.map((line) => (
               <li key={line.id} className="flex items-baseline justify-between gap-3 px-4 py-3">
                 <span className="flex min-w-0 flex-col">
@@ -102,8 +102,8 @@ export default function SaleDetailPage() {
       )}
 
       {voided ? (
-        <section className="flex flex-col gap-1 rounded-lg border border-[var(--border)] p-4 text-sm">
-          <h3 className="font-semibold">Anulada</h3>
+        <section className="flex flex-col gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
+          <h3 className="text-base font-semibold">Anulada</h3>
           {sale.voidedAt && <span>{saleDateFormat.format(new Date(sale.voidedAt))}</span>}
           {present(sale.voidReason) && (
             <span className="text-[var(--muted-foreground)]">Motivo: {sale.voidReason}</span>
@@ -118,7 +118,7 @@ export default function SaleDetailPage() {
           )}
         </section>
       ) : isMaintenance ? (
-        <section className="flex flex-col gap-1 rounded-lg border border-[var(--border)] p-4 text-sm">
+        <section className="flex flex-col gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
           <p>
             Este cobro se administra desde su mantenimiento: se anula al anular el mantenimiento.
           </p>

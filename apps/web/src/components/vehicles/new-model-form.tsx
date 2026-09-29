@@ -22,7 +22,7 @@ export function NewModelForm({ onCreated }: { onCreated: (model: VehicleModel) =
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="-mt-2 inline-flex w-fit items-center gap-1 py-1 text-sm font-medium underline-offset-4 hover:underline"
+        className="-mt-2 inline-flex min-h-11 w-fit items-center gap-1 text-sm font-medium underline-offset-4 hover:underline"
       >
         <Plus className="size-4" aria-hidden />
         Agregar un modelo que no está en la lista
@@ -54,7 +54,7 @@ export function NewModelForm({ onCreated }: { onCreated: (model: VehicleModel) =
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-[var(--border)] p-3">
+    <div className="flex flex-col gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
       <p className="text-sm font-medium">Nuevo modelo</p>
       <div className="grid grid-cols-2 gap-3">
         <Field id="new-model-make" label="Marca" optional>

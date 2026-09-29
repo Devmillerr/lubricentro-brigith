@@ -27,7 +27,7 @@ export function StockAlerts({ onShowNotCounted }: { onShowNotCounted: () => void
 
   return (
     <section aria-labelledby="stock-alerts-title" className="flex flex-col gap-3">
-      <h3 id="stock-alerts-title" className="text-lg font-semibold">
+      <h3 id="stock-alerts-title" className="text-lg font-bold">
         Stock que requiere atención
       </h3>
 
@@ -49,8 +49,8 @@ export function StockAlerts({ onShowNotCounted }: { onShowNotCounted: () => void
       {alerts.status === 'success' && (
         <>
           {alerts.data.negative.length === 0 && alerts.data.outOfStock.length === 0 ? (
-            <p className="flex items-start gap-2 rounded-lg border border-[var(--border)] px-4 py-3 text-sm">
-              <CircleCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <p className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm">
+              <CircleCheck className="mt-0.5 size-4 shrink-0 text-[var(--success)]" aria-hidden />
               Ningún producto contado está agotado ni en negativo.
             </p>
           ) : (
@@ -111,7 +111,7 @@ function AlertGroup({
         </h4>
         {description && <p className="text-xs text-[var(--muted-foreground)]">{description}</p>}
       </div>
-      <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+      <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
         {visible.map((item) => (
           <li key={item.productId}>
             <Link

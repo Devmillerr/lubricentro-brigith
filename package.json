@@ -2,7 +2,7 @@
   "name": "brigith-os",
   "private": true,
   "version": "0.0.0",
-  "description": "Brigith OS — sistema de gestión para lubricentro y lavado de vehículos.",
+  "description": "Brigith — sistema de gestión para lubricentro y lavado de vehículos.",
   "engines": {
     "node": ">=22 <23"
   },

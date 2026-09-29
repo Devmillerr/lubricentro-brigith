@@ -1,19 +1,20 @@
 'use client';
 
-import { ChevronRight, History, PackagePlus, Search } from 'lucide-react';
+import { ChevronRight, History, Package, PackagePlus, Search, SearchX } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { StockAlerts } from '@/components/inventory/stock-alerts';
 import { buttonVariants } from '@/components/ui/button';
+import { StockBadge } from '@/components/inventory/stock-badge';
+import { chipClass } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
-import { Badge, PageHeader } from '@/components/ui/page-header';
+import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
 import { present } from '@/lib/customers/format';
 import {
   formatQuantity,
-  STOCK_STATUS_LABELS,
   stockStatus,
   type ProductWithStock,
   type StockStatus,
@@ -119,7 +120,7 @@ export default function InventoryPage() {
         />
       )}
 
-      <h3 id="inventory-products" className="scroll-mt-20 text-lg font-semibold">
+      <h3 id="inventory-products" className="scroll-mt-20 text-lg font-bold">
         Productos
       </h3>
 
@@ -138,7 +139,10 @@ export default function InventoryPage() {
         />
       </div>
 
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1" role="tablist">
+      <div
+        className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        role="tablist"
+      >
         {FILTERS.map((option) => (
           <button
             key={option.value}
@@ -146,12 +150,7 @@ export default function InventoryPage() {
             role="tab"
             aria-selected={filter === option.value}
             onClick={() => setFilter(option.value)}
-            className={cn(
-              'h-9 shrink-0 rounded-full border px-3 text-sm font-medium',
-              filter === option.value
-                ? 'border-[var(--foreground)] bg-[var(--foreground)] text-[var(--background)]'
-                : 'border-[var(--border)] text-[var(--muted-foreground)]',
-            )}
+            className={chipClass(filter === option.value)}
           >
             {option.label}
             {option.value !== 'all' && (
@@ -169,6 +168,7 @@ export default function InventoryPage() {
 
       {catalog.data.products.length === 0 ? (
         <EmptyState
+          icon={Package}
           title="Todavía no hay productos"
           description="Registra productos en el catálogo para llevar su inventario."
           action={
@@ -178,9 +178,13 @@ export default function InventoryPage() {
           }
         />
       ) : visible.length === 0 ? (
-        <EmptyState title="Sin resultados" description="Prueba con otra búsqueda o filtro." />
+        <EmptyState
+          icon={SearchX}
+          title="Sin resultados"
+          description="Prueba con otra búsqueda o filtro."
+        />
       ) : (
-        <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+        <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
           {visible.map(({ product, status }) => (
             <InventoryRow key={product.id} product={product} status={status} />
           ))}
@@ -200,25 +204,31 @@ function InventoryRow({ product, status }: { product: ProductWithStock; status: 
         href={`/inventario/${product.id}`}
         className="flex min-h-16 min-w-0 flex-1 items-center gap-3 px-4 py-3 hover:bg-[var(--muted)]"
       >
+        {/* El estado va bajo el nombre: así el nombre no compite por ancho con el badge y "Contar". */}
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate font-medium">{product.name}</span>
+          <span className="line-clamp-2 font-medium break-words">{product.name}</span>
           <span className="truncate text-sm text-[var(--muted-foreground)]">
             {details || product.unit}
           </span>
-        </span>
-        <span className="flex shrink-0 flex-col items-end gap-1">
-          {showBalance && product.stock && (
-            <span
-              className={cn('text-base font-semibold', status === 'out' && 'text-[var(--danger)]')}
-            >
-              {formatQuantity(product.stock.balance)}
-              <span className="ml-1 text-xs font-normal text-[var(--muted-foreground)]">
-                {product.unit}
-              </span>
+          {status !== 'available' && (
+            <span className="mt-1 flex">
+              <StockBadge status={status} />
             </span>
           )}
-          {status !== 'available' && <Badge>{STOCK_STATUS_LABELS[status]}</Badge>}
         </span>
+        {showBalance && product.stock && (
+          <span
+            className={cn(
+              'shrink-0 text-base font-semibold',
+              status === 'out' && 'text-[var(--danger)]',
+            )}
+          >
+            {formatQuantity(product.stock.balance)}
+            <span className="ml-1 text-xs font-normal text-[var(--muted-foreground)]">
+              {product.unit}
+            </span>
+          </span>
+        )}
         <ChevronRight className="size-5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
       </Link>
       {status === 'not-counted' && (

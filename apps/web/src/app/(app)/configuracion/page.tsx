@@ -18,11 +18,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader
-        title="Configuración"
-        subtitle={business.status === 'success' ? business.data.name : undefined}
-        back={{ href: '/mas', label: 'Más' }}
-      />
+      <PageHeader title="Configuración" back={{ href: '/mas', label: 'Más' }} />
       {business.status === 'loading' && <LoadingState label="Cargando configuración…" />}
       {business.status === 'error' && (
         <ErrorState
@@ -34,7 +30,7 @@ export default function SettingsPage() {
       )}
       <Link
         href="/configuracion/categorias"
-        className="flex min-h-14 items-center gap-3 rounded-lg border border-[var(--border)] px-4 py-3 hover:bg-[var(--muted)]"
+        className="flex min-h-14 items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 hover:bg-[var(--muted)]"
       >
         <FolderTree className="size-5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
         <span className="flex min-w-0 flex-1 flex-col">
@@ -47,7 +43,7 @@ export default function SettingsPage() {
       </Link>
       <Link
         href="/configuracion/lavados"
-        className="flex min-h-14 items-center gap-3 rounded-lg border border-[var(--border)] px-4 py-3 hover:bg-[var(--muted)]"
+        className="flex min-h-14 items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 hover:bg-[var(--muted)]"
       >
         <Droplets className="size-5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
         <span className="flex min-w-0 flex-1 flex-col">

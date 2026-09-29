@@ -2,7 +2,7 @@
   "name": "@brigith/api",
   "private": true,
   "version": "0.0.0",
-  "description": "Brigith OS — API (NestJS)",
+  "description": "Brigith — API (NestJS)",
   "scripts": {
     "build": "nest build",
     "start": "node dist/src/main.js",

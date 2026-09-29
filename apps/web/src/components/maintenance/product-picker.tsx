@@ -14,9 +14,15 @@ import { useDebouncedValue } from '@/lib/use-debounced-value';
 
 /** Saldo o "sin conteo inicial" (BR-P8) junto a un producto (07-UI-UX.md §3.3.3). */
 export function StockHint({ product }: { product: ProductWithStock }) {
-  if (!product.tracksStock) return <Badge>No controla stock</Badge>;
+  // self-start: dentro de una columna, el badge se ajusta a su texto en vez de estirarse.
+  if (!product.tracksStock) return <Badge className="self-start">No controla stock</Badge>;
   if (!product.stock) return null;
-  if (!product.stock.isCounted) return <Badge>Sin conteo inicial</Badge>;
+  if (!product.stock.isCounted)
+    return (
+      <Badge tone="warning" className="self-start">
+        Sin conteo inicial
+      </Badge>
+    );
   return (
     <span className="text-xs text-[var(--muted-foreground)]">
       Saldo {formatQuantity(product.stock.balance)} {product.unit}
@@ -133,7 +139,7 @@ function SearchResults({
     return <p className="text-sm text-[var(--muted-foreground)]">Sin resultados.</p>;
   }
   return (
-    <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+    <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
       {products.map((product) => {
         const details = [present(product.brand), present(product.code)].filter(Boolean).join(' · ');
         return (

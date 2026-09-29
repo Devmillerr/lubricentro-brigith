@@ -1,4 +1,4 @@
-# 01 — Visión de Brigith OS
+# 01 — Visión de Brigith
 
 **Estado:** borrador para aprobación (decisiones de alcance e indicadores aprobadas) · **Versión:** 0.4 · **Actualizado:** 2026-09-21
 **Fuente de verdad:** [`/research/BRIGITH-DISCOVERY.md`](../research/BRIGITH-DISCOVERY.md). Los IDs entre paréntesis (C-xx, D-xx, H-xx, P-xx) remiten a ese documento. Este documento no afirma como hecho nada que no esté allí.
@@ -7,7 +7,7 @@ Etiquetas: **[CONFIRMADO]** hecho dicho por Brigith · **[DECISIÓN]** decisión
 
 ---
 
-## 1. Qué es Brigith OS
+## 1. Qué es Brigith
 
 Un sistema móvil (PWA mobile-first) para un lubricentro con lavado de vehículos en Perú. **[DECISIÓN]** D-01
 Su primer cliente piloto es Brigith. La arquitectura debe soportar más negocios desde el inicio, sin construir todavía un SaaS complejo. **[DECISIÓN]** D-06

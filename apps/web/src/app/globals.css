@@ -1,15 +1,45 @@
 @import 'tailwindcss';
 
+/*
+ * Sistema visual de Brigith: "taller confiable y rápido".
+ * - Carbón (--primary) para las acciones.
+ * - Rojo Brigith (--brand), tomado del logo, solo para identidad: emblema,
+ *   pestaña activa y detalles de marca. Nunca como color de botón, para no
+ *   competir con --danger.
+ * - Amarillo aceite (--accent) para atención y advertencias, siempre con
+ *   texto oscuro encima.
+ * - Neutros cálidos gris-piedra.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #0a0a0a;
-  --primary: #0f172a;
-  --primary-foreground: #f8fafc;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --border: #e2e8f0;
-  --danger: #dc2626;
-  --danger-soft: #fef2f2;
+  --background: #f5f3ef;
+  --surface: #ffffff;
+  --foreground: #1c1b19;
+  --primary: #1c1b19;
+  --primary-foreground: #ffffff;
+  --muted: #edeae4;
+  --muted-foreground: #645e55;
+  --border: #dcd7ce;
+  /* Borde de controles (inputs, botones con borde): 3:1 sobre blanco. */
+  --border-strong: #948c80;
+  --ring: #1c1b19;
+  /* Opción elegida de un control segmentado (sobre el riel --muted). */
+  --segment-selected: #ffffff;
+
+  --brand: #d7141e;
+  --brand-soft: #fce8e9;
+  --brand-foreground: #ffffff;
+
+  /* Relleno amarillo con texto --accent-foreground; sobre --accent-soft, texto --accent-strong. */
+  --accent: #f5b400;
+  --accent-soft: #fff3cc;
+  --accent-foreground: #1c1b19;
+  --accent-strong: #7a4f00;
+
+  --success: #17804a;
+  --success-soft: #e5f3eb;
+
+  --danger: #b42318;
+  --danger-soft: #fdecea;
 
   /*
    * Gráficos del dashboard (DEC-83). Colores de serie validados con el
@@ -21,29 +51,63 @@
   --series-maintenance: #1baf7a;
   --series-cash: #008300;
   --series-yape: #4a3aa7;
-  --chart-track: #f1f5f9;
+  --chart-track: #edeae4;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #f8fafc;
-    /* Sin esto, el botón principal (#0f172a) queda oscuro sobre fondo oscuro. */
-    --primary: #f8fafc;
-    --primary-foreground: #0f172a;
-    --muted: #1e293b;
-    --muted-foreground: #94a3b8;
-    --border: #1e293b;
+    --background: #121110;
+    --surface: #1c1a18;
+    --foreground: #f2efe9;
+    /* Sin esto, el botón principal (carbón) queda oscuro sobre fondo oscuro. */
+    --primary: #f2efe9;
+    --primary-foreground: #1c1b19;
+    --muted: #2a2723;
+    --muted-foreground: #aaa397;
+    --border: #34302b;
+    --border-strong: #6d665d;
+    --ring: #f2efe9;
+    /* Más clara que el riel: en oscuro, --surface quedaba por debajo de --muted. */
+    --segment-selected: #4a453f;
+
+    --brand: #f0474f;
+    --brand-soft: #3a1618;
+    --brand-foreground: #ffffff;
+
+    --accent: #f5c23a;
+    --accent-soft: #33290d;
+    --accent-foreground: #1c1b19;
+    --accent-strong: #f5c23a;
+
+    --success: #45c283;
+    --success-soft: #11291c;
+
     --danger: #f87171;
-    --danger-soft: #2a1414;
+    --danger-soft: #2e1514;
 
     --series-counter: #3987e5;
     --series-wash: #d95926;
     --series-maintenance: #199e70;
     --series-cash: #008300;
     --series-yape: #9085e9;
-    --chart-track: #1e293b;
+    --chart-track: #2a2723;
   }
+}
+
+@theme inline {
+  --font-sans: var(--font-barlow), system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display:
+    var(--font-barlow-condensed), var(--font-barlow), system-ui, -apple-system, sans-serif;
+}
+
+/*
+ * Radios: controles (inputs, botones, avisos) 10 px, tarjetas 14 px, bloques
+ * destacados 16 px; chips y badges en píldora.
+ */
+@theme {
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1rem;
 }
 
 html,
@@ -55,9 +119,39 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family:
+    var(--font-barlow),
     system-ui,
     -apple-system,
     'Segoe UI',
     Roboto,
     sans-serif;
+  /* Montos, cantidades y km alineados: las cifras no "bailan" al refrescar. */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer base {
+  /* Títulos de pantalla en Barlow Condensed: eco de la itálica deportiva del logo. */
+  h1,
+  h2 {
+    font-family: var(--font-barlow-condensed), var(--font-barlow), system-ui, sans-serif;
+    letter-spacing: 0.005em;
+  }
+
+  input,
+  select,
+  textarea {
+    accent-color: var(--primary);
+  }
+
+  :focus-visible {
+    outline-color: var(--ring);
+  }
+}
+
+/* Filas enlazadas dentro de tarjetas con overflow-hidden: el foco se dibuja por dentro. */
+li > a:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }

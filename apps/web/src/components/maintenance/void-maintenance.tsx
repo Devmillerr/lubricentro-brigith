@@ -76,7 +76,7 @@ export function VoidMaintenance({
     <section className="flex flex-col gap-3 border-t border-[var(--border)] pt-5">
       {error && <FormError>{error}</FormError>}
       {confirming ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-[var(--danger)] p-4">
+        <div className="flex flex-col gap-3 rounded-lg border border-[var(--danger)]/60 bg-[var(--danger-soft)] p-4">
           <p className="text-sm">
             Se devolverán al stock los productos usados y se descartará su recordatorio. El
             mantenimiento queda en el historial como anulado.
@@ -95,7 +95,8 @@ export function VoidMaintenance({
             <Button
               onClick={confirm}
               disabled={working || !trimmedReason}
-              className="flex-1 bg-[var(--danger)] text-white"
+              variant="destructive"
+              className="flex-1"
             >
               {working ? 'Anulando…' : 'Sí, anular'}
             </Button>

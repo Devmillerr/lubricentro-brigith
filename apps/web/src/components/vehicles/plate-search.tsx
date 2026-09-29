@@ -7,6 +7,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/page-header';
 import { ErrorState, LoadingState } from '@/components/ui/states';
+import { Plate } from '@/components/ui/plate';
 import { api, type Schemas } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
@@ -116,11 +117,11 @@ function LookupResult({ item }: { item: LookupItem }) {
   const nextDueText = nextDue.filter(Boolean).join(' · ');
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-[var(--border)] p-4">
+    <div className="flex flex-col gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
       <Link href={`/vehiculos/${item.id}`} className="flex items-start gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
-          <span className="flex flex-wrap items-center gap-2 text-lg font-semibold tracking-wide">
-            {item.plate}
+          <span className="flex flex-wrap items-center gap-2">
+            <Plate plate={item.plate} size="lg" />
             {!item.isActive && <Badge>Inactivo</Badge>}
           </span>
           <span className="text-[var(--muted-foreground)]">

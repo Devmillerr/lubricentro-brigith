@@ -1,4 +1,5 @@
 import type { Schemas } from '@/lib/api/client';
+import { dateTimeFormat } from '@/lib/utils';
 
 export type Sale = Schemas['SaleResponse'];
 export type SaleLine = Schemas['SaleLineResponse'];
@@ -80,10 +81,7 @@ export function formatMoney(amount: string | number): string {
   return Number.isFinite(value) ? `S/ ${value.toFixed(2)}` : `S/ ${amount}`;
 }
 
-export const saleDateFormat = new Intl.DateTimeFormat('es-PE', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
+export const saleDateFormat = dateTimeFormat();
 
 /** Ruta del historial, con el filtro de fuente si lo hay (DEC-68). */
 export function salesHistoryHref(source?: SaleSource | null): string {

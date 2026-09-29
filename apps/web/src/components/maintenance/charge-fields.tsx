@@ -65,8 +65,8 @@ export function ChargeFields({
               className={cn(
                 'flex min-h-14 items-center justify-center gap-2 rounded-lg border px-3 text-base font-semibold',
                 selected
-                  ? 'border-[var(--foreground)] bg-[var(--foreground)] text-[var(--background)]'
-                  : 'border-[var(--border)] hover:bg-[var(--muted)]',
+                  ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]'
+                  : 'border-[var(--border-strong)] bg-[var(--surface)] hover:bg-[var(--muted)]',
               )}
             >
               <Icon className="size-5" aria-hidden />
@@ -109,7 +109,7 @@ export function ChargeSummary({ sale }: { sale: Sale | null }) {
         </span>
         <span className="flex items-center gap-2">
           {PAYMENT_LABELS[sale.paymentMethod]}
-          {voided && <Badge>Anulado</Badge>}
+          {voided && <Badge tone="danger">Anulado</Badge>}
         </span>
       </div>
       <span className="text-[var(--muted-foreground)]">
@@ -203,7 +203,7 @@ export function ChargeLater({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-[var(--border)] p-4">
+    <div className="flex flex-col gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
       {error && <FormError>{error}</FormError>}
       <ChargeFields
         idPrefix="charge-later"

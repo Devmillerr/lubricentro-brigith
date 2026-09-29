@@ -102,7 +102,7 @@ export function WashForm({
   return (
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-3">
-        <h3 className="font-semibold">Vehículo</h3>
+        <h3 className="text-base font-semibold">Vehículo</h3>
         <div role="group" aria-label="Tipo de vehículo" className="grid grid-cols-2 gap-3">
           {types.map((candidate) => (
             <OptionButton
@@ -122,7 +122,7 @@ export function WashForm({
 
       {type && type.prices.length > 1 && (
         <section className="flex flex-col gap-3">
-          <h3 className="font-semibold">Precio</h3>
+          <h3 className="text-base font-semibold">Precio</h3>
           <div role="group" aria-label="Precio" className="grid grid-cols-2 gap-3">
             {type.prices.map((option) => (
               <OptionButton
@@ -141,7 +141,7 @@ export function WashForm({
 
       {type && (
         <section className="flex flex-col gap-3">
-          <h3 className="font-semibold">Pago</h3>
+          <h3 className="text-base font-semibold">Pago</h3>
           <div role="group" aria-label="Método de pago" className="grid grid-cols-2 gap-3">
             {(['CASH', 'YAPE'] as const).map((method) => {
               const Icon = method === 'CASH' ? Banknote : Smartphone;
@@ -202,8 +202,8 @@ function OptionButton({
       className={cn(
         'flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-lg border px-3 py-2 text-center',
         selected
-          ? 'border-[var(--foreground)] bg-[var(--foreground)] text-[var(--background)]'
-          : 'border-[var(--border)] hover:bg-[var(--muted)]',
+          ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]'
+          : 'border-[var(--border-strong)] bg-[var(--surface)] hover:bg-[var(--muted)]',
         className,
       )}
       {...props}

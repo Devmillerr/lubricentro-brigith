@@ -32,18 +32,21 @@ export function MaintenanceSaved({
     <div className="flex flex-col gap-5">
       <p
         role="status"
-        className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--muted)] p-4 font-medium"
+        className="flex items-center gap-3 rounded-lg border border-[var(--success)]/40 bg-[var(--success-soft)] p-4 text-lg font-bold"
       >
-        <CircleCheck className="mt-0.5 size-5 shrink-0" aria-hidden />
+        <CircleCheck className="size-7 shrink-0 text-[var(--success)]" aria-hidden />
         Mantenimiento registrado.
       </p>
 
       {warnings.length > 0 && (
-        <section className="flex flex-col gap-2 rounded-lg border border-[var(--border)] p-4 text-sm">
-          <h3 className="font-semibold">Avisos (se guardó igual)</h3>
+        <section className="flex flex-col gap-2 rounded-lg border border-[var(--accent)]/60 bg-[var(--accent-soft)] p-4 text-sm">
+          <h3 className="text-base font-semibold">Avisos (se guardó igual)</h3>
           {warnings.map((warning, index) => (
             <div key={`${warning.code}-${index}`} className="flex items-start gap-2">
-              <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <TriangleAlert
+                className="mt-0.5 size-4 shrink-0 text-[var(--accent-strong)]"
+                aria-hidden
+              />
               <div className="flex flex-col gap-0.5">
                 <span>
                   {productName(warning.productId) ? `${productName(warning.productId)}: ` : ''}
@@ -68,8 +71,8 @@ export function MaintenanceSaved({
         </section>
       )}
 
-      <section className="flex flex-col gap-1 rounded-lg border border-[var(--border)] p-4 text-sm">
-        <h3 className="font-semibold">Próximo mantenimiento</h3>
+      <section className="flex flex-col gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
+        <h3 className="text-base font-semibold">Próximo mantenimiento</h3>
         {reminder ? (
           <>
             {reminder.dueKm !== null && <span>Km: {formatKm(reminder.dueKm)}</span>}
@@ -87,14 +90,14 @@ export function MaintenanceSaved({
         )}
       </section>
 
-      <section className="flex flex-col gap-2 rounded-lg border border-[var(--border)] p-4">
-        <h3 className="text-sm font-semibold">Cobro</h3>
+      <section className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+        <h3 className="text-base font-semibold">Cobro</h3>
         <ChargeSummary sale={sale} />
       </section>
 
       {saved.stockProducts.length > 0 && (
-        <section className="flex flex-col gap-2 rounded-lg border border-[var(--border)] p-4 text-sm">
-          <h3 className="font-semibold">Stock actual</h3>
+        <section className="flex flex-col gap-2 rounded-lg border border-[var(--accent)]/60 bg-[var(--accent-soft)] p-4 text-sm">
+          <h3 className="text-base font-semibold">Stock actual</h3>
           {saved.stockProducts.map((product) => (
             <CurrentStock key={product.id} product={product} />
           ))}
@@ -104,13 +107,13 @@ export function MaintenanceSaved({
       <div className="flex flex-col gap-2 sm:flex-row">
         <Link
           href={`/mantenimientos/${maintenance.id}`}
-          className={buttonVariants({ size: 'lg', className: 'flex-1' })}
+          className={buttonVariants({ size: 'lg', className: 'sm:flex-1' })}
         >
           Ver mantenimiento
         </Link>
         <Link
           href={vehicleId ? `/vehiculos/${vehicleId}` : '/dashboard'}
-          className={buttonVariants({ variant: 'outline', size: 'lg', className: 'flex-1' })}
+          className={buttonVariants({ variant: 'outline', size: 'lg', className: 'sm:flex-1' })}
         >
           {vehicleId ? 'Volver al vehículo' : 'Volver al inicio'}
         </Link>

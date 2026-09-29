@@ -56,9 +56,9 @@ function NewReceipt() {
         <PageHeader title="Recepción guardada" back={back} />
         <p
           role="status"
-          className="flex items-start gap-2 rounded-md border border-[var(--border)] bg-[var(--muted)] px-3 py-2 text-sm"
+          className="flex items-start gap-2 rounded-md border border-[var(--success)]/40 bg-[var(--success-soft)] px-3 py-2.5 text-sm font-medium"
         >
-          <CircleCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <CircleCheck className="mt-0.5 size-4 shrink-0 text-[var(--success)]" aria-hidden />
           Se sumó al stock de todos los productos.
         </p>
         <ReceiptDetail receipt={saved.receipt} products={saved.products} />
@@ -143,7 +143,7 @@ function IngresoNotice({
     );
   }
   return (
-    <p className="flex items-start gap-2 rounded-md border border-[var(--border)] bg-[var(--muted)] px-3 py-2 text-sm">
+    <p className="flex items-start gap-2 rounded-md border border-[var(--success)]/40 bg-[var(--success-soft)] px-3 py-2.5 text-sm font-medium">
       <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
       <span>
         Los ingresos se registran como recepción. Ya agregamos{' '}
