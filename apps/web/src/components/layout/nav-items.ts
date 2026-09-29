@@ -11,7 +11,8 @@ export interface NavItem {
 
 /**
  * Navegación del MVP (07-UI-UX.md §2): Inicio, Avisar, Productos y Más.
- * "Más" agrupa Clientes, Ventas (historial), Configuración y Resumen del piloto.
+ * "Más" agrupa Clientes, Ventas (historial), Configuración, Resumen del piloto y la
+ * cuenta (cambiar contraseña).
  * Las pestañas sin pantalla se muestran deshabilitadas en vez de llevar a una
  * ruta inexistente.
  */
@@ -31,6 +32,7 @@ export const NAV_ITEMS: NavItem[] = [
       '/ventas',
       '/resumen',
       '/configuracion',
+      '/cuenta',
     ],
   },
 ];

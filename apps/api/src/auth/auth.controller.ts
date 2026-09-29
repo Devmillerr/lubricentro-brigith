@@ -2,7 +2,9 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@n
 import { ApiBearerAuth, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { ChangePasswordDto, ChangePasswordResponse } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
+import { RecoverPasswordDto, RecoverPasswordResponse } from './dto/recover-password.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { TokenPairDto } from './dto/token-pair.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -44,6 +46,36 @@ export class AuthController {
   @ApiBearerAuth()
   async logout(@CurrentUser() user: AccessTokenPayload, @Body() dto: RefreshDto): Promise<void> {
     await this.authService.logout(user.businessId, user.sub, dto.refreshToken);
+  }
+
+  @ApiOkResponse({ type: ChangePasswordResponse })
+  @ApiErrors({ 400: VALIDATION_ERRORS, 401: AUTH_ERRORS })
+  // Mismo límite que el login (5/min por IP): frena el adivinar la contraseña actual.
+  @RateLimit('login')
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async changePassword(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: ChangePasswordDto,
+  ): Promise<ChangePasswordResponse> {
+    return this.authService.changePassword(
+      user.businessId,
+      user.sub,
+      dto.currentPassword,
+      dto.newPassword,
+    );
+  }
+
+  @ApiOkResponse({ type: RecoverPasswordResponse })
+  @ApiErrors({ 400: VALIDATION_ERRORS, 401: ['INVALID_RECOVERY_CODE'] })
+  // Comparte los contadores del login (5/min por IP y 5/min por `username`, DEC-86).
+  @RateLimit('login')
+  @Post('recover')
+  @HttpCode(HttpStatus.OK)
+  async recover(@Body() dto: RecoverPasswordDto): Promise<RecoverPasswordResponse> {
+    return this.authService.recoverPassword(dto.username, dto.recoveryCode, dto.newPassword);
   }
 
   @ApiOkResponse({ type: MeResponse })

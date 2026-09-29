@@ -5,9 +5,13 @@ import * as argon2 from 'argon2';
 import { randomUUID } from 'node:crypto';
 import type { Business, User } from '@prisma/client';
 import type { Env } from '../config/env.validation';
-import { ProblemException } from '../common/exceptions/problem.exception';
+import {
+  ProblemException,
+  ValidationProblemException,
+} from '../common/exceptions/problem.exception';
 import { forBusiness } from '../prisma/business-scope';
 import { PrismaService } from '../prisma/prisma.service';
+import { generateRecoveryCode, normalizeRecoveryCode } from './recovery-code.util';
 import { hashRefreshTokenValue } from './refresh-token.util';
 import type { AccessTokenPayload } from './types/jwt-payload';
 
@@ -27,6 +31,18 @@ function invalidCredentials(): ProblemException {
     code: 'INVALID_CREDENTIALS',
     title: 'Usuario o contraseña incorrectos',
   });
+}
+
+function invalidRecoveryCode(): ProblemException {
+  return new ProblemException({
+    status: HttpStatus.UNAUTHORIZED,
+    code: 'INVALID_RECOVERY_CODE',
+    title: 'Usuario o código de recuperación incorrectos',
+  });
+}
+
+function hashSecret(value: string): Promise<string> {
+  return argon2.hash(value, { type: argon2.argon2id });
 }
 
 function invalidRefreshToken(): ProblemException {
@@ -131,6 +147,70 @@ export class AuthService {
     });
   }
 
+  /**
+   * Cambia la contraseña del mismo usuario (no crea otro ni toca su negocio).
+   * Genera un código de recuperación nuevo (se muestra una sola vez), cierra
+   * todas las sesiones abiertas y devuelve un par nuevo para seguir en esta.
+   * Contraseña actual incorrecta → 400 con error en `currentPassword` (no 401:
+   * la web interpreta un 401 como sesión vencida).
+   */
+  async changePassword(
+    businessId: string,
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<TokenPair & { recoveryCode: string }> {
+    const scoped = forBusiness(this.prisma, businessId);
+    const user = await scoped.user.findFirst({ where: { id: userId, isActive: true } });
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+
+    const currentMatches = await argon2
+      .verify(user.passwordHash, currentPassword)
+      .catch(() => false);
+    if (!currentMatches) {
+      throw new ValidationProblemException([
+        { field: 'currentPassword', message: 'La contraseña actual no es correcta.' },
+      ]);
+    }
+
+    const recoveryCode = generateRecoveryCode();
+    const updated = await this.setPassword(businessId, user.id, newPassword, recoveryCode);
+    const pair = await this.issueTokenPair(updated);
+    return { ...pair, recoveryCode };
+  }
+
+  /**
+   * Recuperación con el código de un solo uso (sin correo ni registro). Mismo
+   * error si el usuario no existe, está inactivo, no tiene código o el código
+   * no coincide, y mismo tiempo de respuesta, para no delatar usuarios.
+   * El código usado deja de servir: se devuelve uno nuevo.
+   */
+  async recoverPassword(
+    username: string,
+    recoveryCode: string,
+    newPassword: string,
+  ): Promise<{ recoveryCode: string }> {
+    // Búsqueda por clave única global, como en `login` (ver el comentario de la clase).
+    const user = await this.prisma.user.findUnique({ where: { username } });
+    const normalized = normalizeRecoveryCode(recoveryCode);
+
+    if (!user || !user.isActive || !user.recoveryCodeHash) {
+      await argon2.verify(DUMMY_HASH, normalized).catch(() => false);
+      throw invalidRecoveryCode();
+    }
+
+    const codeMatches = await argon2.verify(user.recoveryCodeHash, normalized).catch(() => false);
+    if (!codeMatches) {
+      throw invalidRecoveryCode();
+    }
+
+    const nextCode = generateRecoveryCode();
+    await this.setPassword(user.businessId, user.id, newPassword, nextCode);
+    return { recoveryCode: nextCode };
+  }
+
   async me(businessId: string, userId: string): Promise<{ user: User; business: Business }> {
     const [user, business] = await Promise.all([
       forBusiness(this.prisma, businessId).user.findFirst({ where: { id: userId } }),
@@ -142,6 +222,29 @@ export class AuthService {
     }
 
     return { user, business };
+  }
+
+  /** Guarda la contraseña y el código nuevos (con hash) y cierra todas las sesiones del usuario. */
+  private async setPassword(
+    businessId: string,
+    userId: string,
+    newPassword: string,
+    recoveryCode: string,
+  ): Promise<User> {
+    const scoped = forBusiness(this.prisma, businessId);
+    const [passwordHash, recoveryCodeHash] = await Promise.all([
+      hashSecret(newPassword),
+      hashSecret(normalizeRecoveryCode(recoveryCode)),
+    ]);
+    const updated = await scoped.user.update({
+      where: { id: userId },
+      data: { passwordHash, recoveryCodeHash },
+    });
+    await scoped.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return updated;
   }
 
   private async issueTokenPair(user: User): Promise<TokenPair> {

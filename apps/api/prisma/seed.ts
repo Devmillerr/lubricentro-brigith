@@ -36,19 +36,25 @@ async function main() {
     },
   });
 
-  const passwordHash = await argon2.hash(ownerPassword, { type: argon2.argon2id });
-
-  const owner = await prisma.user.upsert({
-    where: { username: 'brigith' },
-    update: {},
-    create: {
-      businessId: brigith.id,
-      name: 'Brigith',
-      username: 'brigith',
-      passwordHash,
-      role: 'OWNER',
-    },
+  // El dueño es la cuenta que se entrega al cliente (usuario `saul`, DEC-88).
+  // Si el negocio ya tiene dueño se reutiliza tal cual, sea cual sea su
+  // username: la semilla nunca crea un segundo dueño, ni lo renombra, ni
+  // cambia su contraseña. Solo en una base vacía lo crea.
+  const existingOwner = await prisma.user.findFirst({
+    where: { businessId: brigith.id, role: 'OWNER' },
+    orderBy: { createdAt: 'asc' },
   });
+  const owner =
+    existingOwner ??
+    (await prisma.user.create({
+      data: {
+        businessId: brigith.id,
+        name: 'Saúl',
+        username: 'saul',
+        passwordHash: await argon2.hash(ownerPassword, { type: argon2.argon2id }),
+        role: 'OWNER',
+      },
+    }));
 
   await prisma.business.upsert({
     where: { slug: 'demo' },

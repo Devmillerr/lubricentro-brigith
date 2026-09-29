@@ -29,6 +29,27 @@ Códigos: 200/201 éxito · 400 validación · 401 sin sesión · 403 sin permis
 | POST | `/auth/refresh` | Renueva el acceso. Límite propio (DEC-86): 20 por minuto por IP |
 | POST | `/auth/logout` | Invalida el refresco |
 | GET | `/auth/me` | Usuario y negocio actuales |
+| POST | `/auth/change-password` | Con sesión. Cambia la contraseña de la misma cuenta y entrega un código de recuperación (DEC-88). Ver abajo |
+| POST | `/auth/recover` | Sin sesión. Recupera la contraseña con el código de recuperación (DEC-88). Ver abajo |
+
+#### Contraseña: cambio y recuperación (DEC-88)
+
+No hay registro público ni correo: la cuenta se entrega ya creada, con una contraseña temporal que el dueño cambia cuando quiera. Cambiar o recuperar la contraseña **actualiza la misma cuenta** (`users.passwordHash`); nunca crea otro usuario ni toca el negocio o sus datos, que cuelgan de `businessId`.
+
+**`POST /auth/change-password`** (`Authorization: Bearer`). Cuerpo: `{ currentPassword, newPassword }`.
+- `newPassword`: entre 8 y 128 caracteres.
+- 200: `{ accessToken, refreshToken, recoveryCode }`. Guarda la contraseña nueva (argon2id), genera un **código de recuperación nuevo** y **cierra todas las sesiones** del usuario (revoca sus tokens de refresco); el par devuelto es el de la sesión que sigue abierta.
+- 400 `VALIDATION_ERROR` con `errors[].field = "currentPassword"` si la contraseña actual no coincide. Es 400 y no 401 a propósito: la web interpreta un 401 como sesión vencida.
+- 400 `VALIDATION_ERROR` en `newPassword` si no cumple el largo. 401 `UNAUTHENTICATED` / `INVALID_TOKEN` sin sesión válida.
+
+**`POST /auth/recover`** (sin sesión). Cuerpo: `{ username, recoveryCode, newPassword }`.
+- 200: `{ recoveryCode }`. Guarda la contraseña nueva, **rota el código** (el usado deja de servir) y cierra todas las sesiones del usuario. No inicia sesión: después se entra con `POST /auth/login`.
+- 401 `INVALID_RECOVERY_CODE` si el usuario no existe, está inactivo, todavía no tiene código o el código no coincide. Mismo error y mismo tiempo de respuesta en todos los casos, para no revelar qué usuarios existen.
+- 400 `VALIDATION_ERROR` si `newPassword` no cumple el largo.
+
+**Código de recuperación.** 12 caracteres en grupos `XXXX-XXXX-XXXX`, del alfabeto `A–Z` y `2–9` sin `I`, `O`, `0` ni `1` (32 símbolos, ~60 bits). Se genera al cambiar la contraseña y al recuperarla, **se muestra una sola vez** y solo se guarda su hash argon2id (`users.recoveryCodeHash`). Es de **un solo uso**. Al compararlo se ignoran mayúsculas/minúsculas, espacios y guiones. Una cuenta que nunca cambió su contraseña no tiene código (`recoveryCodeHash` nulo) y no puede recuperarla hasta hacerlo.
+
+**Límites.** Ambas rutas usan la política del login (§4): `/auth/recover` cuenta a la vez en la cuota por IP y en la del `username` del cuerpo, compartidas con `/auth/login` (los intentos de recuperación y de login suman juntos); `/auth/change-password` no lleva `username` en el cuerpo y cuenta solo en la cuota por IP. Al superarlas, 429 `RATE_LIMITED`.
 
 ### Negocio y configuración
 | Método | Ruta | Descripción |
@@ -560,12 +581,14 @@ Los cinco puntos que estaban "Por definir" se cerraron con el usuario el 2026-09
   | `POST`/`PATCH` autenticado | 30 por minuto | usuario, sumando todos los endpoints |
   | `POST /auth/login` | 5 por minuto por IP **y** 5 por minuto por `username` | IP; `username` del cuerpo |
   | `POST /auth/refresh` | 20 por minuto | IP |
+  | `POST /auth/recover` (DEC-88) | Las mismas cuotas del login, compartidas con `/auth/login` | IP; `username` del cuerpo |
+  | `POST /auth/change-password` (DEC-88) | La cuota por IP del login, compartida con `/auth/login` | IP |
 
   Ventana fija de 60 segundos, almacenamiento en memoria (válido para la arquitectura actual de una sola instancia de la API; con varias haría falta un almacenamiento compartido). Al exceder: **429** con cabecera `Retry-After` (segundos, mínimo 1) y cuerpo en el formato de error de la API con `code: "RATE_LIMITED"`. La web no reintenta automáticamente (`07` §5).
 
   Detalles de la implementación (`src/rate-limit/`, guard global):
   - Claves: `read:user:<userId>` y `write:user:<userId>` (el `sub` de un token de acceso válido); `login-ip:<ip>`, `login-username:<username>` y `refresh-ip:<ip>`. Las dos cuotas de login se cuentan a la vez; si falta `username` en el cuerpo, solo cuenta la de IP.
-  - `HEAD` cuenta como lectura y `PUT`/`DELETE` como escritura. Login y refresh tienen su propio límite y no suman a los generales.
+  - `HEAD` cuenta como lectura y `PUT`/`DELETE` como escritura. Login y refresh tienen su propio límite y no suman a los generales; `/auth/recover` y `/auth/change-password` usan el del login (DEC-88).
   - Sin token, o con uno inválido o vencido, la petición cuenta por IP (`read:ip:<ip>` / `write:ip:<ip>`) con los mismos límites, sin consumir la cuota del usuario del token; la ruta protegida responde luego 401.
   - La ventana empieza con la primera petición de la clave y se reinicia entera al vencer. Una petición rechazada con 429 no suma.
   - CORS expone `Retry-After` para que la web pueda leerla.

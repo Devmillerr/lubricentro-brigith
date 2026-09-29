@@ -28,7 +28,7 @@ export function BrandEmblem({
   );
 }
 
-/** Emblema + "BRIGITH" para cabeceras. */
+/** Emblema + "Brigith" para cabeceras. */
 export function BrandLockup({
   subtitle,
   emblemSize = 40,
@@ -42,9 +42,7 @@ export function BrandLockup({
     <div className={cn('flex min-w-0 items-center gap-2.5', className)}>
       <BrandEmblem size={emblemSize} priority />
       <div className="flex min-w-0 flex-col">
-        <span className="font-display text-lg leading-none font-bold tracking-wide uppercase">
-          Brigith
-        </span>
+        <span className="font-display text-lg leading-none font-bold">Brigith</span>
         {subtitle && (
           <span className="truncate text-xs leading-tight text-[var(--muted-foreground)]">
             {subtitle}

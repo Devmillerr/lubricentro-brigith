@@ -1,4 +1,12 @@
-import { ChevronRight, ChartColumn, Receipt, Settings, Users, type LucideIcon } from 'lucide-react';
+import {
+  ChevronRight,
+  ChartColumn,
+  KeyRound,
+  Receipt,
+  Settings,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import Link from 'next/link';
 import { Badge, PageHeader } from '@/components/ui/page-header';
 
@@ -26,6 +34,12 @@ const SECTIONS: { label: string; description: string; icon: LucideIcon; href: st
     description: 'Indicadores de adopción, mantenimiento e inventario',
     icon: ChartColumn,
     href: '/resumen',
+  },
+  {
+    label: 'Cambiar contraseña',
+    description: 'Tu cuenta y sus datos siguen igual; te da un código de recuperación',
+    icon: KeyRound,
+    href: '/cuenta/contrasena',
   },
 ];
 

@@ -1,10 +1,11 @@
 'use client';
 
 import { CircleAlert, Info } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState, type FormEvent } from 'react';
 import { BrandEmblem } from '@/components/brand/brand-mark';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/states';
 import { describeError } from '@/lib/api/errors';
@@ -74,7 +75,7 @@ function LoginForm() {
       <div className="flex flex-col items-center gap-3 text-center">
         <BrandEmblem size={168} priority />
         <div className="flex flex-col gap-0.5">
-          <h1 className="text-[2rem] leading-tight font-bold tracking-wide uppercase">Brigith</h1>
+          <h1 className="text-[2rem] leading-tight font-bold">Brigith</h1>
           <p className="text-sm text-[var(--muted-foreground)]">Inicia sesión para continuar</p>
         </div>
       </div>
@@ -138,6 +139,14 @@ function LoginForm() {
           {submitting ? 'Ingresando…' : 'Ingresar'}
         </Button>
       </form>
+
+      {/* Sin registro público: la cuenta se entrega ya creada (BR-G4). */}
+      <Link
+        href="/recuperar"
+        className={buttonVariants({ variant: 'ghost', className: 'self-center' })}
+      >
+        ¿Olvidaste tu contraseña?
+      </Link>
     </div>
   );
 }

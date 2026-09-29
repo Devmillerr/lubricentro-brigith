@@ -17,7 +17,7 @@ export const api = createClient<paths>({ baseUrl, credentials: 'include' });
 export type Schemas = components['schemas'];
 
 /** Rutas que no llevan Bearer ni se reintentan tras renovar. */
-const WITHOUT_SESSION = new Set(['/auth/login', '/auth/refresh']);
+const WITHOUT_SESSION = new Set(['/auth/login', '/auth/refresh', '/auth/recover']);
 
 const sessionExpiredListeners = new Set<() => void>();
 

@@ -85,11 +85,14 @@ model User {
   businessId String
   business   Business @relation(fields: [businessId], references: [id])
 
-  name         String
-  username     String   @unique
-  passwordHash String
-  role         UserRole @default(OWNER)
-  isActive     Boolean  @default(true)
+  name             String
+  username         String   @unique
+  passwordHash     String
+  /// Hash (argon2) del código de recuperación de un solo uso. Se genera al
+  /// cambiar la contraseña y se rota al recuperarla; null = todavía sin código.
+  recoveryCodeHash String?
+  role             UserRole @default(OWNER)
+  isActive         Boolean  @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -151,6 +151,26 @@ body {
 }
 
 /* Filas enlazadas dentro de tarjetas con overflow-hidden: el foco se dibuja por dentro. */
+/*
+ * La lista de un <select> la dibuja el navegador con su propio esquema de
+ * color. Sin esto, en modo oscuro se abre blanca con el texto claro de la app
+ * (ilegible). Solo afecta a los <select>; el tema sigue siendo el del sistema.
+ */
+select {
+  color-scheme: light;
+}
+
+select option {
+  background-color: var(--surface);
+  color: var(--foreground);
+}
+
+@media (prefers-color-scheme: dark) {
+  select {
+    color-scheme: dark;
+  }
+}
+
 li > a:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;

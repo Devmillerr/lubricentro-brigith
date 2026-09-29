@@ -222,4 +222,92 @@ describe('AuthService', () => {
     expect(user.username).toBe('brigith');
     expect(business.slug).toBe('brigith');
   });
+
+  describe('cambio y recuperación de contraseña', () => {
+    it('changePassword actualiza la misma cuenta, cierra las sesiones y devuelve un código', async () => {
+      const { service, users, refreshTokens } = await setup();
+      const session = await service.login('brigith', 'correcta123');
+
+      const result = await service.changePassword(
+        'biz-a',
+        'user-a',
+        'correcta123',
+        'nueva-clave-1',
+      );
+
+      // Misma cuenta, mismo negocio, sin usuarios nuevos.
+      expect(users.size).toBe(1);
+      const user = users.get('user-a') as Record<string, unknown>;
+      expect(user.username).toBe('brigith');
+      expect(user.businessId).toBe('biz-a');
+      expect(user.recoveryCodeHash).toEqual(expect.any(String));
+      expect(result.recoveryCode).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+      // La sesión anterior queda cerrada; la nueva sí vale.
+      const old = [...refreshTokens.values()].find(
+        (r) => r.tokenHash === hashRefreshTokenValue(session.refreshToken),
+      ) as Record<string, unknown>;
+      expect(old.revokedAt).toBeInstanceOf(Date);
+      await expect(service.refresh(result.refreshToken)).resolves.toMatchObject({
+        accessToken: expect.any(String),
+      });
+      // La contraseña vieja deja de servir y la nueva entra.
+      await expect(service.login('brigith', 'correcta123')).rejects.toMatchObject({
+        code: 'INVALID_CREDENTIALS',
+      });
+      await expect(service.login('brigith', 'nueva-clave-1')).resolves.toBeDefined();
+    });
+
+    it('changePassword con la contraseña actual incorrecta responde 400 en el campo y no cambia nada', async () => {
+      const { service, users } = await setup();
+      const before = (users.get('user-a') as Record<string, unknown>).passwordHash;
+
+      await expect(
+        service.changePassword('biz-a', 'user-a', 'incorrecta', 'nueva-clave-1'),
+      ).rejects.toMatchObject({
+        code: 'VALIDATION_ERROR',
+        errors: [{ field: 'currentPassword', message: expect.any(String) }],
+      });
+      expect((users.get('user-a') as Record<string, unknown>).passwordHash).toBe(before);
+    });
+
+    it('recoverPassword con el código correcto cambia la contraseña y rota el código', async () => {
+      const { service, users, refreshTokens } = await setup();
+      const { recoveryCode } = await service.changePassword(
+        'biz-a',
+        'user-a',
+        'correcta123',
+        'nueva-clave-1',
+      );
+
+      // El usuario puede escribirlo en minúsculas y con espacios.
+      const typed = recoveryCode.toLowerCase().replace(/-/g, ' ');
+      const recovered = await service.recoverPassword('brigith', typed, 'recuperada-1');
+
+      expect(users.size).toBe(1);
+      expect(recovered.recoveryCode).not.toBe(recoveryCode);
+      expect([...refreshTokens.values()].every((r) => r.revokedAt instanceof Date)).toBe(true);
+      await expect(service.login('brigith', 'recuperada-1')).resolves.toBeDefined();
+      // Un solo uso: el código anterior ya no sirve.
+      await expect(
+        service.recoverPassword('brigith', recoveryCode, 'otra-clave-1'),
+      ).rejects.toMatchObject({ code: 'INVALID_RECOVERY_CODE' });
+    });
+
+    it('recoverPassword rechaza igual un código incorrecto, un usuario inexistente o sin código', async () => {
+      const { service } = await setup();
+      // Sin código todavía (nunca cambió la contraseña).
+      await expect(
+        service.recoverPassword('brigith', 'ABCD-EFGH-JKLM', 'nueva-clave-1'),
+      ).rejects.toMatchObject({ code: 'INVALID_RECOVERY_CODE' });
+
+      await service.changePassword('biz-a', 'user-a', 'correcta123', 'nueva-clave-1');
+      await expect(
+        service.recoverPassword('brigith', 'ABCD-EFGH-JKLM', 'otra-clave-1'),
+      ).rejects.toMatchObject({ code: 'INVALID_RECOVERY_CODE' });
+      await expect(
+        service.recoverPassword('no-existe', 'ABCD-EFGH-JKLM', 'otra-clave-1'),
+      ).rejects.toMatchObject({ code: 'INVALID_RECOVERY_CODE' });
+      await expect(service.login('brigith', 'nueva-clave-1')).resolves.toBeDefined();
+    });
+  });
 });
