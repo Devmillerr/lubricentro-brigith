@@ -65,7 +65,7 @@ export function IncomeSummary({ totals }: { totals: Dashboard['totals'] }) {
         <span className="text-sm text-[var(--muted-foreground)]">Ingresos totales</span>
         <span className="text-4xl font-semibold tracking-tight">{formatAmount(totals.total)}</span>
         <span className="text-sm text-[var(--muted-foreground)]">
-          {plural(totals.salesCount, 'venta', 'ventas')} cobradas
+          {plural(totals.salesCount, 'venta cobrada', 'ventas cobradas')}
         </span>
       </div>
 

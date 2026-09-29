@@ -2,7 +2,34 @@
 
 **Actualizado:** 2026-09-28
 
-## Estado actual (2026-09-28): backend R2–R7 validado en navegador; R7 no cerrado
+## Estado actual (2026-09-28): R7 cerrado (B-167 y B-168)
+
+- **R7 cerrado.** **B-167** (UI de R7) implementado y con commit; **B-168** (validación final) hecho, con pruebas automatizadas y validación funcional en navegador a 390 px.
+- **Commits locales, sin push** (`origin/main` sigue en `c697b96`; 13 commits por delante):
+  - `7b627c2` "docs: actualizando STATUS tras validación funcional de R7".
+  - `b240e8c` "feat: implementando dashboard funcional de R7" (B-167, 30 archivos, todos en `apps/web`).
+  - Último commit: `b240e8c`.
+- **B-167 (contenido de `b240e8c`):**
+  - Inicio con `GET /dashboard`: Hoy / Semana / Mes; ingresos, Efectivo/Yape, fuentes (lavados por tipo), mantenimientos del período, top productos con el uso en mantenimientos aparte, stock que requiere atención y recordatorios por avisar; acciones Vender, Lavado, Mantenimiento y Recibir; búsqueda por placa.
+  - Barras apiladas en CSS propio (DEC-83). Decisión del usuario sobre `07` §3.1: en Semana (7 barras) el valor va sobre cada barra, incluido `0`; en Hoy (24) y Mes (30) no cabe a 390 px, y el valor de cada barra está al tocarla, en su `aria-label` y en "Ver como tabla", que lista todas las horas o días, también los de S/ 0.00.
+  - Refresco de DEC-84 (cada 60 s, al volver a la pestaña y al volver a Inicio) sin vaciar la pantalla; tras un 429 se pausa hasta que el usuario toca Reintentar (`07` §5).
+  - BR-I1 en el Resumen del piloto: ventas de mostrador y lavados, aparte de los mantenimientos.
+  - F3 a F7 de la validación anterior resueltos: mensajes de precio máximo en producto y en tipos de lavado, 404 en español, filtro Mantenimiento visible en Ventas y candado de envío contra el doble clic (`use-submit-lock.ts`).
+- **B-168 (validación final, contra `brigith_test` local, Postgres embebido en 55432):**
+  - API: `typecheck` y `build` OK; unitarias **484/484**, integración **139/139**, e2e **147/147**. `lint` sigue con los errores históricos de CRLF (`Delete ␍`) en los mismos 17 archivos; no los introdujo este cierre.
+  - Web: `typecheck` OK; ESLint 0 errores y el warning conocido de `eslint.config.mjs`; Prettier OK (con `--end-of-line auto` por el CRLF conocido); `git diff --check` OK; `next build` 24/24.
+  - Navegador a 390 px (negocio desechable "QA E2E d766b9cc"): dashboard Hoy/Semana/Mes y las 4 acciones de Inicio; búsqueda por placa; ventas (cobro, historial con filtros y anulación); lavados (cobro, historial y configuración de tipos y precios); mantenimientos (alta con producto, cobro posterior y anulación conjunta); inventario (producto, recepción, conteo y stock) y catálogo; Avisar (descartar y reabrir); barra inferior y Más; estados de carga, vacío, error de red y 429 con Reintentar; 404 en español; login/logout y rutas protegidas. El error de red y el 429 se probaron durante B-167 con el mismo código. Logs de API y web sin errores.
+  - No se probó: el login con contraseña incorrecta ni el botón "Avisar por WhatsApp" (abre wa.me).
+  - La API se levantó con `DATABASE_URL` sobrescrito hacia `brigith_test` y secretos JWT desechables; Supabase no se tocó.
+- **Hallazgo de B-168 corregido, sin commit:** en `apps/web/src/components/dashboard/dashboard-sections.tsx`, "1 venta cobradas" pasa a concordar con el número (1 en singular; 0 y 2 o más en plural). Tras la corrección: `typecheck`, ESLint, Prettier, `git diff --check` y `next build` OK.
+- **Sin migraciones, sin seed y sin cambios en Supabase durante B-167 y B-168.** No hubo más cambios de código que la corrección de pluralización.
+- **`apps/web/src/logo.png`** sigue sin trackear y fuera de R7; se tratará después, en la fase de diseño con Claude Design (identidad visual, logo y refinamiento de UI).
+- **Pendiente:** commit de la corrección de pluralización y de este `STATUS.md`; push, con autorización.
+- **Próximo paso:** que el usuario autorice y dicte el mensaje del commit; después, el push.
+
+## Estado al 2026-09-28: backend R2–R7 validado en navegador; R7 no cerrado
+
+Lo pendiente de esta sección (B-167, B-168 y F3 a F7) quedó resuelto; ver la sección anterior.
 
 - **Backend R2–R7 funcionalmente validado**, con pruebas automatizadas y una validación manual completa en navegador. **R7 NO está cerrado y el proyecto tampoco:** faltan **B-167** (UI de R7) y **B-168** (validación final y cierre).
 - **Commits locales, sin push** (`origin/main` sigue en `c697b96`; 11 commits por delante). Además de los de R7 listados en la sección siguiente:
