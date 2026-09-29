@@ -11,7 +11,7 @@
 // Parte de `dist/src/serverless.js` (salida de `nest build`), no del .ts: tsc
 // emite la metadata de decoradores (`emitDecoratorMetadata`) que la inyección
 // de dependencias de Nest necesita y que esbuild no genera.
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { build } from 'esbuild';
 
 const external = [
@@ -47,6 +47,8 @@ await build({
   keepNames: true,
   logLevel: 'warning',
 });
-// Vercel exige un directorio de salida estático aunque solo haya funciones.
+// Vercel exige un directorio de salida estático no vacío aunque solo haya
+// funciones: un robots.txt que pide no indexar la API.
 mkdirSync('dist/static', { recursive: true });
+writeFileSync('dist/static/robots.txt', 'User-agent: *\nDisallow: /\n');
 console.log('Bundle serverless escrito en dist/serverless.cjs');
