@@ -35,7 +35,8 @@
   --accent-foreground: #1c1b19;
   --accent-strong: #7a4f00;
 
-  --success: #17804a;
+  /* 4.7:1 sobre --success-soft (AA en texto chico: badges y confirmaciones). */
+  --success: #167a47;
   --success-soft: #e5f3eb;
 
   --danger: #b42318;

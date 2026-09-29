@@ -8,7 +8,13 @@ import { MaintenanceList } from '@/components/maintenance/maintenance-list';
 import { buttonVariants } from '@/components/ui/button';
 import { Badge, PageHeader } from '@/components/ui/page-header';
 import { QueryError } from '@/components/ui/query-error';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
+import {
+  EmptyState,
+  ErrorState,
+  ListSkeleton,
+  LoadingState,
+  PageSkeleton,
+} from '@/components/ui/states';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
@@ -38,7 +44,7 @@ export default function VehiclePage() {
   );
   const types = useApiQuery('maintenance-types', () => callApi(api.GET('/maintenance-types')));
 
-  if (vehicle.status === 'loading') return <LoadingState />;
+  if (vehicle.status === 'loading') return <PageSkeleton label="Cargando vehículo…" />;
   if (vehicle.status === 'error') {
     return (
       <div className="flex flex-col gap-5">
@@ -98,7 +104,7 @@ export default function VehiclePage() {
           {data.customer ? (
             <Link
               href={`/clientes/${data.customer.id}`}
-              className="underline-offset-4 hover:underline"
+              className="-my-3 inline-flex min-h-11 items-center font-medium underline underline-offset-4"
             >
               {customerTitle(data.customer)}
             </Link>
@@ -137,7 +143,7 @@ export default function VehiclePage() {
 
       <section className="flex flex-col gap-3">
         <h3 className="text-lg font-bold">Historial</h3>
-        {history.status === 'loading' && <LoadingState label="Cargando historial…" />}
+        {history.status === 'loading' && <ListSkeleton label="Cargando historial…" rows={3} />}
         {history.status === 'error' && (
           <ErrorState message={failureMessage(history.failure)} onRetry={history.reload} />
         )}

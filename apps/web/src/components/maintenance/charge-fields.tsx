@@ -120,7 +120,10 @@ export function ChargeSummary({ sale }: { sale: Sale | null }) {
           El cobro se anuló junto con el mantenimiento.
         </span>
       )}
-      <Link href={`/ventas/${sale.id}`} className="w-fit font-medium underline underline-offset-4">
+      <Link
+        href={`/ventas/${sale.id}`}
+        className="inline-flex min-h-11 w-fit items-center font-medium underline underline-offset-4"
+      >
         Ver venta
       </Link>
     </div>

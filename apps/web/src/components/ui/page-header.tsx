@@ -1,6 +1,7 @@
 import { ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { DocumentTitle } from '@/components/ui/document-title';
 import { Plate } from '@/components/ui/plate';
 import { cn } from '@/lib/utils';
 
@@ -23,6 +24,7 @@ export function PageHeader({
 }) {
   return (
     <div className="flex flex-col gap-2">
+      <DocumentTitle title={title} />
       {back && (
         <Link
           href={back.href}
@@ -34,9 +36,9 @@ export function PageHeader({
       )}
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <h2 className="text-[1.75rem] leading-tight font-bold break-words">
+          <h1 className="text-[1.75rem] leading-tight font-bold break-words">
             {asPlate ? <Plate plate={title} size="lg" /> : title}
-          </h2>
+          </h1>
           {subtitle && <div className="text-sm text-[var(--muted-foreground)]">{subtitle}</div>}
         </div>
         {action && <div className="shrink-0">{action}</div>}

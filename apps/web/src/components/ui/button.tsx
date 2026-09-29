@@ -15,7 +15,7 @@ export const buttonVariants = cva(
         default: 'bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90',
         outline:
           'border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--muted)]',
-        destructive: 'bg-[var(--danger)] text-white hover:opacity-90 dark:text-[#1c1b19]',
+        destructive: 'bg-[var(--danger)] text-[var(--primary-foreground)] hover:opacity-90',
         ghost: 'text-[var(--foreground)] hover:bg-[var(--muted)]',
         link: 'text-[var(--foreground)] underline underline-offset-4 hover:opacity-80',
       },

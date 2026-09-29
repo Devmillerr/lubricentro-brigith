@@ -9,7 +9,7 @@ import { StockBadge } from '@/components/inventory/stock-badge';
 import { chipClass } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
+import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/states';
 import { failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
 import { present } from '@/lib/customers/format';
@@ -49,7 +49,7 @@ export default function InventoryPage() {
   const [filter, setFilter] = useState<Filter>('all');
   const catalog = useApiQuery('inventory:catalog', loadCatalogWithStock);
 
-  if (catalog.status === 'loading') return <LoadingState label="Cargando inventario…" />;
+  if (catalog.status === 'loading') return <PageSkeleton label="Cargando inventario…" />;
 
   const header = (
     <PageHeader

@@ -9,7 +9,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Chip, ChipRow } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
 import { Badge, PageHeader } from '@/components/ui/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
+import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/states';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
@@ -233,7 +233,9 @@ export default function ProductsPage() {
         </Chip>
       </ChipRow>
 
-      {firstPage.status === 'loading' && <LoadingState label="Buscando productos…" />}
+      {firstPage.status === 'loading' && (
+        <ListSkeleton label="Buscando productos…" variant="grid" rows={6} />
+      )}
 
       {firstPage.status === 'error' && (
         <ErrorState message={failureMessage(firstPage.failure)} onRetry={firstPage.reload} />

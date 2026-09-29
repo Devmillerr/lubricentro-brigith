@@ -5,6 +5,7 @@
   "description": "Brigith — API (NestJS)",
   "scripts": {
     "build": "nest build",
+    "build:vercel": "prisma generate && nest build && node scripts/bundle-serverless.mjs",
     "start": "node dist/src/main.js",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
@@ -51,6 +52,7 @@
     "@types/node": "^22.20.4",
     "@types/supertest": "^7.2.1",
     "dotenv": "^18.0.2",
+    "esbuild": "^0.25.12",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.6",

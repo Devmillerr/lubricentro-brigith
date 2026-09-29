@@ -8,7 +8,7 @@ import { FormError } from '@/components/customers/form-error';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Chip, ChipRow } from '@/components/ui/chip';
 import { Badge, PageHeader } from '@/components/ui/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
+import { EmptyState, ErrorState, ListSkeleton, PageSkeleton } from '@/components/ui/states';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
@@ -55,7 +55,7 @@ const SOURCE_ICONS: Record<SaleSource, typeof ShoppingCart> = {
  */
 export default function SalesHistoryPage() {
   return (
-    <Suspense fallback={<LoadingState />}>
+    <Suspense fallback={<PageSkeleton label="Cargando historial…" />}>
       <SalesHistory />
     </Suspense>
   );
@@ -142,7 +142,7 @@ function SalesList({ source }: { source: SaleSource | null }) {
     setMore({ items: [...more.items, ...result.data.items], cursor: result.data.nextCursor });
   }
 
-  if (firstPage.status === 'loading') return <LoadingState label="Cargando historial…" />;
+  if (firstPage.status === 'loading') return <ListSkeleton label="Cargando historial…" />;
   if (firstPage.status === 'error') {
     return <ErrorState message={failureMessage(firstPage.failure)} onRetry={firstPage.reload} />;
   }

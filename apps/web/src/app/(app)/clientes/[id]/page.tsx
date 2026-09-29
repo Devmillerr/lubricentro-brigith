@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { buttonVariants } from '@/components/ui/button';
 import { Badge, PageHeader } from '@/components/ui/page-header';
 import { QueryError } from '@/components/ui/query-error';
-import { EmptyState, LoadingState } from '@/components/ui/states';
+import { EmptyState, PageSkeleton } from '@/components/ui/states';
 import { Plate } from '@/components/ui/plate';
 import { api } from '@/lib/api/client';
 import { callApi } from '@/lib/api/request';
@@ -28,7 +28,7 @@ export default function CustomerDetailPage() {
   // El detalle trae `vehicleModelId`; el nombre del modelo sale de la lista de modelos.
   const models = useApiQuery('vehicle-models', () => callApi(api.GET('/vehicle-models')));
 
-  if (query.status === 'loading') return <LoadingState />;
+  if (query.status === 'loading') return <PageSkeleton label="Cargando cliente…" />;
   if (query.status === 'error') {
     return (
       <div className="flex flex-col gap-5">

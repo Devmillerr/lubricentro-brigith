@@ -7,7 +7,7 @@ import { FormError } from '@/components/customers/form-error';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge, PageHeader } from '@/components/ui/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
+import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/states';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
@@ -99,7 +99,7 @@ export default function CustomersPage() {
         />
       </div>
 
-      {firstPage.status === 'loading' && <LoadingState label="Buscando clientes…" />}
+      {firstPage.status === 'loading' && <ListSkeleton label="Buscando clientes…" />}
 
       {firstPage.status === 'error' && (
         <ErrorState message={failureMessage(firstPage.failure)} onRetry={firstPage.reload} />

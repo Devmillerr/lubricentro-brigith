@@ -25,7 +25,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
       <aside className="sticky top-0 hidden h-dvh flex-col border-r border-[var(--border)] bg-[var(--surface)] md:flex">
         <div className="h-1 shrink-0 bg-[var(--brand)]" aria-hidden />
         <div className="border-b border-[var(--border)] px-4 py-4">
-          <BrandLockup subtitle={me.business.name} emblemSize={52} />
+          <BrandLockup subtitle={businessSubtitle(me.business.name)} emblemSize={52} />
         </div>
         <nav aria-label="Principal" className="flex flex-1 flex-col gap-1 p-3">
           {NAV_ITEMS.map((item) => (
@@ -40,8 +40,15 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
 
       <div className="flex min-h-dvh min-w-0 flex-col">
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-3 border-t-4 border-b border-t-[var(--brand)] border-b-[var(--border)] bg-[var(--surface)] px-4 md:h-14 md:border-t-0 md:px-8">
-          <BrandLockup subtitle={me.business.name} emblemSize={44} className="md:hidden" />
-          <h1 className="hidden text-xl font-bold md:block">{current?.label ?? 'Brigith'}</h1>
+          <BrandLockup
+            subtitle={businessSubtitle(me.business.name)}
+            emblemSize={44}
+            className="md:hidden"
+          />
+          {/* Sección activa (escritorio). No es un encabezado: el título de cada pantalla es su h1. */}
+          <p className="hidden font-display text-xl font-bold md:block">
+            {current?.label ?? 'Brigith'}
+          </p>
           <div className="flex items-center gap-1 md:hidden">
             <span className="max-w-[8rem] truncate text-sm font-medium text-[var(--muted-foreground)]">
               {me.user.name}
@@ -189,4 +196,12 @@ function LogoutButton({ compact = false, className }: { compact?: boolean; class
       {!compact && (pending ? 'Cerrando sesión…' : 'Cerrar sesión')}
     </Button>
   );
+}
+
+/**
+ * Nombre del negocio bajo la marca, salvo que repita "Brigith" (el negocio
+ * real se llama así y la cabecera mostraba "Brigith / Brigith").
+ */
+function businessSubtitle(name: string): string | undefined {
+  return name.trim().toLocaleLowerCase('es') === 'brigith' ? undefined : name;
 }

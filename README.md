@@ -57,6 +57,23 @@ pnpm dev:api                                # http://localhost:4000/api/v1 · Sw
 pnpm dev:web                                # http://localhost:3000
 ```
 
+## Producción
+
+Todo en planes gratuitos, sin métodos de pago asociados (DEC-89):
+
+| Pieza | Dónde | URL |
+| --- | --- | --- |
+| Web (Next.js) | Vercel, proyecto `brigith`, raíz `apps/web` | https://lubricentro-brigith.vercel.app |
+| API (NestJS) | Vercel, proyecto `brigith-api`, raíz `apps/api` | https://brigith-api.vercel.app/api/v1 (salud: `/health`) |
+| Base de datos | Supabase Free, `us-east-1` | — |
+
+- **Despliegue:** cada push a `main` despliega ambos proyectos (la configuración de build está en `apps/*/vercel.json`). Otras ramas generan *previews* protegidas.
+- **Variables de la API** (Vercel → `brigith-api` → Settings → Environment Variables): `DATABASE_URL` (pooler de transacciones de Supabase, puerto 6543), `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `CORS_ORIGIN` (URL de la web, separadas por coma), `RATE_LIMIT_STORE=database`, `TRUST_PROXY=1`. `NODE_ENV=production` lo pone Vercel.
+- **Variables de la web:** `NEXT_PUBLIC_API_URL` (pública, no es secreto).
+- **Migraciones:** no corren en el build. Se aplican a mano con `pnpm --filter @brigith/api prisma:deploy` y `DIRECT_URL` (session pooler, puerto 5432) en `apps/api/.env`.
+- **Dominio propio (si el cliente lo contrata):** agregarlo en el proyecto `brigith` de Vercel y sumarlo a `CORS_ORIGIN` de `brigith-api` (y opcionalmente otro para la API, cambiando `NEXT_PUBLIC_API_URL`). Luego redesplegar.
+- **Migrar a un hosting pagado:** la API es un servidor Node normal (`pnpm --filter @brigith/api build && pnpm --filter @brigith/api start`) con las mismas variables; con una sola instancia puede usarse `RATE_LIMIT_STORE=memory`. La base se mueve con `pg_dump`/`pg_restore` y se cambia `DATABASE_URL`.
+
 ## Antes de programar
 
 El registro de decisiones y lo que bloquea el inicio están en [`docs/09-BACKLOG.md`](docs/09-BACKLOG.md) §1 y §2.

@@ -584,7 +584,7 @@ Los cinco puntos que estaban "Por definir" se cerraron con el usuario el 2026-09
   | `POST /auth/recover` (DEC-88) | Las mismas cuotas del login, compartidas con `/auth/login` | IP; `username` del cuerpo |
   | `POST /auth/change-password` (DEC-88) | La cuota por IP del login, compartida con `/auth/login` | IP |
 
-  Ventana fija de 60 segundos, almacenamiento en memoria (válido para la arquitectura actual de una sola instancia de la API; con varias haría falta un almacenamiento compartido). Al exceder: **429** con cabecera `Retry-After` (segundos, mínimo 1) y cuerpo en el formato de error de la API con `code: "RATE_LIMITED"`. La web no reintenta automáticamente (`07` §5).
+  Ventana fija de 60 segundos. Los contadores viven en memoria con una sola instancia de la API (`RATE_LIMIT_STORE=memory`, por defecto fuera de producción) o en Postgres, compartidos entre instancias (`RATE_LIMIT_STORE=database`, por defecto en producción; tabla `rate_limit_windows`, con respaldo en memoria si la base falla; DEC-89). Detrás de un proxy, la IP sale de `X-Forwarded-For` según `TRUST_PROXY`. Al exceder: **429** con cabecera `Retry-After` (segundos, mínimo 1) y cuerpo en el formato de error de la API con `code: "RATE_LIMITED"`. La web no reintenta automáticamente (`07` §5).
 
   Detalles de la implementación (`src/rate-limit/`, guard global):
   - Claves: `read:user:<userId>` y `write:user:<userId>` (el `sub` de un token de acceso válido); `login-ip:<ip>`, `login-username:<username>` y `refresh-ip:<ip>`. Las dos cuotas de login se cuentan a la vez; si falta `username` en el cuerpo, solo cuenta la de IP.

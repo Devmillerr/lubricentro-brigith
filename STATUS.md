@@ -2,7 +2,43 @@
 
 **Actualizado:** 2026-09-29
 
-## Estado actual (2026-09-29): cuenta entregada, cambio y recuperación de contraseña
+## Estado actual (2026-09-29): publicación en producción (DEC-89)
+
+- **Corte actual:** infraestructura, seguridad y publicación. Rama `claude/admiring-pasteur-522mg8` (sobre `5c9cf0b`), con PR hacia `main`.
+- **Publicado (planes gratuitos, sin cargos):** web https://lubricentro-brigith.vercel.app (Vercel, proyecto `brigith`) y API https://brigith-api.vercel.app/api/v1 (Vercel, proyecto `brigith-api`, función serverless en `iad1`), sobre la base de Supabase de siempre. Ambos proyectos quedan conectados al repositorio: cada push a `main` despliega. Los deploys actuales se hicieron desde la rama.
+- **Completado:**
+  - API como función de Vercel: `createApp()` compartido por `main.ts` y `serverless.ts`; bundle CommonJS con esbuild (`scripts/bundle-serverless.mjs`, `pnpm build:vercel`) porque NestJS 12 es solo ESM y el runtime de Vercel no admite `require()` de ESM; Swagger UI solo fuera de producción.
+  - Rate limit de DEC-86 compartido entre instancias: `PostgresFixedWindowStore` (tabla `rate_limit_windows`, `RATE_LIMIT_STORE`), con respaldo en memoria si la base falla; `TRUST_PROXY` para la IP real detrás de Vercel.
+  - Migraciones nuevas: `20260929215900_rate_limit_windows` y `20260929220000_enable_rls` (RLS en las 23 tablas, sin políticas; Prisma conecta como `postgres`, dueño de las tablas y con `BYPASSRLS`, así que no le afecta).
+  - `generate-openapi` funciona sin secretos (el build de la web en Vercel genera el cliente).
+  - Cron diario de Vercel a `/health` para que Supabase Free no pause el proyecto.
+  - Documentación: README §Producción, DEC-89 (resuelve DEC-10), `06-API.md` §4.
+- **Verificación:** unitarias 488/488, integración 145/145 (6 nuevas del almacén en Postgres), e2e 150/150; typecheck, build de API y web, ESLint y Prettier de los archivos tocados y `git diff --check` OK (siguen los errores preexistentes de CRLF). En producción: `/health` con base arriba; sesión completa con la cuenta de prueba `demo` (login, perfil, negocio, catálogo, alertas, dashboard, token inválido 401, logout y refresh revocado 401); CORS solo para la web; 404 de la web; rutas protegidas redirigen al login. Datos reales de Supabase idénticos antes y después (huellas md5). La contraseña de `saul` no se usó ni cambió.
+- **Migraciones aplicadas en Supabase (2026-09-29, con autorización del usuario):** `20260929215900_rate_limit_windows` y luego `20260929220000_enable_rls`, con `pnpm --filter @brigith/api prisma:deploy` (usa `DIRECT_URL`, session pooler `aws-0-us-east-1.pooler.supabase.com:5432`). Sin SQL manual ni `migrate resolve`.
+  - `_prisma_migrations`: ambas registradas como terminadas, sin errores ni reversión; 15 migraciones en total, ninguna incompleta. `prisma migrate status`: "Database schema is up to date!".
+  - RLS habilitado en las **23 tablas** de `public`, incluida `rate_limit_windows` (existe con `key`, `count`, `resetAt`, su clave primaria y el índice de `resetAt`).
+  - Sin políticas RLS, a propósito: la API accede solo mediante Prisma, conectada como `postgres` (dueño de las tablas y con `BYPASSRLS`); `anon` y `authenticated` quedan sin acceso.
+  - Asesor de seguridad de Supabase: solo el INFO esperado "RLS enabled, no policy" en esas 23 tablas.
+  - Datos de negocio sin cambios: huellas md5 idénticas antes y después (`businesses`, `users`, `products`, `product_categories`, `sales`, `customers`, `inventory_movements`).
+  - No hizo falta redeploy: la API desplegada usa `rate_limit_windows` desde la siguiente petición.
+- **Bloqueos:** ninguno.
+- **Próximo paso:** revisar y fusionar el PR hacia `main`, y que Saúl pruebe su login real.
+
+## Estado al 2026-09-29: auditoría final integral y calidad de interfaz
+
+- **Corte actual:** auditoría funcional completa previa a la publicación, con correcciones de carga, semántica, accesibilidad y tokens. Sin cambios de API, contratos, datos, migraciones ni seeds.
+- **Rama:** `claude/admiring-pasteur-522mg8`, creada desde `origin/main` (`ffaa16d`).
+- **Completado (solo `apps/web`):**
+  - Skeleton loading en lugar del spinner donde la pantalla quedaba vacía: `ListSkeleton` (filas o grilla) y `PageSkeleton` (detalle) en `ui/states.tsx`. Se usan en Ventas, Productos, Clientes, Avisar, Inventario, Recepciones, Categorías, Tipos de lavado, movimientos, historial del vehículo y los detalles de producto, vehículo, cliente, venta, mantenimiento, recepción y recordatorio. Formularios de edición y búsquedas cortas siguen con spinner. Animación solo con `motion-safe`, también en el esqueleto del Inicio.
+  - Semántica: el título de cada pantalla (`PageHeader`, "Hola, …" del Inicio) es el `h1`; antes el único `h1` era la sección de la cabecera, oculta en móvil. Título de pestaña por pantalla ("Ventas · Brigith") con `DocumentTitle`.
+  - Accesibilidad: sin `maximumScale: 1` (permite zoom, WCAG 1.4.4); `--success` claro `#167a47` (4.7:1 sobre `--success-soft`, antes 4.35); enlaces sueltos ("Ver venta", "Ver ficha del producto", cliente del vehículo, "Inventario" del Inicio, enlaces de las confirmaciones) con área táctil de 44 px; emblema decorativo junto al texto "Brigith".
+  - Tokens: el botón `destructive` usa `--primary-foreground` en vez de colores fijos; el selector Contar/Ingreso/Ajuste usa los mismos radios y estados que el selector de período del Inicio.
+  - Jerarquía: la cabecera ya no repite "Brigith / Brigith" cuando el negocio se llama igual que la marca.
+- **Validación (local, Postgres desechable; Supabase no se tocó):** 29 pantallas recorridas a 390 px (claro y oscuro) y 1280 px sin scroll horizontal ni errores de consola; flujos de login, sesión, logout, rutas protegidas, producto, categoría, conteo, recepción, venta y anulación, lavado, cliente → vehículo → mantenimiento con cobro, mantenimiento sin vehículo con cobro posterior y anulación, avisar, configuración, cambio de contraseña y recuperación (código incorrecto, correcto, rotación y reutilización rechazada); límite de intentos con 429 `RATE_LIMITED` en español. Tests API: unitarias 491/491, integración 139/139, e2e 150/150. Typecheck, lint (web: solo el warning conocido), Prettier, `git diff --check` y builds OK.
+- **Pendiente (baja):** barras del gráfico del Inicio de 12 px de ancho como objetivo táctil (diseño de R7; tienen "Ver como tabla"); títulos de sección `h3` directamente bajo el `h1`; en Vender y otras pantallas abiertas desde Inicio la pestaña activa es "Más".
+- **Publicación:** web sin proyecto en Vercel y API sin hosting (DEC-10 pendiente); ver el informe de esta sesión.
+
+## Estado al 2026-09-29: cuenta entregada, cambio y recuperación de contraseña
 
 - **Corte actual:** entrega de la cuenta al cliente (DEC-88), posterior a la ronda de identidad visual.
 - **Último commit:** `9819065` (`9819065bb2d8b496b8be077f6c4870a001941e53`) "feat: implementando cambio y recuperación de contraseña" (21 archivos: 13 modificados y 8 nuevos), **local y sin push**. `origin/main` está en `8ed01f2`; `main` va 1 commit por delante (más el de este `STATUS.md`).

@@ -10,7 +10,7 @@ import { ProductImage } from '@/components/products/product-image';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge, PageHeader } from '@/components/ui/page-header';
 import { QueryError } from '@/components/ui/query-error';
-import { LoadingState } from '@/components/ui/states';
+import { PageSkeleton } from '@/components/ui/states';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
@@ -27,7 +27,7 @@ export default function ProductDetailPage() {
     callApi(api.GET('/product-categories')),
   );
 
-  if (query.status === 'loading') return <LoadingState />;
+  if (query.status === 'loading') return <PageSkeleton label="Cargando producto…" />;
   if (query.status === 'error') {
     return (
       <div className="flex flex-col gap-5">

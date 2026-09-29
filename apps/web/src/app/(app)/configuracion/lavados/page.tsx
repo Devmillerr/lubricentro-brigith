@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Badge, PageHeader } from '@/components/ui/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
+import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/states';
 import { api, type Schemas } from '@/lib/api/client';
 import { callApi, failureMessage, type ApiFailure } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
@@ -90,7 +90,14 @@ export default function WashTypesSettingsPage() {
     />
   );
 
-  if (query.status === 'loading') return <LoadingState label="Cargando tipos de lavado…" />;
+  if (query.status === 'loading') {
+    return (
+      <div className="flex flex-col gap-5">
+        {header}
+        <ListSkeleton label="Cargando tipos de lavado…" />
+      </div>
+    );
+  }
   if (query.status === 'error') {
     return (
       <div className="flex flex-col gap-5">
