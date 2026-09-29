@@ -2,7 +2,31 @@
 
 **Actualizado:** 2026-09-29
 
-## Estado actual (2026-09-29): identidad visual y UX de Brigith cerradas
+## Estado actual (2026-09-29): cuenta entregada, cambio y recuperación de contraseña
+
+- **Corte actual:** entrega de la cuenta al cliente (DEC-88), posterior a la ronda de identidad visual.
+- **Último commit:** `9819065` (`9819065bb2d8b496b8be077f6c4870a001941e53`) "feat: implementando cambio y recuperación de contraseña" (21 archivos: 13 modificados y 8 nuevos), **local y sin push**. `origin/main` está en `8ed01f2`; `main` va 1 commit por delante (más el de este `STATUS.md`).
+- **Cuenta real (Supabase, negocio `brigith`):** el mismo usuario de siempre (`id 70c077ee-0b8e-4e27-9756-70d7bc88b3ef`, `businessId d94e63f5-c287-4b1e-a29b-5da562e8b71d`, OWNER) **renombrado** a `name` "Saúl" y `username` **`saul`** con un único `UPDATE` (antes "Brigith" / `brigith`). No se creó ni borró ningún usuario ni se movió ningún dato: huellas md5 del negocio, de sus 16 categorías, 27 productos, 11 modelos, 11 compatibilidades, 9 tipos de lavado, 8 precios y 1 tipo de mantenimiento idénticas antes y después. En Supabase quedan 2 usuarios (`saul` y `demo`).
+- **Contraseña temporal conservada:** la de siempre (huella de los hashes de contraseña idéntica). Saúl todavía **no tiene código de recuperación** (`recoveryCodeHash` nulo): lo obtiene la primera vez que cambie la contraseña, y hasta entonces no puede recuperarla.
+- **Completado (contenido de `9819065`):**
+  - API: `POST /auth/change-password` (con sesión; contraseña actual incorrecta → 400 en `currentPassword`, no 401; genera código de recuperación y cierra las demás sesiones) y `POST /auth/recover` (público; usuario + código + contraseña nueva; mismo error `INVALID_RECOVERY_CODE` en todos los casos; código de un solo uso que se rota). Hash argon2id; límites del login (DEC-86). Nunca crean usuarios ni tocan datos del negocio.
+  - Migración aditiva `20260929172437_auth_recovery_code` (`users.recoveryCodeHash TEXT` nullable).
+  - Web: enlace "¿Olvidaste tu contraseña?" en el login → `/recuperar`; Más → "Cambiar contraseña" (`/cuenta/contrasena`); el código se muestra una sola vez con botón para copiarlo. Sin registro público ni "Crear cuenta".
+  - Marca "Brigith" sin mayúsculas forzadas en header y login; contraste de los `<select>` nativos en modo oscuro (`color-scheme` solo en `select`).
+  - `seed.ts`: reutiliza el dueño existente del negocio `brigith`; solo en una base vacía crea `saul`. No se ejecutó en ninguna base.
+  - Documentación: `06-API.md` (endpoints, errores, código de recuperación, límites) y **DEC-88** en `09-BACKLOG.md` §2.
+- **Migración aplicada en Supabase (2026-09-29, con autorización del usuario):** `prisma migrate deploy` contra `aws-0-us-east-1.pooler.supabase.com:5432/postgres`, única pendiente. `_prisma_migrations`: **13, todas terminadas**; checksum = sha256 del archivo. `migrate status` al día y `migrate diff` sin diferencias. Ningún usuario ni dato del negocio cambió.
+- **Validación:** typecheck de API y web OK; tests de la API contra `brigith_test`: unitarias **488/488**, integración **139/139**, e2e **150/150** (4 unitarias y 3 e2e nuevas de contraseña); `build` de API y web OK (web 28 páginas); ESLint sin errores nuevos (siguen los preexistentes de CRLF y del parser); Prettier OK en el código tocado; `git diff --check` OK. En navegador a 390 px, con una cuenta desechable en `brigith_test`: login sin "Crear cuenta", cambio con contraseña incorrecta y correcta, recuperación con código incorrecto y correcto (rotación incluida), inicio de sesión con la contraseña recuperada y `<select>` en claro y oscuro. La contraseña de `saul` no se cambió en ninguna prueba.
+- **Pendiente:**
+  - Pedirle a Saúl que cambie la contraseña al recibir la cuenta, para que obtenga su código de recuperación.
+  - Catálogo "vacío" con el usuario `demo` (hallazgo de la prueba manual): `demo` casi no tiene catálogo por diseño (1 categoría y 1 producto activos, restos de QA), pero la pantalla debería mostrarlos; no se reprodujo porque exigía iniciar sesión como `demo` en Supabase.
+  - Siguen los de baja severidad de la sección anterior (service worker en un teléfono real, enlaces de 17 px, barras del gráfico, CRLF preexistente).
+- **Bloqueos:** ninguno conocido.
+- **Próximo paso:** push de `9819065` y del commit de este `STATUS.md`, con autorización.
+
+## Estado al 2026-09-29: identidad visual y UX de Brigith cerradas
+
+Lo pendiente de esta sección (push de `0951c52` y del commit de `STATUS.md`) quedó resuelto: `0951c52` y `8ed01f2` están publicados en `origin/main`; ver la sección anterior.
 
 - **Corte actual:** ronda de diseño visual y UX posterior a R7. Solo presentación, identidad y terminología: sin cambios de lógica de negocio, endpoints, contratos, datos, migraciones ni seeds.
 - **Último commit:** `0951c52` (`0951c527fc5a998ecd22348735a5d3732794ad07`) "feat: aplicando la identidad visual de Brigith y cerrando la ronda de UX" (87 archivos: 77 modificados y 10 nuevos), **local y sin push**. `origin/main` está en `99792c2` (R7 publicado); `main` va 1 commit por delante.
