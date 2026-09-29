@@ -2,7 +2,22 @@
 
 **Actualizado:** 2026-09-29
 
-## Estado actual (2026-09-29): auditoría final integral y calidad de interfaz
+## Estado actual (2026-09-29): publicación en producción (DEC-89)
+
+- **Corte actual:** infraestructura, seguridad y publicación. Rama `claude/admiring-pasteur-522mg8` (sobre `5c9cf0b`), con PR hacia `main`.
+- **Publicado (planes gratuitos, sin cargos):** web https://lubricentro-brigith.vercel.app (Vercel, proyecto `brigith`) y API https://brigith-api.vercel.app/api/v1 (Vercel, proyecto `brigith-api`, función serverless en `iad1`), sobre la base de Supabase de siempre. Ambos proyectos quedan conectados al repositorio: cada push a `main` despliega. Los deploys actuales se hicieron desde la rama.
+- **Completado:**
+  - API como función de Vercel: `createApp()` compartido por `main.ts` y `serverless.ts`; bundle CommonJS con esbuild (`scripts/bundle-serverless.mjs`, `pnpm build:vercel`) porque NestJS 12 es solo ESM y el runtime de Vercel no admite `require()` de ESM; Swagger UI solo fuera de producción.
+  - Rate limit de DEC-86 compartido entre instancias: `PostgresFixedWindowStore` (tabla `rate_limit_windows`, `RATE_LIMIT_STORE`), con respaldo en memoria si la base falla; `TRUST_PROXY` para la IP real detrás de Vercel.
+  - Migraciones nuevas: `20260929215900_rate_limit_windows` y `20260929220000_enable_rls` (RLS en las 23 tablas, sin políticas; Prisma conecta como `postgres`, dueño de las tablas y con `BYPASSRLS`, así que no le afecta).
+  - `generate-openapi` funciona sin secretos (el build de la web en Vercel genera el cliente).
+  - Cron diario de Vercel a `/health` para que Supabase Free no pause el proyecto.
+  - Documentación: README §Producción, DEC-89 (resuelve DEC-10), `06-API.md` §4.
+- **Verificación:** unitarias 488/488, integración 145/145 (6 nuevas del almacén en Postgres), e2e 150/150; typecheck, build de API y web, ESLint y Prettier de los archivos tocados y `git diff --check` OK (siguen los errores preexistentes de CRLF). En producción: `/health` con base arriba; sesión completa con la cuenta de prueba `demo` (login, perfil, negocio, catálogo, alertas, dashboard, token inválido 401, logout y refresh revocado 401); CORS solo para la web; 404 de la web; rutas protegidas redirigen al login. Datos reales de Supabase idénticos antes y después (huellas md5). La contraseña de `saul` no se usó ni cambió.
+- **Bloqueo:** las dos migraciones nuevas **no están aplicadas en Supabase** (el permiso para ejecutar `prisma migrate deploy` contra producción fue denegado en la sesión). Hasta aplicarlas: RLS sigue desactivado y el rate limit funciona solo en memoria por instancia (la API lo registra como advertencia). Comando: `pnpm --filter @brigith/api prisma:deploy` con `DIRECT_URL` en `apps/api/.env`.
+- **Próximo paso:** aplicar las migraciones, revisar y fusionar el PR, y que Saúl pruebe su login real.
+
+## Estado al 2026-09-29: auditoría final integral y calidad de interfaz
 
 - **Corte actual:** auditoría funcional completa previa a la publicación, con correcciones de carga, semántica, accesibilidad y tokens. Sin cambios de API, contratos, datos, migraciones ni seeds.
 - **Rama:** `claude/admiring-pasteur-522mg8`, creada desde `origin/main` (`ffaa16d`).
