@@ -7,7 +7,7 @@ import { useState, type ReactNode } from 'react';
 import { ReminderActions } from '@/components/reminders/reminder-actions';
 import { Badge, PageHeader } from '@/components/ui/page-header';
 import { QueryError } from '@/components/ui/query-error';
-import { LoadingState } from '@/components/ui/states';
+import { PageSkeleton } from '@/components/ui/states';
 import { api } from '@/lib/api/client';
 import { callApi } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
@@ -40,7 +40,7 @@ export default function ReminderDetailPage() {
         </a>
       )}
 
-      {query.status === 'loading' && <LoadingState />}
+      {query.status === 'loading' && <PageSkeleton label="Cargando recordatorio…" />}
       {query.status === 'error' && (
         <>
           <PageHeader title="Recordatorio" back={back} />
@@ -149,7 +149,7 @@ function ReminderView({
           </p>
           <Link
             href={`/vehiculos/${reminder.vehicleId}`}
-            className="w-fit font-medium underline underline-offset-4"
+            className="inline-flex min-h-11 w-fit items-center font-medium underline underline-offset-4"
           >
             Ir a la ficha del vehículo
           </Link>

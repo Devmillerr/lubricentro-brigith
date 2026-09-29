@@ -46,13 +46,13 @@ export function WashSaved({ sale, onNew }: { sale: Sale; onNew: () => void }) {
         </Link>
         <Link
           href={`/ventas/${sale.id}`}
-          className="py-2 text-center text-sm font-medium underline underline-offset-4"
+          className="flex min-h-11 items-center justify-center text-sm font-medium underline underline-offset-4"
         >
           Ver detalle
         </Link>
         <Link
           href={salesHistoryHref('WASH')}
-          className="py-2 text-center text-sm font-medium underline underline-offset-4"
+          className="flex min-h-11 items-center justify-center text-sm font-medium underline underline-offset-4"
         >
           Ver lavados registrados
         </Link>

@@ -2,7 +2,21 @@
 
 **Actualizado:** 2026-09-29
 
-## Estado actual (2026-09-29): cuenta entregada, cambio y recuperación de contraseña
+## Estado actual (2026-09-29): auditoría final integral y calidad de interfaz
+
+- **Corte actual:** auditoría funcional completa previa a la publicación, con correcciones de carga, semántica, accesibilidad y tokens. Sin cambios de API, contratos, datos, migraciones ni seeds.
+- **Rama:** `claude/admiring-pasteur-522mg8`, creada desde `origin/main` (`ffaa16d`).
+- **Completado (solo `apps/web`):**
+  - Skeleton loading en lugar del spinner donde la pantalla quedaba vacía: `ListSkeleton` (filas o grilla) y `PageSkeleton` (detalle) en `ui/states.tsx`. Se usan en Ventas, Productos, Clientes, Avisar, Inventario, Recepciones, Categorías, Tipos de lavado, movimientos, historial del vehículo y los detalles de producto, vehículo, cliente, venta, mantenimiento, recepción y recordatorio. Formularios de edición y búsquedas cortas siguen con spinner. Animación solo con `motion-safe`, también en el esqueleto del Inicio.
+  - Semántica: el título de cada pantalla (`PageHeader`, "Hola, …" del Inicio) es el `h1`; antes el único `h1` era la sección de la cabecera, oculta en móvil. Título de pestaña por pantalla ("Ventas · Brigith") con `DocumentTitle`.
+  - Accesibilidad: sin `maximumScale: 1` (permite zoom, WCAG 1.4.4); `--success` claro `#167a47` (4.7:1 sobre `--success-soft`, antes 4.35); enlaces sueltos ("Ver venta", "Ver ficha del producto", cliente del vehículo, "Inventario" del Inicio, enlaces de las confirmaciones) con área táctil de 44 px; emblema decorativo junto al texto "Brigith".
+  - Tokens: el botón `destructive` usa `--primary-foreground` en vez de colores fijos; el selector Contar/Ingreso/Ajuste usa los mismos radios y estados que el selector de período del Inicio.
+  - Jerarquía: la cabecera ya no repite "Brigith / Brigith" cuando el negocio se llama igual que la marca.
+- **Validación (local, Postgres desechable; Supabase no se tocó):** 29 pantallas recorridas a 390 px (claro y oscuro) y 1280 px sin scroll horizontal ni errores de consola; flujos de login, sesión, logout, rutas protegidas, producto, categoría, conteo, recepción, venta y anulación, lavado, cliente → vehículo → mantenimiento con cobro, mantenimiento sin vehículo con cobro posterior y anulación, avisar, configuración, cambio de contraseña y recuperación (código incorrecto, correcto, rotación y reutilización rechazada); límite de intentos con 429 `RATE_LIMITED` en español. Tests API: unitarias 491/491, integración 139/139, e2e 150/150. Typecheck, lint (web: solo el warning conocido), Prettier, `git diff --check` y builds OK.
+- **Pendiente (baja):** barras del gráfico del Inicio de 12 px de ancho como objetivo táctil (diseño de R7; tienen "Ver como tabla"); títulos de sección `h3` directamente bajo el `h1`; en Vender y otras pantallas abiertas desde Inicio la pestaña activa es "Más".
+- **Publicación:** web sin proyecto en Vercel y API sin hosting (DEC-10 pendiente); ver el informe de esta sesión.
+
+## Estado al 2026-09-29: cuenta entregada, cambio y recuperación de contraseña
 
 - **Corte actual:** entrega de la cuenta al cliente (DEC-88), posterior a la ronda de identidad visual.
 - **Último commit:** `9819065` (`9819065bb2d8b496b8be077f6c4870a001941e53`) "feat: implementando cambio y recuperación de contraseña" (21 archivos: 13 modificados y 8 nuevos), **local y sin push**. `origin/main` está en `8ed01f2`; `main` va 1 commit por delante (más el de este `STATUS.md`).

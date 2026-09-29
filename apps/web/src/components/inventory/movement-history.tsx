@@ -4,7 +4,7 @@ import { History } from 'lucide-react';
 import { useState } from 'react';
 import { FormError } from '@/components/customers/form-error';
 import { Button } from '@/components/ui/button';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
+import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/states';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
@@ -75,7 +75,7 @@ export function MovementHistory({ productId, version }: { productId: string; ver
     <section className="flex flex-col gap-3">
       <h3 className="text-lg font-bold">Movimientos</h3>
 
-      {firstPage.status === 'loading' && <LoadingState label="Cargando movimientos…" />}
+      {firstPage.status === 'loading' && <ListSkeleton label="Cargando movimientos…" rows={3} />}
       {firstPage.status === 'error' && (
         <ErrorState message={failureMessage(firstPage.failure)} onRetry={firstPage.reload} />
       )}

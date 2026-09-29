@@ -24,6 +24,7 @@ import {
 } from '@/components/dashboard/dashboard-sections';
 import { RevenueChart } from '@/components/dashboard/revenue-chart';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { DocumentTitle } from '@/components/ui/document-title';
 import { ErrorState } from '@/components/ui/states';
 import { PlateSearch } from '@/components/vehicles/plate-search';
 import { api } from '@/lib/api/client';
@@ -67,7 +68,8 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <h2 className="text-[1.75rem] leading-tight font-bold">Hola, {user.name}</h2>
+      <DocumentTitle title="Inicio" />
+      <h1 className="text-[1.75rem] leading-tight font-bold">Hola, {user.name}</h1>
 
       <nav aria-label="Acciones principales" className="grid grid-cols-2 gap-3">
         <ActionTile href="/ventas/nueva" icon={ShoppingCart} label="Vender" />

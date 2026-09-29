@@ -28,7 +28,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
+  // Sin maximumScale: bloquear el zoom impide ampliar a quien lo necesita (WCAG 1.4.4).
+  // Los inputs miden 16 px, así que iOS no hace zoom automático al enfocarlos.
   viewportFit: 'cover',
   // Igual que el header de la app en cada tema.
   themeColor: [

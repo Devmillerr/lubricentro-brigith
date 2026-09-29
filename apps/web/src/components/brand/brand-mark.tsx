@@ -9,17 +9,20 @@ import { cn } from '@/lib/utils';
 export function BrandEmblem({
   size,
   priority = false,
+  decorative = false,
   className,
 }: {
   /** Ancho en px CSS; el alto sale de la proporción del logo. */
   size: number;
   priority?: boolean;
+  /** Junto al texto "Brigith": el lector de pantalla no lo repite. */
+  decorative?: boolean;
   className?: string;
 }) {
   return (
     <Image
       src={emblem}
-      alt="Lubricentro Brigith"
+      alt={decorative ? '' : 'Lubricentro Brigith'}
       width={size}
       height={Math.round((size * emblem.height) / emblem.width)}
       priority={priority}
@@ -40,7 +43,7 @@ export function BrandLockup({
 }) {
   return (
     <div className={cn('flex min-w-0 items-center gap-2.5', className)}>
-      <BrandEmblem size={emblemSize} priority />
+      <BrandEmblem size={emblemSize} priority decorative />
       <div className="flex min-w-0 flex-col">
         <span className="font-display text-lg leading-none font-bold">Brigith</span>
         {subtitle && (

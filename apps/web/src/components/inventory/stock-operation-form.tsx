@@ -202,7 +202,7 @@ export function StockOperationForm({
       <div
         role="group"
         aria-label="Tipo de movimiento"
-        className="grid grid-cols-3 gap-1 rounded-md bg-[var(--muted)] p-1"
+        className="grid grid-cols-3 gap-1 rounded-xl bg-[var(--muted)] p-1"
       >
         <OperationButton selected={operation === 'count'} onClick={() => switchOperation('count')}>
           Contar
@@ -403,7 +403,9 @@ function AdjustmentUnavailable({
   );
 }
 
-const OPERATION_CLASS = 'flex h-11 items-center justify-center gap-1 rounded text-sm font-medium';
+// Mismo control segmentado que el período del Inicio.
+const OPERATION_CLASS =
+  'flex h-11 items-center justify-center gap-1 rounded-lg text-sm font-medium transition-colors';
 
 function OperationButton({
   selected,
@@ -421,7 +423,9 @@ function OperationButton({
       onClick={onClick}
       className={cn(
         OPERATION_CLASS,
-        selected ? 'bg-[var(--segment-selected)] shadow-sm' : 'text-[var(--muted-foreground)]',
+        selected
+          ? 'bg-[var(--segment-selected)] text-[var(--foreground)] shadow-sm'
+          : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]',
       )}
     >
       {children}

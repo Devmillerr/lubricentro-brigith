@@ -10,7 +10,7 @@ import { StockOperationForm } from '@/components/inventory/stock-operation-form'
 import { Card } from '@/components/ui/card';
 import { PageHeader } from '@/components/ui/page-header';
 import { QueryError } from '@/components/ui/query-error';
-import { ErrorState, LoadingState } from '@/components/ui/states';
+import { ErrorState, LoadingState, PageSkeleton } from '@/components/ui/states';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
@@ -41,7 +41,7 @@ export default function ProductInventoryPage() {
     label: 'Ver inventario',
   };
 
-  if (product.status === 'loading') return <LoadingState />;
+  if (product.status === 'loading') return <PageSkeleton label="Cargando producto…" />;
   if (product.status === 'error') {
     return (
       <div className="flex flex-col gap-5">
@@ -60,7 +60,7 @@ export default function ProductInventoryPage() {
         subtitle={
           <Link
             href={`/productos/${data.id}`}
-            className="font-medium text-[var(--foreground)] underline underline-offset-4"
+            className="-my-3 inline-flex min-h-11 items-center font-medium text-[var(--foreground)] underline underline-offset-4"
           >
             Ver ficha del producto
           </Link>

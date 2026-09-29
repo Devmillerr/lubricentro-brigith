@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { chipClass } from '@/components/ui/chip';
 import { Select } from '@/components/ui/field';
 import { Badge, PageHeader } from '@/components/ui/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
+import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/states';
 import { Plate } from '@/components/ui/plate';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
@@ -125,7 +125,7 @@ export default function RemindersPage() {
         </Select>
       </div>
 
-      {firstPage.status === 'loading' && <LoadingState label="Cargando recordatorios…" />}
+      {firstPage.status === 'loading' && <ListSkeleton label="Cargando recordatorios…" />}
       {firstPage.status === 'error' && (
         <ErrorState message={failureMessage(firstPage.failure)} onRetry={firstPage.reload} />
       )}

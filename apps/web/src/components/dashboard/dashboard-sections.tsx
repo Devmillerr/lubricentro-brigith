@@ -316,7 +316,10 @@ export function StockAttention({ stock }: { stock: Dashboard['stock'] }) {
     <Panel
       title="Stock que requiere atención"
       action={
-        <Link href="/inventario" className="text-sm font-medium underline-offset-4 hover:underline">
+        <Link
+          href="/inventario"
+          className="inline-flex min-h-11 items-center text-sm font-medium underline-offset-4 hover:underline"
+        >
           Inventario
         </Link>
       }
@@ -442,13 +445,13 @@ export function RemindersDue({ dueNow }: { dueNow: number }) {
 export function DashboardSkeleton() {
   return (
     <div role="status" aria-label="Cargando el resumen" className="flex flex-col gap-3">
-      <div className="h-40 animate-pulse rounded-lg bg-[var(--muted)]" />
+      <div className="h-40 rounded-lg bg-[var(--muted)] motion-safe:animate-pulse" />
       <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-3">
         {[0, 1, 2].map((key) => (
-          <div key={key} className="h-16 animate-pulse rounded-lg bg-[var(--muted)]" />
+          <div key={key} className="h-16 rounded-lg bg-[var(--muted)] motion-safe:animate-pulse" />
         ))}
       </div>
-      <div className="h-56 animate-pulse rounded-lg bg-[var(--muted)]" />
+      <div className="h-56 rounded-lg bg-[var(--muted)] motion-safe:animate-pulse" />
     </div>
   );
 }

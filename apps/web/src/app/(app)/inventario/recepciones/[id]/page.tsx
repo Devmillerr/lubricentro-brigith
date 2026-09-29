@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import { ReceiptDetail } from '@/components/inventory/receipt-detail';
 import { PageHeader } from '@/components/ui/page-header';
 import { QueryError } from '@/components/ui/query-error';
-import { LoadingState } from '@/components/ui/states';
+import { PageSkeleton } from '@/components/ui/states';
 import { api } from '@/lib/api/client';
 import { callApi, type ApiResult } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
@@ -28,7 +28,7 @@ export default function ReceiptPage() {
 
   const back = { href: '/inventario/recepciones', label: 'Recepciones' };
 
-  if (receipt.status === 'loading') return <LoadingState label="Cargando recepción…" />;
+  if (receipt.status === 'loading') return <PageSkeleton label="Cargando recepción…" />;
   if (receipt.status === 'error') {
     return (
       <div className="flex flex-col gap-5">

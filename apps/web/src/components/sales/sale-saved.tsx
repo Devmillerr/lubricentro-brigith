@@ -82,7 +82,7 @@ export function SaleSaved({ result, onNew }: { result: CreateSaleResult; onNew: 
         </Link>
         <Link
           href="/dashboard"
-          className="py-2 text-center text-sm font-medium underline underline-offset-4"
+          className="flex min-h-11 items-center justify-center text-sm font-medium underline underline-offset-4"
         >
           Volver al inicio
         </Link>

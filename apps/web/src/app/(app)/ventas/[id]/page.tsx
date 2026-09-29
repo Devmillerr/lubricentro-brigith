@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import { VoidSale } from '@/components/sales/void-sale';
 import { Badge, PageHeader } from '@/components/ui/page-header';
 import { QueryError } from '@/components/ui/query-error';
-import { LoadingState } from '@/components/ui/states';
+import { PageSkeleton } from '@/components/ui/states';
 import { api } from '@/lib/api/client';
 import { callApi } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
@@ -32,7 +32,7 @@ export default function SaleDetailPage() {
     callApi(api.GET('/sales/{id}', { params: { path: { id } } })),
   );
 
-  if (query.status === 'loading') return <LoadingState />;
+  if (query.status === 'loading') return <PageSkeleton label="Cargando venta…" />;
   if (query.status === 'error') {
     return (
       <div className="flex flex-col gap-5">
@@ -111,7 +111,7 @@ export default function SaleDetailPage() {
           {isMaintenance && sale.maintenanceId && (
             <Link
               href={`/mantenimientos/${sale.maintenanceId}`}
-              className="w-fit font-medium underline underline-offset-4"
+              className="inline-flex min-h-11 w-fit items-center font-medium underline underline-offset-4"
             >
               Ver mantenimiento
             </Link>
@@ -125,7 +125,7 @@ export default function SaleDetailPage() {
           {sale.maintenanceId && (
             <Link
               href={`/mantenimientos/${sale.maintenanceId}`}
-              className="w-fit font-medium underline underline-offset-4"
+              className="inline-flex min-h-11 w-fit items-center font-medium underline underline-offset-4"
             >
               Ver mantenimiento
             </Link>

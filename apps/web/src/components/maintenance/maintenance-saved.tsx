@@ -60,7 +60,7 @@ export function MaintenanceSaved({
                     warning.code === 'PRODUCT_NOT_COUNTED') && (
                     <Link
                       href={`/inventario/${warning.productId}`}
-                      className="w-fit font-medium underline underline-offset-4"
+                      className="inline-flex min-h-11 w-fit items-center font-medium underline underline-offset-4"
                     >
                       Contar
                     </Link>
