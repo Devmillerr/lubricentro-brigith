@@ -1,8 +1,39 @@
 # STATUS — Estado del proyecto
 
-**Actualizado:** 2026-09-28
+**Actualizado:** 2026-09-29
 
-## Estado actual (2026-09-28): R7 cerrado (B-167 y B-168)
+## Estado actual (2026-09-29): identidad visual y UX de Brigith cerradas
+
+- **Corte actual:** ronda de diseño visual y UX posterior a R7. Solo presentación, identidad y terminología: sin cambios de lógica de negocio, endpoints, contratos, datos, migraciones ni seeds.
+- **Último commit:** `0951c52` (`0951c527fc5a998ecd22348735a5d3732794ad07`) "feat: aplicando la identidad visual de Brigith y cerrando la ronda de UX" (87 archivos: 77 modificados y 10 nuevos), **local y sin push**. `origin/main` está en `99792c2` (R7 publicado); `main` va 1 commit por delante.
+- **Completado (contenido de `0951c52`):**
+  - Identidad: emblema oficial en header, barra lateral, login y 404; wordmark "BRIGITH"; franja y pestaña activa en rojo Brigith; favicon, ícono de iOS e íconos PWA (192, 512 y *maskable*) derivados del logo por recorte y reescalado, sin redibujar; manifest con nombre "Brigith" y los íconos que antes faltaban.
+  - Sistema visual en `apps/web`: tokens de color (carbón para acciones, rojo Brigith solo como marca, amarillo aceite para atención, neutros gris-piedra), claro y oscuro; Barlow y Barlow Condensed con `next/font`, sin dependencias nuevas; radios, botones (`destructive`, `ghost`, `link`, `icon`), controles de 48 px y badges con tono.
+  - Componentes nuevos: `ui/card.tsx`, `ui/plate.tsx`, `brand/brand-mark.tsx` e `inventory/stock-badge.tsx`.
+  - Estados: confirmaciones en verde, advertencias en amarillo, errores en rojo suave, estados vacíos con ícono por pantalla y banner "Sin conexión" en amarillo.
+  - Correcciones de la validación en navegador: contraste de los selectores segmentados en modo oscuro (token `--segment-selected`); botones de "Mantenimiento registrado" (antes de 20–22 px); nombre de producto cortado en Inventario; placa con estilo de placa en los títulos de Vehículo y Avisar; números del Resumen en Barlow Condensed; enlaces "volver", "Agregar…" y pestañas Contar/Ingreso/Ajuste a 44 px; badge "Sin conteo inicial" ajustado a su texto; la hora ya no se parte ("5:40 p. m."); sin línea de scroll bajo los chips; sin repetición del nombre del negocio ni del título tras guardar.
+  - "OS" quitado de las referencias actuales: interfaz web, título de la pestaña, manifest, descripciones de los `package.json` (raíz, `apps/api` y `apps/web`), `README.md`, comentario de `schema.prisma`, título y descripción de OpenAPI y `docs/01-VISION.md`. `openapi.json` se regeneró con `pnpm api:generate` (solo cambian `info.title` e `info.description`; `schema.d.ts` quedó idéntico).
+- **Decisiones de esta sesión:**
+  - La identidad oficial es **Brigith**, sin "OS".
+  - Se mantiene "Resumen del piloto": en este proyecto "piloto" es la prueba piloto del sistema, no la persona que conduce.
+  - `apps/web/src/logo.png` queda **fuera del repositorio** (sin trackear); la aplicación usa el recorte `apps/web/src/assets/brand/brigith-emblem.png`.
+  - Referencias a "Brigith OS" que se conservan a propósito: `"name": "brigith-os"` del `package.json` raíz (identificador técnico del workspace); `docs/10-OPERACION-REAL.md`, línea 4 (propuesta v0.3 fechada); las entradas históricas de este `STATUS.md`. `CLAUDE.md` se actualizó, pero está ignorado por Git.
+- **Validación:**
+  - API y web: `typecheck` OK; `build` OK (web 26/26); ESLint web 0 errores (el warning conocido de `eslint.config.mjs`); Prettier OK en los archivos tocados; `git diff --check` OK. El lint de la API sigue con los errores preexistentes de CRLF y del parser en archivos que esta ronda no tocó.
+  - Navegador a 390 px contra `brigith_test` (negocio "QA E2E d766b9cc"): Login, Inicio, Ventas, Vender, Lavado, Mantenimiento, Inventario, Recepciones, Avisar, Productos, Clientes, Vehículo, Configuración, Más, Resumen del piloto, 404 y sin conexión; modo claro y oscuro. Sin scroll horizontal y dentro del margen de 16 px.
+  - Flujos Vender, Lavado, Mantenimiento y Recibir y la navegación Inicio/Productos/Inventario/Más/Ventas/Avisar funcionan igual que antes. Logs de API y web sin errores.
+  - Entorno: API compilada con `DATABASE_URL` sobrescrito hacia `brigith_test` y secretos JWT desechables; Supabase no se tocó. Para arrancar el Postgres embebido hubo que recrear directorios vacíos de `pgdata` (`pg_notify` y otros) que faltaban; los datos no se tocaron. Quedan datos desechables del negocio QA en `brigith_test`: 2 ventas, 2 lavados, 2 mantenimientos sin vehículo y 2 recepciones.
+- **Pendiente (severidad baja):**
+  - Registro del service worker: el navegador embebido no lo permite ("unknown error fetching the script", con `/sw.js` en 200); probarlo en un teléfono real.
+  - "Ver ficha", "Ver ficha del producto" y el enlace al cliente en Vehículo se ven como enlace pero miden 17 px de alto.
+  - Barras del gráfico de Inicio: 9–12 px de ancho como objetivo táctil (diseño de R7).
+  - Errores preexistentes de CRLF (`prettier/prettier`) en la API y en `README.md`, `docs/01-VISION.md` y `apps/web/public/sw.js`; no los introdujo esta ronda.
+- **Bloqueos:** ninguno conocido.
+- **Próximo paso:** push de `0951c52` y del commit de este `STATUS.md`, con autorización.
+
+## Estado al 2026-09-28: R7 cerrado (B-167 y B-168)
+
+Lo pendiente de esta sección (commit de la corrección de pluralización y push) quedó resuelto en `99792c2`, ya publicado en `origin/main`; ver la sección anterior.
 
 - **R7 cerrado.** **B-167** (UI de R7) implementado y con commit; **B-168** (validación final) hecho, con pruebas automatizadas y validación funcional en navegador a 390 px.
 - **Commits locales, sin push** (`origin/main` sigue en `c697b96`; 13 commits por delante):
