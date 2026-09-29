@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { APP_GUARD, ModuleRef } from '@nestjs/core';
+import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from '../auth/auth.module';
 import type { Env } from '../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,8 +12,8 @@ import { RateLimitStore } from './rate-limit.store';
 /**
  * Registra el rate limit de DEC-86 como guard global. `RATE_LIMIT_STORE`
  * elige dónde viven los contadores: `memory` (una instancia) o `database`
- * (varias instancias; producción en Vercel). `PrismaService` se resuelve solo
- * en modo `database`, así el módulo sigue funcionando sin base en pruebas.
+ * (varias instancias; producción en Vercel). `PrismaService` es opcional, así
+ * el módulo sigue funcionando sin base en pruebas (y entonces usa memoria).
  */
 @Module({
   imports: [AuthModule],
@@ -21,14 +21,14 @@ import { RateLimitStore } from './rate-limit.store';
     FixedWindowStore,
     {
       provide: RateLimitStore,
-      inject: [ConfigService, FixedWindowStore, ModuleRef],
+      inject: [ConfigService, FixedWindowStore, { token: PrismaService, optional: true }],
       useFactory: (
         config: ConfigService<Env, true>,
         memory: FixedWindowStore,
-        moduleRef: ModuleRef,
+        prisma: PrismaService | undefined,
       ): RateLimitStore =>
-        config.get('RATE_LIMIT_STORE', { infer: true }) === 'database'
-          ? new PostgresFixedWindowStore(moduleRef.get(PrismaService, { strict: false }), memory)
+        config.get('RATE_LIMIT_STORE', { infer: true }) === 'database' && prisma
+          ? new PostgresFixedWindowStore(prisma, memory)
           : memory,
     },
     { provide: APP_GUARD, useClass: RateLimitGuard },
