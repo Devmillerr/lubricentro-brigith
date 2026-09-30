@@ -4,14 +4,16 @@ import {
   Bell,
   ChevronRight,
   CircleAlert,
+  CircleCheck,
+  ClipboardList,
   Droplets,
   PackageOpen,
   ShoppingCart,
   Wrench,
+  type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { buttonVariants } from '@/components/ui/button';
 import { cardVariants } from '@/components/ui/card';
 import {
   formatAmount,
@@ -21,9 +23,11 @@ import {
   toCents,
   type Dashboard,
 } from '@/lib/dashboard/format';
-import { formatQuantity } from '@/lib/inventory/format';
 import { cn } from '@/lib/utils';
 import { Swatch } from './revenue-chart';
+
+/** Productos visibles sin desplegar "Ver todos". */
+const TOP_VISIBLE = 3;
 
 /** Tarjeta del Inicio: la `Card` del sistema como `<section>` con título. */
 export function Panel({
@@ -51,77 +55,153 @@ export function Panel({
 }
 
 /**
- * Ingresos del período: el total grande, cuántas ventas y la división
- * Efectivo / Yape ("¿cuánto debería haber en caja y cuánto en Yape?").
+ * Sección plegable del Inicio (`<details>` nativo: accesible y sin estado).
+ * Cerrada por defecto para que la pantalla no se sienta cargada; el detalle
+ * sigue ahí, a un toque.
  */
-export function IncomeSummary({ totals }: { totals: Dashboard['totals'] }) {
-  const cash = toCents(totals.cash);
-  const yape = toCents(totals.yape);
-  const total = cash + yape;
-  return (
-    <Panel>
-      <div className="flex flex-col gap-0.5">
-        <span className="text-sm font-medium text-[var(--muted-foreground)]">Ingresos totales</span>
-        <span className="font-display text-5xl leading-none font-bold tracking-tight">
-          {formatAmount(totals.total)}
-        </span>
-        <span className="text-sm text-[var(--muted-foreground)]">
-          {plural(totals.salesCount, 'venta cobrada', 'ventas cobradas')}
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <div
-          className="flex h-3 w-full gap-[2px] overflow-hidden rounded-full bg-[var(--chart-track)]"
-          role="img"
-          aria-label={`Efectivo ${formatCentsMoney(cash)}, Yape ${formatCentsMoney(yape)}`}
-        >
-          {total > 0 && cash > 0 && (
-            <span style={{ width: `${(cash / total) * 100}%`, background: 'var(--series-cash)' }} />
-          )}
-          {total > 0 && yape > 0 && (
-            <span style={{ width: `${(yape / total) * 100}%`, background: 'var(--series-yape)' }} />
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <PaymentFigure color="var(--series-cash)" label="Efectivo" cents={cash} total={total} />
-          <PaymentFigure color="var(--series-yape)" label="Yape" cents={yape} total={total} />
-        </div>
-      </div>
-    </Panel>
-  );
-}
-
-function PaymentFigure({
-  color,
-  label,
-  cents,
-  total,
+export function Collapsible({
+  summary,
+  hint,
+  children,
 }: {
-  color: string;
-  label: string;
-  cents: number;
-  total: number;
+  summary: string;
+  hint?: ReactNode;
+  children: ReactNode;
 }) {
-  const share = total > 0 ? Math.round((cents / total) * 100) : 0;
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)]">
-        <span
+    <details className="group rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+      <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 px-4 py-2 [&::-webkit-details-marker]:hidden">
+        <span className="flex-1 text-sm font-semibold">{summary}</span>
+        {hint && <span className="text-sm text-[var(--muted-foreground)]">{hint}</span>}
+        <ChevronRight
+          className="size-4 shrink-0 text-[var(--muted-foreground)] transition-transform group-open:rotate-90"
           aria-hidden
-          className="inline-block size-2.5 rounded-[3px]"
-          style={{ background: color }}
         />
-        {label}
-        {total > 0 && <span className="tabular-nums">· {share}%</span>}
-      </span>
-      <span className="text-lg font-semibold tabular-nums">{formatCentsMoney(cents)}</span>
-    </div>
+      </summary>
+      <div className="flex flex-col gap-3 border-t border-[var(--border)] px-4 py-3">
+        {children}
+      </div>
+    </details>
   );
 }
 
-/** Mostrador · Lavados · Mantenimiento, cada uno con su monto y su color de la serie. */
-export function SourceBreakdown({
+type AlertTone = 'warning' | 'danger' | 'neutral';
+
+const ALERT_TONES: Record<AlertTone, string> = {
+  warning: 'border-[var(--accent)]/60 bg-[var(--accent-soft)] text-[var(--accent-strong)]',
+  danger: 'border-[var(--danger)]/50 bg-[var(--danger-soft)] text-[var(--danger)]',
+  neutral: 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted-foreground)]',
+};
+
+function AlertChip({
+  href,
+  icon: Icon,
+  tone,
+  children,
+}: {
+  href: string;
+  icon: LucideIcon;
+  tone: AlertTone;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        'inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold transition-opacity hover:opacity-85',
+        ALERT_TONES[tone],
+      )}
+    >
+      <Icon className="size-4 shrink-0" aria-hidden />
+      {children}
+    </Link>
+  );
+}
+
+/**
+ * Lo que necesita atención, en píldoras que llevan a su pantalla: recordatorios
+ * por avisar (Avisar) y stock (Inventario). No dependen del período.
+ */
+export function AlertChips({
+  reminders,
+  stock,
+}: {
+  reminders: Dashboard['reminders'];
+  stock: Dashboard['stock'];
+}) {
+  const clean =
+    reminders.dueNow === 0 &&
+    stock.negative === 0 &&
+    stock.outOfStock === 0 &&
+    stock.notCounted === 0;
+
+  return (
+    <nav aria-label="Atención" className="flex flex-wrap gap-2">
+      {reminders.dueNow > 0 && (
+        <AlertChip href="/avisar" icon={Bell} tone="warning">
+          {reminders.dueNow} por avisar
+        </AlertChip>
+      )}
+      {stock.negative > 0 && (
+        <AlertChip href="/inventario" icon={CircleAlert} tone="danger">
+          {plural(stock.negative, 'en negativo', 'en negativo')}
+        </AlertChip>
+      )}
+      {stock.outOfStock > 0 && (
+        <AlertChip href="/inventario" icon={PackageOpen} tone="warning">
+          {plural(stock.outOfStock, 'agotado', 'agotados')}
+        </AlertChip>
+      )}
+      {stock.notCounted > 0 && (
+        <AlertChip href="/inventario" icon={ClipboardList} tone="neutral">
+          {stock.notCounted} sin conteo
+        </AlertChip>
+      )}
+      {clean && (
+        <span className="inline-flex min-h-11 items-center gap-1.5 text-sm text-[var(--muted-foreground)]">
+          <CircleCheck className="size-4 text-[var(--success)]" aria-hidden />
+          Sin avisos ni stock por revisar
+        </span>
+      )}
+    </nav>
+  );
+}
+
+function PaymentChip({ color, label, cents }: { color: string; label: string; cents: number }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--muted)] px-3 py-1.5 text-sm">
+      <span
+        aria-hidden
+        className="inline-block size-2.5 rounded-full"
+        style={{ background: color }}
+      />
+      <span className="font-semibold tabular-nums">{formatCentsMoney(cents)}</span>
+      <span className="text-[var(--muted-foreground)]">{label}</span>
+    </span>
+  );
+}
+
+/** Ingresos del período: el total grande y, debajo, cuánto fue en efectivo y cuánto por Yape. */
+export function IncomeSummary({ totals }: { totals: Dashboard['totals'] }) {
+  return (
+    <section className={cn(cardVariants(), 'gap-2')} aria-label="Ingresos totales">
+      <div className="flex items-baseline justify-between gap-3 text-sm text-[var(--muted-foreground)]">
+        <span className="font-medium">Ingresos totales</span>
+        <span>{plural(totals.salesCount, 'venta cobrada', 'ventas cobradas')}</span>
+      </div>
+      <span className="font-display text-5xl leading-none font-bold tracking-tight">
+        {formatAmount(totals.total)}
+      </span>
+      <div className="flex flex-wrap gap-2 pt-1">
+        <PaymentChip color="var(--series-cash)" label="Efectivo" cents={toCents(totals.cash)} />
+        <PaymentChip color="var(--series-yape)" label="Yape" cents={toCents(totals.yape)} />
+      </div>
+    </section>
+  );
+}
+
+/** Mostrador · Lavados · Mantenimiento, plegado: el detalle se abre a pedido. */
+export function SourceDetails({
   totals,
   washes,
   maintenances,
@@ -131,7 +211,7 @@ export function SourceBreakdown({
   maintenances: Dashboard['maintenances'];
 }) {
   return (
-    <Panel title="Por fuente">
+    <Collapsible summary="Detalle por fuente">
       <ul className="flex flex-col divide-y divide-[var(--border)]">
         <SourceRow
           source="counter"
@@ -172,7 +252,7 @@ export function SourceBreakdown({
         />
       </ul>
       <MaintenancesCard maintenances={maintenances} />
-    </Panel>
+    </Collapsible>
   );
 }
 
@@ -185,7 +265,7 @@ function SourceRow({
   children,
 }: {
   source: 'counter' | 'wash' | 'maintenance';
-  icon: typeof ShoppingCart;
+  icon: LucideIcon;
   label: string;
   amount: string;
   detail?: string;
@@ -204,7 +284,9 @@ function SourceRow({
             )}
           </span>
         </span>
-        <span className="shrink-0 text-lg font-semibold tabular-nums">{formatAmount(amount)}</span>
+        <span className="shrink-0 text-base font-semibold tabular-nums">
+          {formatAmount(amount)}
+        </span>
       </div>
       {children}
     </li>
@@ -238,13 +320,17 @@ function MaintenancesCard({ maintenances }: { maintenances: Dashboard['maintenan
 }
 
 /**
- * Más vendidos (hasta 10): lo vendido en mostrador y, aparte y con otra
- * etiqueta, lo usado en mantenimientos, que es inventario y no suma a las
- * ventas (BR-D5).
+ * Más vendidos: los 3 primeros en filas de una línea y el resto (hasta 10) al
+ * desplegar "Ver todos". Lo usado en mantenimientos es consumo de inventario y
+ * no suma a las ventas (BR-D5).
  */
 export function TopProducts({ items }: { items: Dashboard['topProducts'] }) {
+  const visible = items.slice(0, TOP_VISIBLE);
+  const rest = items.slice(TOP_VISIBLE);
+  const anyUsed = items.some((item) => Number(item.maintenanceUnits) > 0);
+
   return (
-    <Panel title="Productos más vendidos">
+    <Panel title="Productos más vendidos" className="gap-2">
       {items.length === 0 ? (
         <p className="text-sm text-[var(--muted-foreground)]">
           Sin productos vendidos ni usados en este período.
@@ -252,214 +338,82 @@ export function TopProducts({ items }: { items: Dashboard['topProducts'] }) {
       ) : (
         <>
           <ol className="flex flex-col divide-y divide-[var(--border)]">
-            {items.map((item, index) => {
-              const sold = Number(item.soldUnits);
-              const used = Number(item.maintenanceUnits);
-              return (
-                <li
-                  key={item.productId}
-                  className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0"
-                >
-                  <span className="w-5 shrink-0 pt-0.5 text-right text-sm font-medium text-[var(--muted-foreground)] tabular-nums">
-                    {index + 1}
-                  </span>
-                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <Link
-                      href={`/productos/${item.productId}`}
-                      className="font-medium break-words underline-offset-4 hover:underline"
-                    >
-                      {item.name}
-                    </Link>
-                    <span className="flex flex-wrap gap-x-3 text-sm">
-                      {sold > 0 && (
-                        <span>
-                          <span className="text-[var(--muted-foreground)]">Vendido </span>
-                          <span className="font-medium tabular-nums">
-                            {formatUnits(item.soldUnits)}
-                          </span>
-                          <span className="text-[var(--muted-foreground)] tabular-nums">
-                            {' '}
-                            · {formatAmount(item.soldAmount)}
-                          </span>
-                        </span>
-                      )}
-                      {used > 0 && (
-                        <span>
-                          <span className="text-[var(--muted-foreground)]">
-                            Usado en mantenimientos{' '}
-                          </span>
-                          <span className="font-medium tabular-nums">
-                            {formatUnits(item.maintenanceUnits)}
-                          </span>
-                        </span>
-                      )}
-                    </span>
-                  </span>
-                </li>
-              );
-            })}
+            {visible.map((item, index) => (
+              <ProductRow key={item.productId} item={item} rank={index + 1} />
+            ))}
           </ol>
-          <p className="text-xs text-[var(--muted-foreground)]">
-            Lo usado en mantenimientos es consumo de inventario: no suma a las ventas ni a los
-            ingresos.
-          </p>
+          {rest.length > 0 && (
+            <details className="group">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] [&::-webkit-details-marker]:hidden">
+                <ChevronRight
+                  className="size-4 transition-transform group-open:rotate-90"
+                  aria-hidden
+                />
+                <span className="group-open:hidden">Ver todos ({items.length})</span>
+                <span className="hidden group-open:inline">Ver menos</span>
+              </summary>
+              <ol start={TOP_VISIBLE + 1} className="flex flex-col divide-y divide-[var(--border)]">
+                {rest.map((item, index) => (
+                  <ProductRow key={item.productId} item={item} rank={TOP_VISIBLE + index + 1} />
+                ))}
+              </ol>
+            </details>
+          )}
+          {anyUsed && (
+            <p className="text-xs text-[var(--muted-foreground)]">
+              “En mant.” es consumo de inventario en mantenimientos: no suma a las ventas.
+            </p>
+          )}
         </>
       )}
     </Panel>
   );
 }
 
-/** Stock que requiere atención (lista, no gráfico): negativos, agotados y sin conteo. */
-export function StockAttention({ stock }: { stock: Dashboard['stock'] }) {
-  const clean = stock.negative === 0 && stock.outOfStock === 0;
-  return (
-    <Panel
-      title="Stock que requiere atención"
-      action={
-        <Link
-          href="/inventario"
-          className="inline-flex min-h-11 items-center text-sm font-medium underline-offset-4 hover:underline"
-        >
-          Inventario
-        </Link>
-      }
-    >
-      <div className="flex flex-wrap gap-2 text-sm">
-        <Count
-          value={stock.negative}
-          label={stock.negative === 1 ? 'negativo' : 'negativos'}
-          danger={stock.negative > 0}
-        />
-        <Count value={stock.outOfStock} label={stock.outOfStock === 1 ? 'agotado' : 'agotados'} />
-        <Count value={stock.notCounted} label="sin conteo" />
-      </div>
-      {clean ? (
-        <p className="text-sm text-[var(--muted-foreground)]">
-          Ningún producto contado está agotado ni en negativo.
-        </p>
-      ) : (
-        <ul className="-mx-1 flex flex-col divide-y divide-[var(--border)]">
-          {stock.items.map((item) => (
-            <li key={item.productId}>
-              <Link
-                href={`/inventario/${item.productId}`}
-                className="flex min-h-12 items-center gap-3 rounded-md px-1 py-2 hover:bg-[var(--muted)]"
-              >
-                {item.balance < 0 ? (
-                  <CircleAlert
-                    className="size-4 shrink-0 text-[var(--danger)]"
-                    aria-label="Negativo"
-                  />
-                ) : (
-                  <PackageOpen
-                    className="size-4 shrink-0 text-[var(--muted-foreground)]"
-                    aria-label="Agotado"
-                  />
-                )}
-                <span className="min-w-0 flex-1 break-words">{item.name}</span>
-                <span
-                  className={cn(
-                    'shrink-0 font-semibold tabular-nums',
-                    item.balance < 0 && 'text-[var(--danger)]',
-                  )}
-                >
-                  {formatQuantity(item.balance)}
-                  <span className="ml-1 text-xs font-normal text-[var(--muted-foreground)]">
-                    {item.unit}
-                  </span>
-                </span>
-                <ChevronRight
-                  className="size-4 shrink-0 text-[var(--muted-foreground)]"
-                  aria-hidden
-                />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Panel>
-  );
-}
+function ProductRow({ item, rank }: { item: Dashboard['topProducts'][number]; rank: number }) {
+  const sold = Number(item.soldUnits);
+  const used = Number(item.maintenanceUnits);
+  const parts = [
+    sold > 0 ? `${formatUnits(item.soldUnits)} · ${formatAmount(item.soldAmount)}` : null,
+    used > 0 ? `${formatUnits(item.maintenanceUnits)} en mant.` : null,
+  ].filter(Boolean);
 
-function Count({
-  value,
-  label,
-  danger = false,
-}: {
-  value: number;
-  label: string;
-  danger?: boolean;
-}) {
   return (
-    <span
-      className={cn(
-        'inline-flex items-baseline gap-1 rounded-full border px-3 py-1',
-        danger
-          ? 'border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)]'
-          : 'border-[var(--border)] bg-[var(--surface)]',
-      )}
-    >
-      <span className="font-semibold tabular-nums">{value}</span>
-      <span className={danger ? '' : 'text-[var(--muted-foreground)]'}>{label}</span>
-    </span>
-  );
-}
-
-/** Recordatorios por avisar ahora (no depende del período), con acceso a Avisar. */
-export function RemindersDue({ dueNow }: { dueNow: number }) {
-  return (
-    <Link
-      href="/avisar"
-      className={cn(
-        'flex min-h-16 items-center gap-3 rounded-lg border p-4 transition-colors',
-        // Con recordatorios pendientes, amarillo aceite: atención, no error.
-        dueNow > 0
-          ? 'border-[var(--accent)] bg-[var(--accent-soft)] hover:brightness-[0.98]'
-          : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--muted)]',
-      )}
-    >
-      <span
-        className={cn(
-          'flex size-10 shrink-0 items-center justify-center rounded-full',
-          dueNow > 0 ? 'bg-[var(--accent)] text-[var(--accent-foreground)]' : 'bg-[var(--muted)]',
-        )}
+    <li>
+      <Link
+        href={`/productos/${item.productId}`}
+        className="flex min-h-11 items-center gap-3 py-1.5 hover:opacity-80"
       >
-        <Bell className="size-5" aria-hidden />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="font-semibold">
-          {dueNow === 0
-            ? 'Nadie por avisar ahora'
-            : plural(dueNow, 'recordatorio', 'recordatorios') + ' por avisar'}
+        <span className="w-4 shrink-0 text-right text-sm font-medium text-[var(--muted-foreground)] tabular-nums">
+          {rank}
         </span>
-        <span className="text-sm text-[var(--muted-foreground)]">
-          {dueNow === 0 ? 'Revisa los próximos en Avisar.' : 'Toca para avisar por WhatsApp.'}
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.name}</span>
+        <span className="shrink-0 text-sm text-[var(--muted-foreground)] tabular-nums">
+          {parts.join(' · ')}
         </span>
-      </span>
-      <ChevronRight className="size-5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
-    </Link>
+      </Link>
+    </li>
   );
 }
 
-/** Esqueleto de tarjetas mientras llega el primer dato (07-UI-UX.md §3.1). */
+/** Esqueleto mientras llega el primer dato (07-UI-UX.md §3.1). */
 export function DashboardSkeleton() {
   return (
     <div role="status" aria-label="Cargando el resumen" className="flex flex-col gap-3">
-      <div className="h-40 rounded-lg bg-[var(--muted)] motion-safe:animate-pulse" />
-      <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-3">
-        {[0, 1, 2].map((key) => (
-          <div key={key} className="h-16 rounded-lg bg-[var(--muted)] motion-safe:animate-pulse" />
-        ))}
-      </div>
-      <div className="h-56 rounded-lg bg-[var(--muted)] motion-safe:animate-pulse" />
+      <div className="h-36 animate-pulse rounded-lg bg-[var(--muted)]" />
+      <div className="h-12 animate-pulse rounded-lg bg-[var(--muted)]" />
+      <div className="h-12 animate-pulse rounded-lg bg-[var(--muted)]" />
+      <div className="h-40 animate-pulse rounded-lg bg-[var(--muted)]" />
     </div>
   );
 }
 
-export function ViewAllLink({ href, children }: { href: string; children: ReactNode }) {
+/** Píldoras de atención mientras llega el primer dato. */
+export function AlertChipsSkeleton() {
   return (
-    <Link href={href} className={buttonVariants({ variant: 'outline', className: 'w-full' })}>
-      {children}
-    </Link>
+    <div aria-hidden className="flex gap-2">
+      <div className="h-11 w-28 animate-pulse rounded-full bg-[var(--muted)]" />
+      <div className="h-11 w-24 animate-pulse rounded-full bg-[var(--muted)]" />
+    </div>
   );
 }

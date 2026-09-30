@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  ChartColumn,
   Droplets,
   LoaderCircle,
   PackagePlus,
@@ -14,16 +13,17 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { FormError } from '@/components/customers/form-error';
 import {
+  AlertChips,
+  AlertChipsSkeleton,
+  Collapsible,
   DashboardSkeleton,
   IncomeSummary,
   Panel,
-  RemindersDue,
-  SourceBreakdown,
-  StockAttention,
+  SourceDetails,
   TopProducts,
 } from '@/components/dashboard/dashboard-sections';
 import { RevenueChart } from '@/components/dashboard/revenue-chart';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { DocumentTitle } from '@/components/ui/document-title';
 import { ErrorState } from '@/components/ui/states';
 import { PlateSearch } from '@/components/vehicles/plate-search';
@@ -69,21 +69,25 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-5">
       <DocumentTitle title="Inicio" />
-      <h1 className="text-[1.75rem] leading-tight font-bold">Hola, {user.name}</h1>
-
-      <nav aria-label="Acciones principales" className="grid grid-cols-2 gap-3">
-        <ActionTile href="/ventas/nueva" icon={ShoppingCart} label="Vender" />
-        <ActionTile href="/lavado" icon={Droplets} label="Lavado" />
-        <ActionTile
-          href="/mantenimientos/nuevo"
-          icon={Wrench}
-          label="Mantenimiento"
-          hint="Con placa: búscala abajo"
-        />
-        <ActionTile href="/inventario/recepciones/nueva" icon={PackagePlus} label="Recibir" />
-      </nav>
+      {/* Orden: qué necesita atención → qué puedo hacer → qué está pasando. */}
+      <h1 className="-mb-2 text-sm font-medium text-[var(--muted-foreground)]">
+        Hola, {user.name}
+      </h1>
 
       <PlateSearch />
+
+      {data ? (
+        <AlertChips reminders={data.reminders} stock={data.stock} />
+      ) : (
+        dashboard.status === 'loading' && <AlertChipsSkeleton />
+      )}
+
+      <nav aria-label="Acciones principales" className="grid grid-cols-4 gap-2">
+        <ActionTile href="/ventas/nueva" icon={ShoppingCart} label="Vender" />
+        <ActionTile href="/lavado" icon={Droplets} label="Lavado" />
+        <ActionTile href="/mantenimientos/nuevo" icon={Wrench} label="Mantenimiento" />
+        <ActionTile href="/inventario/recepciones/nueva" icon={PackagePlus} label="Recibir" />
+      </nav>
 
       <section aria-labelledby="period-title" className="flex flex-col gap-3">
         <div className="flex flex-col gap-2">
@@ -119,17 +123,6 @@ export default function DashboardPage() {
         )}
         {data && <DashboardBody data={data} />}
       </section>
-
-      <Link
-        href="/resumen"
-        className={buttonVariants({
-          variant: 'ghost',
-          className: 'gap-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]',
-        })}
-      >
-        <ChartColumn className="size-4" aria-hidden />
-        Resumen del piloto
-      </Link>
     </div>
   );
 }
@@ -150,12 +143,15 @@ function DashboardBody({ data }: { data: Dashboard }) {
       ) : (
         <>
           <IncomeSummary totals={data.totals} />
-          <SourceBreakdown
+          <SourceDetails
             totals={data.totals}
             washes={data.washes}
             maintenances={data.maintenances}
           />
-          <Panel title={data.period.kind === 'today' ? 'Ingresos por hora' : 'Ingresos por día'}>
+          <Collapsible
+            summary="Ver evolución"
+            hint={data.period.kind === 'today' ? 'por hora' : 'por día'}
+          >
             <RevenueChart
               key={`${data.period.kind}:${data.period.from}`}
               series={data.series}
@@ -163,38 +159,32 @@ function DashboardBody({ data }: { data: Dashboard }) {
               timeZone={data.period.timezone}
               periodTo={data.period.to}
             />
-          </Panel>
+          </Collapsible>
           <TopProducts items={data.topProducts} />
         </>
       )}
-      <RemindersDue dueNow={data.reminders.dueNow} />
-      <StockAttention stock={data.stock} />
     </div>
   );
 }
 
+/** Acción rápida: superficie del tema con borde sutil; el rojo Brigith solo en el ícono. */
 function ActionTile({
   href,
   icon: Icon,
   label,
-  hint,
 }: {
   href: string;
   icon: LucideIcon;
   label: string;
-  hint?: string;
 }) {
   return (
     <Link
       href={href}
-      className="flex min-h-24 flex-col justify-between gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-[var(--primary-foreground)] transition-[opacity,transform] hover:opacity-90 active:scale-[0.98] active:opacity-80"
+      className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-0.5 text-[var(--foreground)] transition-[background-color,transform] hover:bg-[var(--muted)] active:scale-[0.97]"
     >
-      <span className="flex size-10 items-center justify-center rounded-md bg-[var(--primary-foreground)]/12">
-        <Icon className="size-6" aria-hidden />
-      </span>
-      <span className="flex flex-col">
-        <span className="font-display text-xl leading-tight font-bold">{label}</span>
-        {hint && <span className="text-xs leading-tight opacity-75">{hint}</span>}
+      <Icon className="size-6 shrink-0 text-[var(--brand)]" aria-hidden />
+      <span className="w-full truncate text-center text-xs leading-tight font-semibold tracking-tight">
+        {label}
       </span>
     </Link>
   );
