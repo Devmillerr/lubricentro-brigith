@@ -340,6 +340,7 @@ describeIfTestDb('POST /api/v1/inventory/receipts (e2e)', () => {
           'lineCount',
           'note',
           'occurredAt',
+          'preview',
           'totalCost',
         ].sort(),
       );

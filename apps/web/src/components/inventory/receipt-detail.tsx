@@ -3,8 +3,10 @@ import Link from 'next/link';
 import { present } from '@/lib/customers/format';
 import { formatQuantity } from '@/lib/inventory/format';
 import {
+  lineUnitCost,
   productCountLabel,
   receiptDateFormat,
+  unitCostLabel,
   type InventoryReceipt,
 } from '@/lib/inventory/receipts';
 import type { Product } from '@/lib/products/format';
@@ -13,7 +15,7 @@ import { formatMoney } from '@/lib/sales/format';
 /**
  * Cabecera y líneas de una recepción (07-UI-UX.md §3.6, "Historial de
  * recepciones"): producto, cantidad recibida, monto pagado si se registró
- * (DEC-90) y saldo resultante. Solo lectura: los movimientos no se editan
+ * (DEC-90), su costo unitario calculado (DEC-94) y saldo resultante. Solo lectura: los movimientos no se editan
  * (BR-P3). Las recepciones anteriores no tienen monto: no se inventa.
  */
 export function ReceiptDetail({
@@ -68,6 +70,8 @@ export function ReceiptDetail({
             const details = product
               ? [present(product.brand), present(product.code)].filter(Boolean).join(' · ')
               : '';
+            // Calculado (DEC-94): monto ÷ cantidad; el monto guardado no cambia.
+            const unitCost = lineUnitCost(line.purchaseCost, line.quantityDelta);
             return (
               <li key={line.id}>
                 <Link
@@ -98,8 +102,15 @@ export function ReceiptDetail({
                         </span>
                       )}
                     </span>
-                    {line.purchaseCost !== null && (
+                    {line.purchaseCost !== null ? (
                       <span className="text-sm">{formatMoney(line.purchaseCost)}</span>
+                    ) : (
+                      <span className="text-xs text-[var(--muted-foreground)]">Sin monto</span>
+                    )}
+                    {product && unitCost !== null && (
+                      <span className="text-xs text-[var(--muted-foreground)]">
+                        {unitCostLabel(unitCost, product.unit)}
+                      </span>
                     )}
                   </span>
                 </Link>

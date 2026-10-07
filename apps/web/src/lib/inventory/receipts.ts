@@ -3,10 +3,31 @@ import { callApi, type ApiResult } from '@/lib/api/request';
 import { findProduct } from '@/lib/products/product-lookup';
 import type { Product } from '@/lib/products/format';
 import { parseQuantity, QUANTITY_DECIMALS, type ProductWithStock } from './format';
+import { formatMoney } from '@/lib/sales/format';
 import { dateTimeFormat } from '@/lib/utils';
 
 export type InventoryReceipt = Schemas['InventoryReceiptResponse'];
 export type InventoryReceiptSummary = Schemas['InventoryReceiptSummaryResponse'];
+export type ReceiptsMonthSummary = Schemas['ReceiptsMonthSummaryResponse'];
+export type ReceiptProductSummary = Schemas['ReceiptProductSummaryResponse'];
+
+/**
+ * Costo por unidad de stock de una línea, calculado (DEC-94): monto pagado ÷
+ * cantidad recibida, a 2 decimales. Solo informa: el monto guardado no
+ * cambia. Sin monto, o sin cantidad, no hay costo unitario (`null`).
+ */
+export function lineUnitCost(purchaseCost: string | null, quantity: string): number | null {
+  if (purchaseCost === null) return null;
+  const cost = Number(purchaseCost);
+  const amount = Number(quantity);
+  if (!Number.isFinite(cost) || !Number.isFinite(amount) || amount <= 0) return null;
+  return Math.round((cost * 100) / amount) / 100;
+}
+
+/** "S/ 5.75 por litro": el costo unitario en la unidad de stock del producto. */
+export function unitCostLabel(unitCost: number | string, unit: string): string {
+  return `${formatMoney(unitCost)} por ${unit}`;
+}
 
 /** Límites del contrato de `POST /inventory/receipts` (06-API.md §2, cambios de R3). */
 export const MAX_RECEIPT_LINES = 100;

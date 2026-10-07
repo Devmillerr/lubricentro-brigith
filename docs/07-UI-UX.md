@@ -118,6 +118,14 @@ La UI forma parte de R3 (DEC-52). **Ingreso** y **Ajuste** cambian así; **Conta
 - **Stock que requiere atención**, en Inventario: agotados y negativos (solo productos con conteo) y cuántos productos siguen sin conteo inicial, con acceso a Contar (BR-P19). Es una lista, no un gráfico, y no hay stock mínimo.
 - Los errores se validan en el formulario antes de enviar (líneas vacías, cantidades ≤ 0, productos repetidos), para no mostrar los mensajes de validación de la API, que hoy están en inglés.
 
+#### Cambios del 2026-10-07 (DEC-94): compras por mes
+
+- **Recepciones y compras** se lee por mes. La tarjeta de arriba dice "Total pagado registrado" del mes elegido y, si hay recepciones sin monto, "N recepciones sin monto — no incluidas en el total".
+- **Por producto:** lo comprado de cada producto en el mes: total pagado con una barra de su parte del total y el porcentaje en texto, cantidad recibida en la unidad del producto, recepciones y costo unitario calculado ("S/ 5.75 por litro"). Lo que no tiene monto aparece como "Sin monto", sin barra ni costo.
+- **Recepciones de <mes>:** la lista muestra solo las recepciones del mes elegido; cada fila dice qué llegó (hasta 3 productos con su cantidad y "y N productos más") y el total. "Ver todo el historial" muestra todas las recepciones sin la tarjeta del mes; "Ver por mes" vuelve al mes actual.
+- **Detalle de una recepción:** cada línea con monto muestra también su costo unitario calculado; las líneas sin monto dicen "Sin monto".
+- Recibir y Contar no cambian: "+1 Balde (20 L)" sigue sumando 20 L y en Contar la cantidad va en la unidad del producto.
+
 #### Cambios del 2026-10-06 (DEC-90 a DEC-92)
 
 - **Recepciones y compras** (la misma pantalla de Recepciones): arriba, "Comprado en <mes>" con flechas de mes (`GET /inventory/receipts/summary`); cada recepción del historial muestra su total pagado o "Sin monto". Se llega desde Inventario (botón **Compras**, con texto también en móvil) y desde **Más → Recepciones y compras**. En **Recibir**, cada línea tiene "Total pagado S/" opcional y el formulario muestra el total; si el producto tiene una forma mayor a 1 (p. ej. Balde de 5 galones), un atajo "+1 Balde (5 galón)" suma su capacidad a la cantidad.

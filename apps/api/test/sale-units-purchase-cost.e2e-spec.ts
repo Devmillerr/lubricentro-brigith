@@ -202,6 +202,61 @@ describeIfTestDb('Unidades, formas de venta y monto de recepciones (e2e)', () =>
       .expect(400);
   });
 
+  it('GET /inventory/receipts?month= filtra el historial y trae la vista previa; summary trae los productos (DEC-94)', async () => {
+    const created = await auth(request(server()).post('/api/v1/products'))
+      .send({ name: `Aceite granel ${randomUUID()}`, unit: 'litro' })
+      .expect(201);
+    await auth(request(server()).post('/api/v1/inventory/receipts'))
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        occurredAt: '2026-07-10T15:00:00.000Z',
+        lines: [{ productId: created.body.id, quantity: 20, purchaseCost: 115 }],
+      })
+      .expect(201);
+    await auth(request(server()).post('/api/v1/inventory/receipts'))
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        occurredAt: '2026-06-10T15:00:00.000Z',
+        lines: [{ productId: created.body.id, quantity: 1 }],
+      })
+      .expect(201);
+
+    const july = await auth(request(server()).get('/api/v1/inventory/receipts'))
+      .query({ month: '2026-07' })
+      .expect(200);
+    expect(july.body.items).toHaveLength(1);
+    expect(july.body.items[0]).toMatchObject({
+      lineCount: 1,
+      totalCost: '115',
+      preview: [
+        {
+          productId: created.body.id,
+          name: created.body.name,
+          unit: 'litro',
+          quantity: '20',
+          purchaseCost: '115.00',
+        },
+      ],
+    });
+
+    const summary = await auth(request(server()).get('/api/v1/inventory/receipts/summary'))
+      .query({ month: '2026-07' })
+      .expect(200);
+    expect(summary.body.products).toEqual([
+      expect.objectContaining({
+        productId: created.body.id,
+        unit: 'litro',
+        quantity: '20',
+        totalCost: '115.00',
+        unitCost: '5.75',
+      }),
+    ]);
+
+    await auth(request(server()).get('/api/v1/inventory/receipts'))
+      .query({ month: '2026-7' })
+      .expect(400);
+  });
+
   async function businessOfToken() {
     const me = await auth(request(server()).get('/api/v1/auth/me')).expect(200);
     return { id: (me.body.businessId ?? me.body.business?.id) as string };
