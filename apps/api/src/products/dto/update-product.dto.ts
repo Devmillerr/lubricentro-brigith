@@ -7,11 +7,13 @@ import {
   IsString,
   IsUUID,
   Max,
+  Matches,
   MaxLength,
   Min,
   ValidateIf,
 } from 'class-validator';
 import { MAX_MONEY, MAX_MONEY_MESSAGE } from '../../common/decimal-limits';
+import { UNIT_MESSAGE, UNIT_PATTERN } from '../catalog-suggestions';
 
 /** No enviado = no se toca. */
 const sent = (_: object, value: unknown) => value !== undefined;
@@ -69,6 +71,7 @@ export class UpdateProductDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(50)
+  @Matches(UNIT_PATTERN, { message: UNIT_MESSAGE })
   unit?: string;
 
   @ApiPropertyOptional({

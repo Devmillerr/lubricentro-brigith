@@ -1,12 +1,16 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { Prisma, type Product, type VehicleModel } from '@prisma/client';
-import { ProblemException } from '../common/exceptions/problem.exception';
+import { Prisma, type Product, type ProductSaleUnit, type VehicleModel } from '@prisma/client';
+import {
+  ProblemException,
+  ValidationProblemException,
+  type FieldError,
+} from '../common/exceptions/problem.exception';
 import { paginate, type Page } from '../common/pagination';
 import { toStockView, type StockView } from '../inventory/inventory.service';
 import { forBusiness } from '../prisma/business-scope';
 import { PrismaService } from '../prisma/prisma.service';
-import { CATALOG_SUGGESTIONS } from './catalog-suggestions';
+import { CATALOG_SUGGESTIONS, isValidUnit, UNIT_MESSAGE } from './catalog-suggestions';
 import type { CreateProductDto } from './dto/create-product.dto';
 import type { ListProductsQueryDto } from './dto/list-products-query.dto';
 import type { UpdateProductDto } from './dto/update-product.dto';
@@ -21,7 +25,31 @@ export interface ProductFacets {
   brands: FacetValue[];
   viscosities: FacetValue[];
   presentations: FacetValue[];
+  /** Unidades de stock en uso (sin valores inválidos como "0") y sugeridas. */
+  units: FacetValue[];
 }
+
+/** Formas de venta por producto (DEC-91). */
+export const MAX_SALE_UNITS = 20;
+
+/** Elemento de `PUT /products/:id/sale-units` (DEC-91). */
+export interface SaleUnitInput {
+  id?: string;
+  label: string;
+  factor: number;
+  salePrice?: number | null;
+}
+
+/** Producto con sus formas de venta activas, en orden (DEC-91). */
+export type ProductWithSaleUnits = Product & { saleUnits: ProductSaleUnit[] };
+
+/** Solo las formas activas, en el orden configurado. */
+const ACTIVE_SALE_UNITS = {
+  saleUnits: {
+    where: { isActive: true },
+    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+  },
+} satisfies Prisma.ProductInclude;
 
 /**
  * Primero los valores en uso (más productos primero), luego las sugerencias
@@ -65,7 +93,7 @@ export class ProductsService {
   async list(
     businessId: string,
     query: ListProductsQueryDto,
-  ): Promise<Page<Product | (Product & { stock: StockView })>> {
+  ): Promise<Page<ProductWithSaleUnits | (ProductWithSaleUnits & { stock: StockView })>> {
     const limit = query.limit ?? 20;
     // Claves de primer nivel: Prisma ya las combina con AND implícito.
     const where: Prisma.ProductWhereInput = {};
@@ -111,6 +139,7 @@ export class ProductsService {
 
     const rows = await forBusiness(this.prisma, businessId).product.findMany({
       where,
+      include: ACTIVE_SALE_UNITS,
       orderBy: { name: 'asc' },
       take: limit + 1,
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
@@ -152,16 +181,21 @@ export class ProductsService {
         products.map((product) => product.presentation),
         CATALOG_SUGGESTIONS.presentations,
       ),
+      units: buildFacet(
+        products.map((product) => (isValidUnit(product.unit) ? product.unit : null)),
+        CATALOG_SUGGESTIONS.units,
+      ),
     };
   }
 
-  async create(businessId: string, dto: CreateProductDto): Promise<Product> {
+  async create(businessId: string, dto: CreateProductDto): Promise<ProductWithSaleUnits> {
     if (dto.categoryId) {
       await this.ensureCategoryExists(businessId, dto.categoryId);
     }
 
     try {
       return await forBusiness(this.prisma, businessId).product.create({
+        include: ACTIVE_SALE_UNITS,
         data: {
           id: dto.id ?? randomUUID(),
           // forBusiness sobrescribe businessId igual; se pasa para que el tipo compile (ver auth.service.ts).
@@ -185,7 +219,11 @@ export class ProductsService {
     }
   }
 
-  async update(businessId: string, id: string, dto: UpdateProductDto): Promise<Product> {
+  async update(
+    businessId: string,
+    id: string,
+    dto: UpdateProductDto,
+  ): Promise<ProductWithSaleUnits> {
     await this.ensureExists(businessId, id);
 
     if (dto.categoryId) {
@@ -196,9 +234,105 @@ export class ProductsService {
       return await forBusiness(this.prisma, businessId).product.update({
         where: { id },
         data: dto,
+        include: ACTIVE_SALE_UNITS,
       });
     } catch (error) {
       this.translateWriteError(error);
+    }
+  }
+
+  /**
+   * Formas de venta del producto (DEC-91): la lista enviada pasa a ser la de
+   * formas activas, en ese orden. Cada elemento se aplica a la forma con su
+   * `id` (que debe ser de este producto) o, sin `id`, a la que tenga el
+   * mismo nombre aunque esté desactivada (sin distinguir mayúsculas); si no
+   * hay, se crea. Las activas que no vienen se desactivan: nunca se borran,
+   * porque las ventas pasadas las referencian (y conservan su nombre y
+   * equivalencia copiados, así que cambiarlas no altera el pasado).
+   *
+   * Para configurar formas, la unidad del producto debe ser un nombre válido:
+   * la equivalencia se expresa en esa unidad (p. ej. 0.125 galón).
+   */
+  async setSaleUnits(
+    businessId: string,
+    productId: string,
+    units: SaleUnitInput[],
+  ): Promise<ProductWithSaleUnits> {
+    const normalized = validateSaleUnits(units);
+
+    try {
+      return await forBusiness(this.prisma, businessId).$transaction(async (tx) => {
+        const product = await tx.product.findFirst({ where: { id: productId } });
+        if (!product) throw this.notFound();
+        if (normalized.length > 0 && !isValidUnit(product.unit)) {
+          throw new ProblemException({
+            status: HttpStatus.CONFLICT,
+            code: 'PRODUCT_UNIT_INVALID',
+            title: 'Primero define la unidad del producto',
+            detail: `La unidad actual («${product.unit}») no es válida. ${UNIT_MESSAGE}`,
+          });
+        }
+
+        const existing = await tx.productSaleUnit.findMany({ where: { productId } });
+        const byId = new Map(existing.map((unit) => [unit.id, unit]));
+        const byLabel = new Map(existing.map((unit) => [labelKey(unit.label), unit]));
+        const kept = new Set<string>();
+
+        for (const [index, input] of normalized.entries()) {
+          let target = input.id ? byId.get(input.id) : byLabel.get(labelKey(input.label));
+          if (input.id && !target) {
+            throw new ProblemException({
+              status: HttpStatus.NOT_FOUND,
+              code: 'SALE_UNIT_NOT_FOUND',
+              title: 'Forma de venta no encontrada',
+              errors: [
+                { field: `units.${index}.id`, message: 'No es una forma de este producto.' },
+              ],
+            });
+          }
+          // Dos elementos no pueden terminar en la misma fila.
+          if (target && kept.has(target.id)) target = undefined;
+          const data = {
+            label: input.label,
+            factor: input.factor,
+            salePrice: input.salePrice,
+            sortOrder: index,
+            isActive: true,
+          };
+          if (target) {
+            kept.add(target.id);
+            await tx.productSaleUnit.update({ where: { id: target.id }, data });
+          } else {
+            const created = await tx.productSaleUnit.create({
+              // forBusiness sobrescribe businessId igual; se pasa para que el tipo compile.
+              data: { ...data, id: randomUUID(), businessId, productId },
+            });
+            kept.add(created.id);
+          }
+        }
+
+        const toDeactivate = existing.filter((unit) => unit.isActive && !kept.has(unit.id));
+        if (toDeactivate.length > 0) {
+          await tx.productSaleUnit.updateMany({
+            where: { id: { in: toDeactivate.map((unit) => unit.id) } },
+            data: { isActive: false },
+          });
+        }
+
+        return tx.product.findFirstOrThrow({
+          where: { id: productId },
+          include: ACTIVE_SALE_UNITS,
+        });
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ProblemException({
+          status: HttpStatus.CONFLICT,
+          code: 'SALE_UNIT_ALREADY_EXISTS',
+          title: 'Ya hay otra forma de venta con ese nombre',
+        });
+      }
+      throw error;
     }
   }
 
@@ -277,4 +411,68 @@ export class ProductsService {
       title: 'Producto no encontrado',
     });
   }
+}
+
+function labelKey(label: string): string {
+  return label.trim().toLocaleLowerCase('es');
+}
+
+interface NormalizedSaleUnit {
+  id?: string;
+  label: string;
+  factor: number;
+  salePrice: number | null;
+}
+
+/**
+ * Forma de `PUT /products/:id/sale-units` (DEC-91), antes de tocar la base:
+ * hasta MAX_SALE_UNITS formas, nombre obligatorio y sin repetir (sin
+ * distinguir mayúsculas), equivalencia > 0 con hasta 3 decimales y precio
+ * opcional ≥ 0 con hasta 2. Devuelve los nombres recortados y el precio en
+ * `null` si no se envió.
+ */
+function validateSaleUnits(units: SaleUnitInput[]): NormalizedSaleUnit[] {
+  if (units.length > MAX_SALE_UNITS) {
+    throw new ValidationProblemException([
+      { field: 'units', message: `Un producto admite hasta ${MAX_SALE_UNITS} formas de venta.` },
+    ]);
+  }
+  const errors: FieldError[] = [];
+  const seen = new Set<string>();
+  const normalized = units.map((unit, index) => {
+    const label = typeof unit.label === 'string' ? unit.label.trim() : '';
+    if (!label || label.length > 50) {
+      errors.push({
+        field: `units.${index}.label`,
+        message: 'Escribe un nombre de hasta 50 caracteres.',
+      });
+    } else if (seen.has(labelKey(label))) {
+      errors.push({ field: `units.${index}.label`, message: 'Ese nombre ya está en la lista.' });
+    }
+    seen.add(labelKey(label));
+    if (!hasDecimals(unit.factor, 3) || unit.factor <= 0) {
+      errors.push({
+        field: `units.${index}.factor`,
+        message: 'La equivalencia debe ser mayor que 0, con hasta 3 decimales.',
+      });
+    }
+    const salePrice = unit.salePrice ?? null;
+    if (salePrice !== null && (!hasDecimals(salePrice, 2) || salePrice < 0)) {
+      errors.push({
+        field: `units.${index}.salePrice`,
+        message: 'El precio debe ser 0 o más, con hasta 2 decimales.',
+      });
+    }
+    return { id: unit.id, label, factor: unit.factor, salePrice };
+  });
+  if (errors.length > 0) throw new ValidationProblemException(errors);
+  return normalized;
+}
+
+function hasDecimals(value: number, maxDecimals: number): boolean {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    new Prisma.Decimal(String(value)).decimalPlaces() <= maxDecimals
+  );
 }

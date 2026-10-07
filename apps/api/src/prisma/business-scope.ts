@@ -22,6 +22,7 @@ const BUSINESS_SCOPED_MODELS = new Set([
   'ProductCompatibility',
   'InventoryMovement',
   'InventoryReceipt',
+  'ProductSaleUnit',
   'Sale',
   'SaleLine',
   'WashType',

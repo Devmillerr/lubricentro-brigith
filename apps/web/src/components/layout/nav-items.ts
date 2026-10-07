@@ -11,7 +11,8 @@ export interface NavItem {
 
 /**
  * Navegación del MVP (07-UI-UX.md §2): Inicio, Avisar, Productos y Más.
- * "Más" agrupa Clientes, Ventas (historial), Configuración, Resumen del piloto y la
+ * "Más" agrupa Clientes, Ventas (historial), Recepciones y compras (que vive en
+ * Inventario, dentro de Productos), Configuración, Resumen del piloto y la
  * cuenta (cambiar contraseña).
  * Las pestañas sin pantalla se muestran deshabilitadas en vez de llevar a una
  * ruta inexistente.

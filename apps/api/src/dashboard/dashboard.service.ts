@@ -240,6 +240,8 @@ export function buildDashboard(period: DashboardPeriod, rows: DashboardRows): Da
  *   que el cobro no suma un segundo mantenimiento.
  * - Productos (DEC-81, BR-D5), con los tipos reales del ledger:
  *   - Vendido: `quantity`/`subtotal` de las líneas `PRODUCT` de ventas
+ *     (la cantidad en la unidad de stock: `quantity × saleUnitFactor` si se
+ *     vendió con una forma de venta, DEC-91)
  *     `COUNTER` `ACTIVE`, por `Sale.occurredAt`. Es la misma fecha y cantidad del
  *     movimiento `SALE`, que el ledger solo crea para productos con
  *     `tracksStock`; la línea cuenta también lo vendido sin control de stock.
@@ -332,7 +334,7 @@ export class DashboardService {
           AND m."performedAt" < ${to}
       `),
       this.prisma.$queryRaw<ProductsSoldRow[]>(Prisma.sql`
-        SELECT COALESCE(SUM(l."quantity"), 0)::text AS "units"
+        SELECT COALESCE(SUM(l."quantity" * COALESCE(l."saleUnitFactor", 1)), 0)::text AS "units"
         FROM "sales" s
         JOIN "sale_lines" l ON l."saleId" = s."id" AND l."businessId" = s."businessId"
         WHERE s."businessId" = ${businessId}::text
@@ -344,7 +346,10 @@ export class DashboardService {
       `),
       this.prisma.$queryRaw<TopProductRow[]>(Prisma.sql`
         WITH "sold" AS (
-          SELECT l."productId", SUM(l."quantity") AS "units", SUM(l."subtotal") AS "amount"
+          SELECT
+            l."productId",
+            SUM(l."quantity" * COALESCE(l."saleUnitFactor", 1)) AS "units",
+            SUM(l."subtotal") AS "amount"
           FROM "sales" s
           JOIN "sale_lines" l ON l."saleId" = s."id" AND l."businessId" = s."businessId"
           WHERE s."businessId" = ${businessId}::text

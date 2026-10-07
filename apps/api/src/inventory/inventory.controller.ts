@@ -27,6 +27,7 @@ import { CreateAdjustmentDto } from './dto/create-adjustment.dto';
 import { CreateCountDto } from './dto/create-count.dto';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { ListMovementsQueryDto } from './dto/list-movements-query.dto';
+import { ReceiptsSummaryQueryDto } from './dto/receipts-summary-query.dto';
 import { StockQueryDto } from './dto/stock-query.dto';
 import { InventoryService } from './inventory.service';
 import {
@@ -40,6 +41,7 @@ import {
   InventoryMovementResponse,
   InventoryReceiptResponse,
   InventoryReceiptSummaryPageResponse,
+  ReceiptsMonthSummaryResponse,
   StockAlertsResponse,
   StockViewResponse,
 } from './dto/inventory.response';
@@ -108,6 +110,21 @@ export class InventoryController {
   @Get('receipts')
   listReceipts(@CurrentUser() user: AccessTokenPayload, @Query() query: PaginationQueryDto) {
     return this.inventoryService.listReceipts(user.businessId, query);
+  }
+
+  /**
+   * Total comprado en un mes (DEC-90): suma de los montos pagados registrados
+   * en las recepciones del mes, en la zona horaria del negocio. Va antes de
+   * `receipts/:id` para que "summary" no se tome como un id.
+   */
+  @ApiOkResponse({ type: ReceiptsMonthSummaryResponse })
+  @ApiErrors({ 400: VALIDATION_ERRORS })
+  @Get('receipts/summary')
+  receiptsSummary(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query() query: ReceiptsSummaryQueryDto,
+  ) {
+    return this.inventoryService.receiptsMonthSummary(user.businessId, query.month);
   }
 
   /** Recepción con sus líneas `PURCHASE_IN`, ordenadas por `productId` (R3). */

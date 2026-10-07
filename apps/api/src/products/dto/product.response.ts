@@ -38,6 +38,33 @@ export class ProductCategoryWithCountResponse extends ProductCategoryResponse {
   productCount!: number;
 }
 
+/** Forma de venta activa de un producto (DEC-91). Los `Decimal` viajan como string. */
+export class ProductSaleUnitResponse {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty({ example: 'Octavo' })
+  label!: string;
+
+  @ApiProperty({
+    type: String,
+    description:
+      'Unidades de stock del producto que descuenta una unidad vendida (Decimal(12,3) como string).',
+    example: '0.125',
+  })
+  factor!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Precio de esta forma (Decimal(10,2) como string). null = se escribe al vender.',
+  })
+  salePrice!: string | null;
+
+  @ApiProperty()
+  sortOrder!: number;
+}
+
 /** `salePrice` y `stockQuantity` son `Decimal` en Prisma y viajan como string en el JSON. */
 export class ProductResponse implements Omit<Product, 'salePrice' | 'stockQuantity'> {
   @ApiProperty()
@@ -102,6 +129,13 @@ export class ProductResponse implements Omit<Product, 'salePrice' | 'stockQuanti
 
   @ApiProperty({ type: String, format: 'date-time' })
   updatedAt!: Date;
+
+  @ApiProperty({
+    type: [ProductSaleUnitResponse],
+    description:
+      'Formas de venta activas, en orden (DEC-91). Vacía = se vende solo en su propia unidad.',
+  })
+  saleUnits!: ProductSaleUnitResponse[];
 }
 
 /** Ítem de `GET /products`: `stock` solo viene con `includeStock=true`. */
@@ -155,4 +189,10 @@ export class ProductFacetsResponse {
 
   @ApiProperty({ type: [FacetValueResponse] })
   presentations!: FacetValueResponse[];
+
+  @ApiProperty({
+    type: [FacetValueResponse],
+    description: 'Unidades de stock en uso (sin valores inválidos) y sugeridas.',
+  })
+  units!: FacetValueResponse[];
 }

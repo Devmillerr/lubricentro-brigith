@@ -5,7 +5,12 @@ import {
   type InventoryReceipt,
 } from '@prisma/client';
 import { PageOf } from '../../common/openapi/page.dto';
-import type { StockAlertProduct, StockAlerts, StockView } from '../inventory.service';
+import type {
+  ReceiptsMonthSummary,
+  StockAlertProduct,
+  StockAlerts,
+  StockView,
+} from '../inventory.service';
 
 export class StockViewResponse implements StockView {
   @ApiProperty()
@@ -20,7 +25,8 @@ export class StockViewResponse implements StockView {
   isCounted!: boolean;
 }
 
-type DecimalFields = 'quantityDelta' | 'countedQuantity' | 'previousBalance' | 'resultingBalance';
+type DecimalFields =
+  'quantityDelta' | 'countedQuantity' | 'previousBalance' | 'resultingBalance' | 'purchaseCost';
 
 /** Los campos `Decimal` de Prisma viajan como string en el JSON. */
 export class InventoryMovementResponse implements Omit<InventoryMovement, DecimalFields> {
@@ -64,6 +70,14 @@ export class InventoryMovementResponse implements Omit<InventoryMovement, Decima
   @ApiProperty({ type: String, nullable: true })
   reason!: string | null;
 
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Solo en PURCHASE_IN de una recepción: total pagado por la línea (Decimal(10,2) como string). null = sin monto registrado (DEC-90).',
+  })
+  purchaseCost!: string | null;
+
   @ApiProperty({ type: String, nullable: true })
   refType!: string | null;
 
@@ -84,7 +98,7 @@ export class InventoryMovementResponse implements Omit<InventoryMovement, Decima
 export class InventoryMovementPageResponse extends PageOf(InventoryMovementResponse) {}
 
 /** Recepción en lote con sus líneas `PURCHASE_IN`, en el orden enviado (R3). */
-export class InventoryReceiptResponse implements InventoryReceipt {
+export class InventoryReceiptResponse implements Omit<InventoryReceipt, 'totalCost'> {
   @ApiProperty()
   id!: string;
 
@@ -96,6 +110,14 @@ export class InventoryReceiptResponse implements InventoryReceipt {
 
   @ApiProperty({ type: String, nullable: true })
   note!: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Suma de los montos pagados de las líneas que lo tienen (Decimal(10,2) como string). null = ninguna línea tiene monto (DEC-90).',
+  })
+  totalCost!: string | null;
 
   @ApiProperty()
   createdById!: string;
@@ -121,6 +143,14 @@ export class InventoryReceiptSummaryResponse implements Omit<InventoryReceiptRes
   @ApiProperty({ type: String, nullable: true })
   note!: string | null;
 
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Suma de los montos pagados de las líneas que lo tienen (Decimal(10,2) como string). null = ninguna línea tiene monto (DEC-90).',
+  })
+  totalCost!: string | null;
+
   @ApiProperty()
   createdById!: string;
 
@@ -132,6 +162,38 @@ export class InventoryReceiptSummaryResponse implements Omit<InventoryReceiptRes
 }
 
 export class InventoryReceiptSummaryPageResponse extends PageOf(InventoryReceiptSummaryResponse) {}
+
+/** Total comprado en un mes (DEC-90). */
+export class ReceiptsMonthSummaryResponse implements ReceiptsMonthSummary {
+  @ApiProperty({ description: 'Mes calendario, YYYY-MM.' })
+  month!: string;
+
+  @ApiProperty({ type: String, format: 'date-time', description: 'Inicio incluido (UTC).' })
+  from!: Date;
+
+  @ApiProperty({ type: String, format: 'date-time', description: 'Fin excluido (UTC).' })
+  to!: Date;
+
+  @ApiProperty()
+  timezone!: string;
+
+  @ApiProperty({ description: 'Recepciones del mes.' })
+  receiptCount!: number;
+
+  @ApiProperty({
+    type: String,
+    description: 'Suma de los montos pagados registrados (Decimal como string, 2 decimales).',
+  })
+  totalCost!: string;
+
+  @ApiProperty({ description: 'Recepciones del mes sin ningún monto registrado.' })
+  receiptsWithoutCost!: number;
+
+  @ApiProperty({
+    description: 'Líneas del mes sin monto, también de recepciones con monto parcial.',
+  })
+  linesWithoutCost!: number;
+}
 
 /** Producto en una lista de alertas de stock (R3, BR-P19). */
 export class StockAlertProductResponse implements StockAlertProduct {

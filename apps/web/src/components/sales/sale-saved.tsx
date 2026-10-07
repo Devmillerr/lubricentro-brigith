@@ -53,7 +53,8 @@ export function SaleSaved({ result, onNew }: { result: CreateSaleResult; onNew: 
             <span className="flex min-w-0 flex-col">
               <span className="font-medium break-words">{line.descriptionSnapshot}</span>
               <span className="text-[var(--muted-foreground)]">
-                {formatQuantity(line.quantity)} × {formatMoney(line.unitPrice)}
+                {formatQuantity(line.quantity)}
+                {line.saleUnitLabel ? ` ${line.saleUnitLabel}` : ''} × {formatMoney(line.unitPrice)}
               </span>
             </span>
             <span className="shrink-0 font-medium">{formatMoney(line.subtotal)}</span>

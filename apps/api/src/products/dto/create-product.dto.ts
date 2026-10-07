@@ -9,9 +9,11 @@ import {
   IsUUID,
   Max,
   Min,
+  Matches,
   MaxLength,
 } from 'class-validator';
 import { MAX_MONEY, MAX_MONEY_MESSAGE } from '../../common/decimal-limits';
+import { UNIT_MESSAGE, UNIT_PATTERN } from '../catalog-suggestions';
 
 /**
  * Cada producto es una unidad de stock (BR-P15). `unit` es texto libre a
@@ -59,11 +61,13 @@ export class CreateProductDto {
   name!: string;
 
   @ApiProperty({
-    description: 'Unidad en la que se cuenta y descuenta (BR-P15). Vocabulario libre.',
+    description:
+      'Unidad en la que se cuenta y descuenta (BR-P15): un nombre como "unidad", "galón" o "litro". Un valor sin letras (p. ej. "0") se rechaza.',
   })
   @IsString()
   @IsNotEmpty()
   @MaxLength(50)
+  @Matches(UNIT_PATTERN, { message: UNIT_MESSAGE })
   unit!: string;
 
   @ApiPropertyOptional({

@@ -57,16 +57,13 @@ export default function InventoryPage() {
       back={{ href: '/productos', label: 'Productos' }}
       action={
         <div className="flex gap-2">
+          {/* Con texto también en móvil: es el historial de compras (DEC-90). */}
           <Link
             href="/inventario/recepciones"
-            aria-label="Recepciones"
-            className={buttonVariants({
-              variant: 'outline',
-              className: 'w-11 px-0 sm:w-auto sm:px-4',
-            })}
+            className={buttonVariants({ variant: 'outline', className: 'px-3 sm:px-4' })}
           >
-            <History className="size-4 sm:mr-1" aria-hidden />
-            <span className="hidden sm:inline">Recepciones</span>
+            <History className="mr-1 size-4" aria-hidden />
+            Compras
           </Link>
           <Link href="/inventario/recepciones/nueva" className={buttonVariants()}>
             <PackagePlus className="mr-1 size-4" aria-hidden />

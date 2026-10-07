@@ -14,6 +14,8 @@ import { rememberProducts } from '@/lib/products/product-lookup';
 import { AttributePicker } from './attribute-picker';
 import { CategoryPicker } from './category-picker';
 import { NewCategoryForm } from './new-category-form';
+import { UnitPicker } from './unit-picker';
+import { isValidUnit, UNIT_ERROR, UNIT_SUGGESTIONS } from '@/lib/products/units';
 import { useSubmitLock } from '@/lib/use-submit-lock';
 
 type Values = {
@@ -37,7 +39,10 @@ const MAX_PRICE = 99_999_999.99;
 
 /**
  * Alta y edición de producto (R2). Solo nombre y unidad son obligatorios; la
- * unidad es texto libre porque su vocabulario sigue pendiente (DEC-22, P-07).
+ * unidad se elige de una lista (unidad, galón, litro y las que ya usa el
+ * catálogo) o se escribe otra, pero nunca es un número (DEC-92). Un producto
+ * antiguo con una unidad inválida (p. ej. "0") se puede seguir editando sin
+ * corregirla: solo se avisa y no se envía hasta que se elija otra.
  * Categoría, marca, viscosidad y presentación se eligen con chips (valores ya
  * usados y confirmados por el dueño); código y precio son opcionales y, al
  * editar, se pueden borrar para dejarlos pendientes (BR-P19b). No hay imagen
@@ -94,7 +99,9 @@ export function ProductForm({ product }: { product?: Product }) {
   function validate(): FieldErrors {
     const found: FieldErrors = {};
     if (!values.name.trim()) found.name = 'Ingresa el nombre del producto.';
-    if (!values.unit.trim()) found.unit = 'Ingresa la unidad en la que se cuenta.';
+    const unitUnchanged = product !== undefined && values.unit.trim() === product.unit;
+    if (!values.unit.trim()) found.unit = 'Elige la unidad en la que se cuenta.';
+    else if (!unitUnchanged && !isValidUnit(values.unit)) found.unit = UNIT_ERROR;
     const price = values.salePrice.trim().replace(',', '.');
     if (price) {
       const parsed = Number(price);
@@ -299,7 +306,19 @@ export function ProductForm({ product }: { product?: Product }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <UnitPicker
+        value={values.unit}
+        options={
+          facets.status === 'success'
+            ? facets.data.units.map((option) => option.value)
+            : UNIT_SUGGESTIONS
+        }
+        error={errors.unit}
+        storedInvalid={product && !isValidUnit(product.unit) ? product.unit : null}
+        onChange={(value) => update('unit', value)}
+      />
+
+      <div className="flex flex-col gap-3">
         <Field id="code" label="Código" optional error={errors.code}>
           <Input
             id="code"
@@ -310,22 +329,6 @@ export function ProductForm({ product }: { product?: Product }) {
             autoCapitalize="characters"
             spellCheck={false}
             aria-invalid={!!errors.code || undefined}
-          />
-        </Field>
-        <Field
-          id="unit"
-          label="Unidad"
-          hint="En la que se cuenta y se descuenta."
-          error={errors.unit}
-        >
-          <Input
-            id="unit"
-            value={values.unit}
-            onChange={(e) => update('unit', e.target.value)}
-            maxLength={50}
-            autoComplete="off"
-            required
-            aria-invalid={!!errors.unit || undefined}
           />
         </Field>
       </div>

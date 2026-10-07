@@ -99,6 +99,9 @@ El "último km conocido" **se calcula** desde el mantenimiento activo más recie
 
 Cada fila es una **unidad de stock**. Cómo se representan presentaciones y granel queda para DEC-22; con esta estructura, ambas opciones son solo datos.
 
+### ProductSaleUnit (DEC-91)
+Formas de venta de un producto: `productId`, `label` (único por producto), `factor` Decimal(12,3) (unidades de stock por unidad vendida), `salePrice` Decimal(10,2) opcional, `sortOrder`, `isActive`. Sin borrado físico: `SaleLine.saleUnitId` la referencia (FK `RESTRICT`). RLS habilitado como el resto. Migración aditiva `20261006180000_purchase_cost_and_sale_units`, que además agrega `InventoryMovement.purchaseCost`, `InventoryReceipt.totalCost` (DEC-90) y `SaleLine.saleUnitId/saleUnitLabel/saleUnitFactor`, todas opcionales: los datos existentes quedan en `NULL` y no cambian.
+
 ### ProductCompatibility
 `id, businessId, productId, vehicleModelId, confirmedById, confirmedAt, note?`. Único `(productId, vehicleModelId)`. Solo se crea por acción explícita (BR-F1, BR-F2). No hay campos de "inferido" ni "confianza".
 

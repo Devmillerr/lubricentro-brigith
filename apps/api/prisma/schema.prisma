@@ -64,6 +64,7 @@ model Business {
   productCompatibilities ProductCompatibility[]
   inventoryMovements     InventoryMovement[]
   inventoryReceipts      InventoryReceipt[]
+  productSaleUnits       ProductSaleUnit[]
   sales                  Sale[]
   saleLines              SaleLine[]
   washTypes              WashType[]
@@ -334,10 +335,45 @@ model Product {
   inventoryMovements InventoryMovement[]
   maintenanceItems   MaintenanceItem[]
   saleLines          SaleLine[]
+  /// Formas de venta (octavo, cuarto, galón, balde…). Opcionales: sin filas,
+  /// el producto se vende en su propia unidad, como siempre (DEC-91).
+  saleUnits          ProductSaleUnit[]
 
   @@unique([businessId, code])
   @@index([businessId, categoryId, isActive])
   @@map("products")
+}
+
+/// Forma de vender un producto de stock (DEC-91, BR-P15): el stock se lleva
+/// en `Product.unit` (p. ej. galón) y cada forma descuenta `factor` unidades
+/// de stock por unidad vendida (octavo = 0.125; balde = su capacidad, que
+/// cada producto define). Cada forma tiene su propio precio. Sin borrado
+/// físico: las líneas de venta la referencian; se desactiva con `isActive`.
+model ProductSaleUnit {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  /// "Octavo", "Cuarto", "Galón", "Balde". Único por producto.
+  label     String
+  /// Unidades de stock (`Product.unit`) que descuenta una unidad vendida.
+  factor    Decimal  @db.Decimal(12, 3)
+  /// Precio de esta forma. Nulo = se escribe al vender (como `Product.salePrice`).
+  salePrice Decimal? @db.Decimal(10, 2)
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  saleLines SaleLine[]
+
+  @@unique([businessId, productId, label])
+  @@index([businessId, productId])
+  @@map("product_sale_units")
 }
 
 /// Compatibilidad explícita producto <-> modelo de vehículo (BR-F1, BR-F3).
@@ -411,6 +447,11 @@ model InventoryMovement {
   /// fila del producto bloqueada. Nulo en los movimientos anteriores a R1.
   resultingBalance Decimal? @db.Decimal(12, 3)
 
+  /// Solo en `PURCHASE_IN` de una recepción: total pagado por la línea
+  /// (DEC-90, reabre DEC-36). Opcional: nulo = no se registró el monto, como
+  /// en todas las recepciones anteriores. Nunca se infiere.
+  purchaseCost Decimal? @db.Decimal(10, 2)
+
   /// Quién lo registró. Nulo en los movimientos anteriores a R1.
   createdById String?
   createdBy   User?   @relation(fields: [createdById], references: [id])
@@ -425,8 +466,8 @@ model InventoryMovement {
 /// son `InventoryMovement` de tipo `PURCHASE_IN` con
 /// `refType = 'InventoryReceipt'` y `refId = id`, igual que un mantenimiento
 /// enlaza sus movimientos (sin FK: `refType`/`refId` es polimórfico). Solo se
-/// insertan; no se editan ni se borran (BR-G5). Sin proveedor ni costo de
-/// compra (DEC-36).
+/// insertan; no se editan ni se borran (BR-G5). Sin proveedor. El monto
+/// pagado es opcional por línea (DEC-90, reabre DEC-36).
 model InventoryReceipt {
   id         String   @id @default(uuid())
   businessId String
@@ -435,6 +476,10 @@ model InventoryReceipt {
   /// Cuándo llegó la mercadería; puede ser anterior al registro.
   occurredAt DateTime @default(now())
   note       String?
+
+  /// Suma de `purchaseCost` de las líneas que lo tienen (DEC-90). Nulo si
+  /// ninguna lo tiene, como en todas las recepciones anteriores.
+  totalCost Decimal? @db.Decimal(10, 2)
 
   createdById String
   createdBy   User   @relation(fields: [createdById], references: [id])
@@ -544,7 +589,16 @@ model SaleLine {
   descriptionSnapshot String
   codeSnapshot        String?
 
-  /// En la unidad del producto (sin formas de venta en R4).
+  /// Forma de venta usada (DEC-91). Nula = la unidad del producto, como en
+  /// todas las ventas anteriores. Etiqueta y factor se copian al vender
+  /// (BR-G6): el stock descontado es `quantity × saleUnitFactor`, también al
+  /// anular, aunque la forma cambie después.
+  saleUnitId     String?
+  saleUnit       ProductSaleUnit? @relation(fields: [saleUnitId], references: [id], onDelete: Restrict)
+  saleUnitLabel  String?
+  saleUnitFactor Decimal?         @db.Decimal(12, 3)
+
+  /// En la forma de venta si la hay; si no, en la unidad del producto.
   quantity   Decimal @db.Decimal(12, 3)
   /// Precio aplicado en esta venta (DEC-29).
   unitPrice  Decimal @db.Decimal(10, 2)

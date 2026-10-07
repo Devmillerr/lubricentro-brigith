@@ -7,6 +7,7 @@ import { useState, type ReactNode } from 'react';
 import { FormError } from '@/components/customers/form-error';
 import { CompatibilitiesSection } from '@/components/products/compatibilities-section';
 import { ProductImage } from '@/components/products/product-image';
+import { SaleUnitsSection } from '@/components/products/sale-units-section';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge, PageHeader } from '@/components/ui/page-header';
 import { QueryError } from '@/components/ui/query-error';
@@ -19,7 +20,10 @@ import { categoryPath } from '@/lib/products/categories';
 import { formatPrice, type Product } from '@/lib/products/format';
 import { findProduct, rememberProducts } from '@/lib/products/product-lookup';
 
-/** Ficha del producto con sus modelos compatibles; desactivar y reactivar (BR-G5). */
+/**
+ * Ficha del producto con sus formas de venta (DEC-91) y modelos compatibles;
+ * desactivar y reactivar (BR-G5).
+ */
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const query = useApiQuery(`product:${id}`, () => findProduct(id));
@@ -84,6 +88,8 @@ export default function ProductDetailPage() {
         <Boxes className="mr-2 size-4" aria-hidden />
         Inventario: saldo, conteo, ingreso y ajuste
       </Link>
+
+      <SaleUnitsSection product={product} onSaved={query.reload} />
 
       <CompatibilitiesSection productId={product.id} />
 

@@ -86,9 +86,12 @@ No hay registro público ni correo: la cuenta se entrega ya creada, con una cont
 | POST | `/product-categories` | `{ name, parentId?, sortOrder?, id? }`. Máximo 2 niveles |
 | PATCH | `/product-categories/:id` | `{ name?, parentId? (null = subir a categoría), sortOrder?, isActive? }`. Errores: `CATEGORY_DEPTH_EXCEEDED`, `CATEGORY_IN_USE` (desactivar con productos o subcategorías activos) |
 | GET | `/products?search=&code=&categoryId=&isActive=&brand=&viscosity=&presentation=&missingPrice=&includeStock=` | La búsqueda cubre nombre, marca, código, viscosidad, presentación y vehículo compatible. `categoryId` incluye sus subcategorías. Sin `isActive` devuelve activos e inactivos |
-| GET | `/products/facets?categoryId=` | Marcas, viscosidades y presentaciones de los productos activos (con conteo) más las sugerencias confirmadas |
-| POST | `/products` | `{ name, unit, categoryId?, brand?, code?, viscosity?, presentation?, salePrice?, tracksStock?, id? }`. `unit` es texto libre (BR-P15) |
-| PATCH | `/products/:id` | Editar los mismos campos; `null` borra los opcionales. `isActive: false` desactiva y `true` reactiva (BR-G5) |
+| GET | `/products/facets?categoryId=` | Marcas, viscosidades, presentaciones y **unidades** (DEC-92: las válidas en uso más unidad, galón y litro) de los productos activos, con conteo, más las sugerencias confirmadas |
+| POST | `/products` | `{ name, unit, categoryId?, brand?, code?, viscosity?, presentation?, salePrice?, tracksStock?, id? }`. `unit` es texto (BR-P15) pero debe tener al menos una letra: un número como "0" responde 400 (DEC-92) |
+| PATCH | `/products/:id` | Editar los mismos campos; `null` borra los opcionales. `isActive: false` desactiva y `true` reactiva (BR-G5). `unit`, si se envía, sigue la regla de DEC-92; si no se envía, no se valida (los productos antiguos con unidad "0" se pueden editar sin corregirla) |
+| PUT | `/products/:id/sale-units` | Formas de venta (DEC-91): `{ units: [{ id?, label (≤50), factor > 0 (3 decimales), salePrice? ≥ 0 \| null }] }`, hasta 20. La lista pasa a ser la de formas activas, en ese orden; sin `id` se reutiliza la del mismo nombre (aunque esté inactiva) o se crea; las activas que no vienen se desactivan (nunca se borran). Responde el producto. Errores: 400 `VALIDATION_ERROR` (nombre repetido, factor o precio inválido), 404 `PRODUCT_NOT_FOUND` / `SALE_UNIT_NOT_FOUND` (id de otra forma o producto), 409 `PRODUCT_UNIT_INVALID` (la unidad del producto no es válida), 409 `SALE_UNIT_ALREADY_EXISTS` |
+
+Desde DEC-91, toda respuesta de producto (`GET /products`, `POST`, `PATCH`, `PUT …/sale-units`) trae `saleUnits`: las formas **activas**, ordenadas, cada una `{ id, label, factor, salePrice, sortOrder }` (decimales como string). Vacía = se vende solo en su unidad.
 | DELETE | `/products/:id` | Desactivar (no borra) |
 | GET | `/products/:id/compatible-models` | Modelos con compatibilidad confirmada |
 
@@ -110,6 +113,12 @@ No existe ningún endpoint ni efecto lateral que cree compatibilidades a partir 
 | POST | `/inventory/adjustments` | ~~`{ productId, quantityDelta, reason }`~~. Reemplazado el 2026-09-25 por el contrato de R3 de abajo (ya implementado) |
 
 No existen endpoints para editar ni borrar movimientos (BR-G5).
+
+#### Monto pagado y total del mes (DEC-90, implementado el 2026-10-06)
+
+- `POST /inventory/receipts`: cada línea acepta `purchaseCost?` (≥ 0, 2 decimales): **total pagado por la línea**, no por unidad. Opcional; sin él la línea se registra como siempre.
+- Respuestas: cada línea (`InventoryMovementResponse`) trae `purchaseCost` (string o `null`); la cabecera (`InventoryReceiptResponse` y los elementos del historial) trae `totalCost`: la suma de las líneas con monto, o `null` si ninguna lo tiene (todas las recepciones anteriores).
+- `GET /inventory/receipts/summary?month=YYYY-MM` (por defecto el mes actual): `{ month, from, to, timezone, receiptCount, totalCost, receiptsWithoutCost, linesWithoutCost }`. Mes calendario en `Business.timezone` (DEC-79). `totalCost` suma solo lo registrado; lo que no tiene monto se cuenta aparte, nunca se estima. 400 si `month` no es `YYYY-MM`.
 
 #### Cambios de R3 (aprobados el 2026-09-25, sin implementar)
 
@@ -278,7 +287,9 @@ Tipos: `salesCount`, `washes.count`, `byType[].count`, `maintenances.*`, `stock.
 
 Venta de mostrador: productos, un método de pago y confirmación, sin cliente ni placa (DEC-44). Diseño: `10-OPERACION-REAL.md` §2.1, §2.3, §2.5 y §2.7. Decisiones: DEC-26, DEC-27, DEC-29, DEC-30 y el alcance de R4 (`09-BACKLOG.md` §2 y §3, ítems B-100, B-101 y B-130 a B-136; `10` §3.2e). Las pantallas se documentan en `07-UI-UX.md`.
 
-**Fuera de R4:** formas de venta (`ProductSaleUnit`, `saleUnitId`), pago mixto, lavados (`source = WASH`, R5), cobro de mantenimiento (`source = MAINTENANCE`, líneas `SERVICE`, R6), dashboard (R7) y clientes o vehículos en la venta (R8). Tampoco hay `GET /payment-methods`: el método de pago es el enum `PaymentMethod` publicado en OpenAPI.
+**Formas de venta (DEC-91, implementadas el 2026-10-06):** cada línea acepta `saleUnitId?`, una forma activa del producto. Con ella, `quantity` va en esa forma, el precio aplicado es el que se envía (la web precarga el de la forma) y el stock descontado es `quantity × factor`, que debe caber en 3 decimales (si no, 400). La línea guarda `saleUnitId`, `saleUnitLabel` y `saleUnitFactor` (copiados); la anulación devuelve `quantity × saleUnitFactor`. El mismo producto puede ir en dos líneas con formas distintas; repetir la misma forma (o el producto sin forma) sigue siendo `DUPLICATE_PRODUCT_LINE`. Errores nuevos: 404 `SALE_UNIT_NOT_FOUND` (no existe o no es de ese producto) y 409 `SALE_UNIT_INACTIVE`. Sin `saleUnitId`, todo sigue igual. El dashboard cuenta lo vendido en la unidad de stock (`quantity × saleUnitFactor`).
+
+**Fuera de R4:** pago mixto, lavados (`source = WASH`, R5), cobro de mantenimiento (`source = MAINTENANCE`, líneas `SERVICE`, R6), dashboard (R7) y clientes o vehículos en la venta (R8). Tampoco hay `GET /payment-methods`: el método de pago es el enum `PaymentMethod` publicado en OpenAPI.
 
 #### Modelos y enums
 
@@ -315,7 +326,8 @@ Venta de mostrador: productos, un método de pago y confirmación, sin cliente n
 | `washTypeId` | UUID, opcional | Siempre `null` en R4 |
 | `descriptionSnapshot` | texto | Nombre del producto al momento de la venta (BR-G6) |
 | `codeSnapshot` | texto, opcional | Código del producto al momento de la venta |
-| `quantity` | decimal (12,3) | En la unidad del producto (sin formas de venta) |
+| `saleUnitId`, `saleUnitLabel`, `saleUnitFactor` | opcionales | Forma de venta usada y sus datos copiados (DEC-91); `null` sin forma |
+| `quantity` | decimal (12,3) | En la forma de venta si la hay; si no, en la unidad del producto |
 | `unitPrice` | decimal (10,2) | Precio aplicado en esta venta |
 | `subtotal` | decimal (10,2) | `quantity × unitPrice`, redondeado half-up a 2 decimales |
 | `movesStock` | booleano | `true` si el producto controla stock; `false` si `tracksStock = false` |

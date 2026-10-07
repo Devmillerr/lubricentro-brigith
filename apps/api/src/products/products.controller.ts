@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -25,6 +26,7 @@ import type { AccessTokenPayload } from '../auth/types/jwt-payload';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ListProductsQueryDto } from './dto/list-products-query.dto';
 import { ProductFacetsQueryDto } from './dto/product-facets-query.dto';
+import { SetSaleUnitsDto } from './dto/set-sale-units.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductsService } from './products.service';
 import { AUTH_ERRORS, ApiErrors, VALIDATION_ERRORS } from '../common/openapi/api-errors.decorator';
@@ -80,6 +82,25 @@ export class ProductsController {
     @Body() dto: UpdateProductDto,
   ) {
     return this.productsService.update(user.businessId, id, dto);
+  }
+
+  /**
+   * Formas de venta del producto (DEC-91): reemplaza las activas por la lista
+   * enviada, en ese orden. Las que no vienen se desactivan, nunca se borran.
+   */
+  @ApiOkResponse({ type: ProductResponse })
+  @ApiErrors({
+    400: VALIDATION_ERRORS,
+    404: ['PRODUCT_NOT_FOUND', 'SALE_UNIT_NOT_FOUND'],
+    409: ['PRODUCT_UNIT_INVALID', 'SALE_UNIT_ALREADY_EXISTS'],
+  })
+  @Put(':id/sale-units')
+  setSaleUnits(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetSaleUnitsDto,
+  ) {
+    return this.productsService.setSaleUnits(user.businessId, id, dto.units);
   }
 
   @ApiNoContentResponse()
