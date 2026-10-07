@@ -2,7 +2,26 @@
 
 **Actualizado:** 2026-10-07
 
-## Estado actual (2026-10-07): baldes en producción (DEC-90 a DEC-93), cerrado
+## Estado actual (2026-10-07, tarde): revisión de pendientes y prueba integral en local
+
+- **Solo local, sin cambios de código.** Rama `claude/admiring-pasteur-522mg8`; código funcional en `572532a`, sin cambios desde entonces. No se tocó Supabase, ni Vercel, ni `main`, ni datos reales.
+- **Observaciones del cliente (2026-10-06):**
+  1. Compras del mes e inversión: levantada (DEC-90).
+  2. Clientes creados no aparecían en Mantenimiento: levantada (`/mantenimientos/nuevo` busca por placa o cliente).
+  3. El cliente sí aparecía por placa: levantada (los dos caminos llevan al mismo vehículo y cliente).
+  4. Vender 1/8 descontaba el balde completo: levantada (DEC-91, DEC-93).
+  5. Distintos baldes (granel, 15W40, 25W60): parcial. El sistema lo soporta y el granel está configurado en producción; los dos productos diesel no existen todavía y esperan autorización.
+  6. Ventana aparte por balde: resuelta sin pantalla nueva (envase y formas de venta en la ficha del producto).
+- **Costo de compra:** es el monto pagado por línea de recepción (DEC-90). Lo escribe el usuario (no hay precios de compra cargados), es opcional, se guarda en `InventoryMovement.purchaseCost` (solo `PURCHASE_IN`) y en `InventoryReceipt.totalCost`, y no toca `Product.salePrice`, cantidades, ventas ni otros movimientos. Solo se escribe al registrar la recepción: una recepción ya guardada no se edita para agregarlo.
+- **Baldes en producción:** sin cambios desde la sección siguiente ("Aceite Balde granel", 59 L).
+- **Lint de la API:** los errores de CRLF son solo de la copia de trabajo de Windows (`core.autocrlf=true`); en Git esos 16 archivos están en LF y su contenido es idéntico a `HEAD`. Con LF, `pnpm lint` queda limpio. La copia de trabajo se restauró desde `HEAD`, sin cambios de formato commiteados.
+- **Validación (Postgres embebido desechable en 55450, bases `brigith_test` y `brigith_qa`):** typecheck API y web OK; lint API 0 errores (con LF) y web 0 errores (el warning conocido de `eslint.config.mjs`); unitarias 488/488, integración 172/172, e2e 158/158; build de API y web OK.
+- **Navegador (Chrome headless local, 390 px y 1280 px, datos de prueba creados en la sesión):** login (incorrecto y correcto), Inicio, productos (crear, validar, editar precio), balde (envase 20 L, formas 1/4 = 1 L y 1/8 = 0.5 L sin precio fijo), recepción con costo (S/ 250 + S/ 300 = S/ 550, total del mes) y sin costo (contada aparte), conteo, ventas normal y fraccionadas (20 → 19.5 → 18.5 → 17.5 L con precios 6, 10 y 11), exceso de stock rechazado, +1 balde (1 abierto + 1 cerrado), anulación con devolución de stock, cliente → vehículo → mantenimiento con producto y cobro, búsqueda de cliente en Nuevo mantenimiento, placa desde Inicio, mantenimiento sin vehículo, lavado, Avisar, Ventas, Resumen y 25 rutas sin scroll horizontal ni errores de consola. Saldos y montos verificados también en la base local. Sin errores encontrados.
+- **PR #3 (`claude/admiring-pasteur-522mg8` → `main`):** abierto, sin conflictos (GitHub: `mergeable_state` "clean"; `git merge-tree` local sin conflictos). Base `main` en `89e57c2`. Entran `4398dff`, `572532a`, `4693b3f` y el commit documental de esta sección. Producción ya corre `572532a`: el merge solo sincroniza `main`.
+- **Pendiente (requiere autorización o al dueño, no código):** fusionar el PR #3; crear "Aceite Balde 25w60 diesel" y "Aceite Balde 15w40 diesel" en producción; que Saúl cambie su contraseña para obtener el código de recuperación.
+- **Próximo paso:** autorización del usuario para fusionar el PR #3.
+
+## Estado al 2026-10-07: baldes en producción (DEC-90 a DEC-93), cerrado
 
 - **Commit funcional:** `572532a4f465c59a71d664d5a7282a48d3ae4335` ("feat: add open-container inventory for bulk oils"), sobre `4398dff` (compras, mantenimiento y formas de venta) y `bc05bae` (Inicio mobile-first). Rama `claude/admiring-pasteur-522mg8`, subida a GitHub.
 - **Migraciones de producción aplicadas (Supabase, 2026-10-07, con autorización):** `20261006180000_purchase_cost_and_sale_units` y `20261007120000_product_container`, con `pnpm --filter @brigith/api prisma:deploy`. **17/17** migraciones, `migrate status` al día. Comparación fila por fila de las 18 tablas de negocio antes y después: sin cambios en los datos existentes; las columnas nuevas quedaron vacías.
