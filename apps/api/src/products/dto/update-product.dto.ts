@@ -4,14 +4,22 @@ import {
   IsBoolean,
   IsNotEmpty,
   IsNumber,
+  IsPositive,
   IsString,
   IsUUID,
   Max,
+  Matches,
   MaxLength,
   Min,
   ValidateIf,
 } from 'class-validator';
-import { MAX_MONEY, MAX_MONEY_MESSAGE } from '../../common/decimal-limits';
+import {
+  MAX_MONEY,
+  MAX_MONEY_MESSAGE,
+  MAX_QUANTITY,
+  MAX_QUANTITY_MESSAGE,
+} from '../../common/decimal-limits';
+import { UNIT_MESSAGE, UNIT_PATTERN } from '../catalog-suggestions';
 
 /** No enviado = no se toca. */
 const sent = (_: object, value: unknown) => value !== undefined;
@@ -69,6 +77,7 @@ export class UpdateProductDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(50)
+  @Matches(UNIT_PATTERN, { message: UNIT_MESSAGE })
   unit?: string;
 
   @ApiPropertyOptional({
@@ -88,6 +97,29 @@ export class UpdateProductDto {
   @ValidateIf(sent)
   @IsBoolean()
   tracksStock?: boolean;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Capacidad del envase (DEC-93). null lo quita junto con containerLabel.',
+    maximum: MAX_QUANTITY,
+  })
+  @ValidateIf(sentNotNull)
+  @Type(() => Number)
+  @IsNumber(
+    { maxDecimalPlaces: 3 },
+    { message: 'La capacidad debe ser un número con hasta 3 decimales.' },
+  )
+  @IsPositive({ message: 'La capacidad debe ser mayor que 0.' })
+  @Max(MAX_QUANTITY, { message: MAX_QUANTITY_MESSAGE })
+  containerCapacity?: number | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 30 })
+  @ValidateIf(sentNotNull)
+  @IsString()
+  @IsNotEmpty({ message: 'Escribe el nombre del envase.' })
+  @MaxLength(30, { message: 'El nombre del envase admite hasta 30 caracteres.' })
+  containerLabel?: string | null;
 
   @ApiPropertyOptional({ description: 'false desactiva y true reactiva (BR-G5).' })
   @ValidateIf(sent)

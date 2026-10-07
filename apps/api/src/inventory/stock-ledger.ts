@@ -45,6 +45,11 @@ export interface StockEntry {
    */
   requireActiveProduct?: boolean;
   reason?: string;
+  /**
+   * Solo en `PURCHASE_IN` de una recepción: total pagado por la línea
+   * (DEC-90). No afecta el saldo.
+   */
+  purchaseCost?: number;
   refType?: string;
   refId?: string;
   occurredAt: Date;
@@ -293,6 +298,10 @@ export async function applyStockMovements(
             previousBalance: planned.previousBalance,
             resultingBalance: planned.resultingBalance,
             reason: entry.reason,
+            purchaseCost:
+              entry.type === InventoryMovementType.PURCHASE_IN
+                ? (entry.purchaseCost ?? null)
+                : null,
             refType: entry.refType,
             refId: entry.refId,
             occurredAt: entry.occurredAt,

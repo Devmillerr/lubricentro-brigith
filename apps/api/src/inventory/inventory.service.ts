@@ -18,6 +18,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { CreateAdjustmentDto } from './dto/create-adjustment.dto';
 import type { CreateCountDto } from './dto/create-count.dto';
 import type { ListMovementsQueryDto } from './dto/list-movements-query.dto';
+import { MAX_MONEY, MAX_MONEY_MESSAGE } from '../common/decimal-limits';
+import { resolveDashboardPeriod } from '../dashboard/dashboard-period';
 import { applyStockMovements, type StockEntry } from './stock-ledger';
 
 export interface StockView {
@@ -37,7 +39,8 @@ export interface ReceiptBatchInput {
   id?: string;
   occurredAt?: string;
   note?: string;
-  lines: { productId: string; quantity: number }[];
+  /** `purchaseCost`: total pagado por la línea, opcional (DEC-90). */
+  lines: { productId: string; quantity: number; purchaseCost?: number | null }[];
 }
 
 export interface ReceiptBatchResult {
@@ -64,6 +67,26 @@ export interface StockAlerts {
 /** Elemento del historial de recepciones: la cabecera y cuántas líneas tiene. */
 export interface ReceiptSummary extends InventoryReceipt {
   lineCount: number;
+}
+
+/**
+ * Total comprado en un mes calendario (DEC-90): suma de los montos pagados en
+ * las recepciones de ese mes, en la zona horaria del negocio. Las recepciones
+ * o líneas sin monto se cuentan aparte: el total no las estima.
+ */
+export interface ReceiptsMonthSummary {
+  /** `YYYY-MM`. */
+  month: string;
+  from: Date;
+  to: Date;
+  timezone: string;
+  receiptCount: number;
+  /** Suma de `totalCost` (Decimal como string, 2 decimales). */
+  totalCost: string;
+  /** Recepciones del mes sin ningún monto registrado. */
+  receiptsWithoutCost: number;
+  /** Líneas del mes sin monto (incluye las de recepciones con monto parcial). */
+  linesWithoutCost: number;
 }
 
 /**
@@ -196,7 +219,7 @@ export class InventoryService {
     userId: string,
     input: ReceiptBatchInput,
   ): Promise<ReceiptBatchResult> {
-    validateReceiptBatch(input);
+    const totalCost = validateReceiptBatch(input);
 
     const receiptId = input.id ?? randomUUID();
     const occurredAt = input.occurredAt ? new Date(input.occurredAt) : new Date();
@@ -211,6 +234,7 @@ export class InventoryService {
           productId: line.productId,
           type: InventoryMovementType.PURCHASE_IN,
           quantityDelta: line.quantity,
+          purchaseCost: line.purchaseCost ?? undefined,
           requireActiveProduct: true,
           refType: RECEIPT_REF_TYPE,
           refId: receiptId,
@@ -225,6 +249,7 @@ export class InventoryService {
           businessId,
           occurredAt,
           note: input.note ?? null,
+          totalCost,
           createdById: userId,
         },
       });
@@ -266,6 +291,64 @@ export class InventoryService {
         lineCount: countByReceipt.get(receipt.id) ?? 0,
       })),
       nextCursor: page.nextCursor,
+    };
+  }
+
+  /**
+   * Total comprado en el mes `month` (`YYYY-MM`, por defecto el actual) en
+   * la zona horaria del negocio (DEC-79, DEC-90). Suma `totalCost` de las
+   * cabeceras, que guardan la suma de sus líneas; no estima lo que no tiene
+   * monto: lo informa aparte. Tres consultas, sin importar el volumen.
+   */
+  async receiptsMonthSummary(
+    businessId: string,
+    month: string | undefined,
+    now: Date = new Date(),
+  ): Promise<ReceiptsMonthSummary> {
+    const business = await this.prisma.business.findUniqueOrThrow({
+      where: { id: businessId },
+      select: { timezone: true },
+    });
+    if (month !== undefined && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+      throw new ValidationProblemException([
+        { field: 'month', message: 'El mes debe tener el formato YYYY-MM.' },
+      ]);
+    }
+    const period = resolveDashboardPeriod(
+      { period: 'month', ...(month ? { date: `${month}-01` } : {}) },
+      business.timezone,
+      now,
+    );
+    const scoped = forBusiness(this.prisma, businessId);
+    const where = { occurredAt: { gte: period.from, lt: period.to } };
+    const [totals, receiptsWithoutCost, receipts] = await Promise.all([
+      scoped.inventoryReceipt.aggregate({
+        where,
+        _count: { _all: true },
+        _sum: { totalCost: true },
+      }),
+      scoped.inventoryReceipt.count({ where: { ...where, totalCost: null } }),
+      scoped.inventoryReceipt.findMany({ where, select: { id: true } }),
+    ]);
+    const linesWithoutCost =
+      receipts.length === 0
+        ? 0
+        : await scoped.inventoryMovement.count({
+            where: {
+              refType: RECEIPT_REF_TYPE,
+              refId: { in: receipts.map((receipt) => receipt.id) },
+              purchaseCost: null,
+            },
+          });
+    return {
+      month: period.date.slice(0, 7),
+      from: period.from,
+      to: period.to,
+      timezone: period.timezone,
+      receiptCount: totals._count._all,
+      totalCost: new Prisma.Decimal(totals._sum.totalCost ?? 0).toFixed(2),
+      receiptsWithoutCost,
+      linesWithoutCost,
     };
   }
 
@@ -331,10 +414,12 @@ export class InventoryService {
 }
 
 /**
- * Forma del lote (06-API.md §2): de 1 a 100 líneas, cantidades > 0 y sin
- * productos repetidos. Se valida antes de tocar la base.
+ * Forma del lote (06-API.md §2): de 1 a 100 líneas, cantidades > 0, montos
+ * ≥ 0 con hasta 2 decimales (opcionales, DEC-90) y sin productos repetidos.
+ * Se valida antes de tocar la base. Devuelve el total pagado de la recepción
+ * (suma de las líneas con monto) o `null` si ninguna tiene monto.
  */
-function validateReceiptBatch(input: ReceiptBatchInput): void {
+function validateReceiptBatch(input: ReceiptBatchInput): Prisma.Decimal | null {
   const { lines } = input;
   if (lines.length < 1 || lines.length > MAX_RECEIPT_LINES) {
     throw new ValidationProblemException([
@@ -351,6 +436,19 @@ function validateReceiptBatch(input: ReceiptBatchInput): void {
       errors.push({
         field: `lines.${index}.quantity`,
         message: 'La cantidad debe ser mayor que 0.',
+      });
+    }
+    const cost = line.purchaseCost;
+    if (
+      cost != null &&
+      (!Number.isFinite(cost) ||
+        cost < 0 ||
+        new Prisma.Decimal(String(cost)).decimalPlaces() > 2 ||
+        cost > MAX_MONEY)
+    ) {
+      errors.push({
+        field: `lines.${index}.purchaseCost`,
+        message: 'El monto debe ser 0 o más, con hasta 2 decimales.',
       });
     }
   });
@@ -370,6 +468,17 @@ function validateReceiptBatch(input: ReceiptBatchInput): void {
     }
     seen.add(line.productId);
   }
+
+  const costs = lines.filter((line) => line.purchaseCost != null);
+  if (costs.length === 0) return null;
+  const total = costs.reduce(
+    (sum, line) => sum.plus(new Prisma.Decimal(String(line.purchaseCost))),
+    new Prisma.Decimal(0),
+  );
+  if (total.greaterThan(new Prisma.Decimal(String(MAX_MONEY)))) {
+    throw new ValidationProblemException([{ field: 'lines', message: MAX_MONEY_MESSAGE }]);
+  }
+  return total;
 }
 
 /** `Prisma.Decimal` (real) o number (fake de pruebas): ambos coercen bien con Number(). */

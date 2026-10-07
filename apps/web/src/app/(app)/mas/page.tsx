@@ -2,6 +2,7 @@ import {
   ChevronRight,
   ChartColumn,
   KeyRound,
+  PackagePlus,
   Receipt,
   Settings,
   Users,
@@ -22,6 +23,12 @@ const SECTIONS: { label: string; description: string; icon: LucideIcon; href: st
     description: 'Historial de cobros y lavados; detalle y anulación',
     icon: Receipt,
     href: '/ventas',
+  },
+  {
+    label: 'Recepciones y compras',
+    description: 'Mercadería recibida, cuánto pagaste y el total invertido del mes',
+    icon: PackagePlus,
+    href: '/inventario/recepciones',
   },
   {
     label: 'Configuración',

@@ -16,6 +16,35 @@ export const MAX_RECEIPT_QUANTITY = 999_999_999.999;
 
 export const receiptDateFormat = dateTimeFormat();
 
+/** Mes actual `YYYY-MM` en la hora de Lima (la zona del negocio, DEC-79). */
+export function currentMonth(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === 'year')!.value;
+  const month = parts.find((part) => part.type === 'month')!.value;
+  return `${year}-${month}`;
+}
+
+/** Suma o resta meses a `YYYY-MM`. */
+export function shiftMonth(month: string, delta: number): string {
+  const [year, value] = month.split('-').map(Number) as [number, number];
+  const date = new Date(Date.UTC(year, value - 1 + delta, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+/** "octubre de 2026". */
+export function monthLabel(month: string): string {
+  const [year, value] = month.split('-').map(Number) as [number, number];
+  return new Intl.DateTimeFormat('es-PE', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, value - 1, 15)));
+}
+
 export function productCountLabel(count: number): string {
   return count === 1 ? '1 producto' : `${count} productos`;
 }

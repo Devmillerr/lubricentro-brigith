@@ -10,7 +10,9 @@ import { Input } from '@/components/ui/input';
 import { api, type Schemas } from '@/lib/api/client';
 import { useIdempotencyKey } from '@/lib/api/idempotency';
 import { callApi, failureMessage, type ApiFailure } from '@/lib/api/request';
-import { parseQuantity, type ProductWithStock } from '@/lib/inventory/format';
+import { formatQuantity, parseQuantity, type ProductWithStock } from '@/lib/inventory/format';
+import { formatCents, parsePrice } from '@/lib/sales/format';
+import { shortUnit } from '@/lib/products/container';
 import {
   MAX_RECEIPT_LINES,
   MAX_RECEIPT_NOTE,
@@ -25,6 +27,8 @@ import { useSubmitLock } from '@/lib/use-submit-lock';
 interface Line {
   product: ProductWithStock;
   quantity: string;
+  /** Total pagado por la línea (no por unidad), opcional (DEC-90). */
+  cost: string;
 }
 
 type Errors = Partial<Record<'lines' | 'occurredAt' | 'note', string>> & {
@@ -51,6 +55,9 @@ const ERROR_MESSAGES = {
  * `PURCHASE_IN` por línea en una transacción: todo o nada. Los errores se
  * validan antes de enviar (líneas vacías, cantidades ≤ 0, repetidos). Lleva
  * `Idempotency-Key`: si falla la red y se reintenta sin cambios, no se duplica.
+ *
+ * Cada línea admite, opcional, el total pagado por ella (DEC-90): con eso se
+ * conoce cuánto se invirtió en la compra. Sin monto, se registra igual.
  */
 export function ReceiptForm({
   initialProducts = [],
@@ -61,7 +68,7 @@ export function ReceiptForm({
   onSaved: (receipt: InventoryReceipt, products: ProductWithStock[]) => void;
 }) {
   const [lines, setLines] = useState<Line[]>(() =>
-    initialProducts.map((product) => ({ product, quantity: '1' })),
+    initialProducts.map((product) => ({ product, quantity: '1', cost: '' })),
   );
   const [occurredAt, setOccurredAt] = useState('');
   const [note, setNote] = useState('');
@@ -91,16 +98,23 @@ export function ReceiptForm({
             : line,
         );
       }
-      return [...current, { product, quantity: '1' }];
+      return [...current, { product, quantity: '1', cost: '' }];
     });
   }
 
-  function updateQuantity(productId: string, quantity: string) {
+  function updateLine(productId: string, patch: Partial<Pick<Line, 'quantity' | 'cost'>>) {
     clearLineError(productId);
     setLines((current) =>
-      current.map((line) => (line.product.id === productId ? { ...line, quantity } : line)),
+      current.map((line) => (line.product.id === productId ? { ...line, ...patch } : line)),
     );
   }
+
+  // Total pagado: suma de las líneas con monto válido (vista previa; la API lo recalcula).
+  const costCents = lines.reduce((sum, line) => {
+    const cost = parsePrice(line.cost);
+    return cost === null ? sum : sum + Math.round(cost * 100);
+  }, 0);
+  const linesWithCost = lines.filter((line) => parsePrice(line.cost) !== null).length;
 
   function removeLine(productId: string) {
     clearLineError(productId);
@@ -115,12 +129,14 @@ export function ReceiptForm({
     }
     const line: Record<string, string> = {};
     const seen = new Set<string>();
-    for (const { product, quantity } of lines) {
+    for (const { product, quantity, cost } of lines) {
       const parsed = parseQuantity(quantity);
       if (parsed === null || parsed <= 0) {
         line[product.id] = 'Cantidad mayor que 0 (hasta 3 decimales).';
       } else if (parsed > MAX_RECEIPT_QUANTITY) {
         line[product.id] = 'La cantidad es demasiado grande.';
+      } else if (cost.trim() && parsePrice(cost) === null) {
+        line[product.id] = 'Monto pagado: 0 o más, con hasta 2 decimales.';
       }
       if (seen.has(product.id)) line[product.id] = 'Producto repetido.';
       seen.add(product.id);
@@ -146,10 +162,14 @@ export function ReceiptForm({
     setSubmitting(true);
 
     const body: Schemas['CreateReceiptDto'] = {
-      lines: lines.map((line) => ({
-        productId: line.product.id,
-        quantity: parseQuantity(line.quantity)!,
-      })),
+      lines: lines.map((line) => {
+        const cost = parsePrice(line.cost);
+        return {
+          productId: line.product.id,
+          quantity: parseQuantity(line.quantity)!,
+          ...(cost !== null ? { purchaseCost: cost } : {}),
+        };
+      }),
     };
     if (occurredAt) body.occurredAt = new Date(occurredAt).toISOString();
     if (note.trim()) body.note = note.trim();
@@ -214,7 +234,7 @@ export function ReceiptForm({
                   key={line.product.id}
                   line={line}
                   error={errors.line?.[line.product.id]}
-                  onQuantity={(value) => updateQuantity(line.product.id, value)}
+                  onChange={(patch) => updateLine(line.product.id, patch)}
                   onRemove={() => removeLine(line.product.id)}
                 />
               ))}
@@ -224,6 +244,23 @@ export function ReceiptForm({
             <p role="alert" className="text-sm text-[var(--danger)]">
               {errors.lines}
             </p>
+          )}
+          {lines.length > 0 && (
+            <div className="flex flex-col gap-0.5 border-t border-[var(--border)] pt-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="font-semibold">Total pagado</span>
+                <span className="text-xl font-semibold">
+                  {linesWithCost > 0 ? formatCents(costCents) : '—'}
+                </span>
+              </div>
+              {linesWithCost < lines.length && (
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  {linesWithCost === 0
+                    ? 'Opcional: escribe cuánto pagaste por cada producto para saber cuánto invertiste.'
+                    : `${lines.length - linesWithCost} sin monto: no se suman al total.`}
+                </p>
+              )}
+            </div>
           )}
         </Section>
 
@@ -277,17 +314,30 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 function LineRow({
   line,
   error,
-  onQuantity,
+  onChange,
   onRemove,
 }: {
   line: Line;
   error?: string;
-  onQuantity: (value: string) => void;
+  onChange: (patch: Partial<Pick<Line, 'quantity' | 'cost'>>) => void;
   onRemove: () => void;
 }) {
   const { product } = line;
   const parsed = parseQuantity(line.quantity);
   const inputId = `receipt-line-${product.id}`;
+  const costId = `receipt-cost-${product.id}`;
+  const onQuantity = (quantity: string) => onChange({ quantity });
+  // Atajos para recibir por envase o forma (p. ej. +1 Balde = +20 litros): la
+  // cantidad va en la unidad de stock. Con envase (DEC-93) se usa su capacidad.
+  const bigUnits = product.containerCapacity
+    ? [
+        {
+          id: 'container',
+          label: product.containerLabel ?? 'Envase',
+          factor: product.containerCapacity,
+        },
+      ]
+    : product.saleUnits.filter((unit) => Number(unit.factor) > 1);
 
   return (
     <li className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
@@ -339,6 +389,41 @@ function LineRow({
           <Plus className="size-4" aria-hidden />
         </Button>
         <span className="truncate text-sm text-[var(--muted-foreground)]">{product.unit}</span>
+      </div>
+      {bigUnits.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {bigUnits.map((unit) => (
+            <Button
+              key={unit.id}
+              type="button"
+              variant="outline"
+              className="h-10 px-3 text-sm"
+              onClick={() => {
+                const current = parsed ?? 0;
+                // Si solo está el 1 inicial, el primer balde reemplaza ese 1.
+                const base = line.quantity === '1' ? 0 : current;
+                onQuantity(String(Math.round((base + Number(unit.factor)) * 1000) / 1000));
+              }}
+            >
+              <Plus className="mr-1 size-4" aria-hidden />1 {unit.label} (
+              {formatQuantity(unit.factor)} {shortUnit(product.unit)})
+            </Button>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <label htmlFor={costId} className="text-sm text-[var(--muted-foreground)]">
+          Total pagado S/
+        </label>
+        <Input
+          id={costId}
+          inputMode="decimal"
+          autoComplete="off"
+          value={line.cost}
+          placeholder="Opcional"
+          onChange={(e) => onChange({ cost: e.target.value })}
+          className="w-32 text-right"
+        />
       </div>
       {error && (
         <p id={`${inputId}-error`} role="alert" className="text-sm text-[var(--danger)]">

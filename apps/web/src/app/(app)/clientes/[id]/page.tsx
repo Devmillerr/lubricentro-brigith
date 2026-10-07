@@ -1,6 +1,6 @@
 'use client';
 
-import { Car, Pencil, Phone, Plus } from 'lucide-react';
+import { Car, Pencil, Phone, Plus, Wrench } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { buttonVariants } from '@/components/ui/button';
@@ -100,7 +100,16 @@ export default function CustomerDetailPage() {
           <EmptyState
             icon={Car}
             title="Sin vehículos registrados"
-            description="Registra un vehículo con su placa; el resto de datos es opcional."
+            description="Para registrar un mantenimiento, primero registra su vehículo con la placa; el resto de datos es opcional."
+            action={
+              <Link
+                href={`/clientes/${customer.id}/vehiculos/nuevo?siguiente=mantenimiento`}
+                className={buttonVariants({ variant: 'outline' })}
+              >
+                <Wrench className="mr-2 size-4" aria-hidden />
+                Registrar vehículo y mantenimiento
+              </Link>
+            }
           />
         ) : (
           <ul className="flex flex-col gap-3">
@@ -170,6 +179,13 @@ function VehicleCard({
         </div>
       )}
       {notes && <p className="text-sm whitespace-pre-line">{notes}</p>}
+      <Link
+        href={`/vehiculos/${vehicle.id}/mantenimientos/nuevo`}
+        className={buttonVariants({ className: 'mt-1' })}
+      >
+        <Wrench className="mr-2 size-4" aria-hidden />
+        Nuevo mantenimiento
+      </Link>
     </li>
   );
 }

@@ -25,14 +25,27 @@ import {
 } from '../../common/decimal-limits';
 import { MAX_SALE_LINES, MAX_SALE_TEXT, type CreateSaleInput } from '../sales.service';
 
-/** Una línea de la venta: producto, cantidad y precio aplicado (06-API.md §2, "Ventas"). */
+/**
+ * Una línea de la venta: producto, forma de venta opcional (DEC-91), cantidad
+ * y precio aplicado (06-API.md §2, "Ventas").
+ */
 export class CreateSaleLineDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID('all', { message: 'El producto no es válido.' })
   productId!: string;
 
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'Forma de venta activa del producto (octavo, galón, balde…). Sin ella, la cantidad va en la unidad del producto, como siempre.',
+  })
+  @IsOptional()
+  @IsUUID('all', { message: 'La forma de venta no es válida.' })
+  saleUnitId?: string;
+
   @ApiProperty({
-    description: 'Mayor que 0, hasta 3 decimales, en la unidad del producto.',
+    description:
+      'Mayor que 0, hasta 3 decimales. En la forma de venta si se envía saleUnitId (el stock descontado es cantidad × equivalencia); si no, en la unidad del producto.',
     minimum: 0,
     exclusiveMinimum: true,
     maximum: MAX_QUANTITY,
@@ -63,9 +76,9 @@ export class CreateSaleLineDto {
 
 /**
  * Venta de mostrador (R4, 06-API.md §2 "Ventas"): de 1 a 50 líneas, sin
- * productos repetidos (el servicio responde `DUPLICATE_PRODUCT_LINE`), un
- * solo método de pago (DEC-30). Sin total (lo calcula el servidor) ni
- * `saleUnitId` (fuera de R4): cualquier campo desconocido se rechaza con 400.
+ * repetir producto y forma de venta (el servicio responde
+ * `DUPLICATE_PRODUCT_LINE`), un solo método de pago (DEC-30). Sin total (lo
+ * calcula el servidor): cualquier campo desconocido se rechaza con 400.
  */
 export class CreateSaleDto implements CreateSaleInput {
   @ApiPropertyOptional({

@@ -78,6 +78,8 @@ Después de guardar:
 - **Sin vehículo** (DEC-73): se permite registrar y cobrar; sin km actual, próximo km/fecha ni regla, y sin recordatorio.
 - **Anular un mantenimiento** pide el motivo **obligatorio** (DEC-71); si tiene cobro, se anula junto con él. Cambio incompatible con el formulario actual, donde el motivo es opcional.
 
+**Nuevo mantenimiento desde Inicio (2026-10-06):** primero **"¿Qué vehículo?"**: un buscador por placa o por nombre/teléfono del cliente. Un vehículo lleva al formulario de ese vehículo; un cliente se despliega con sus vehículos ("Elegir") y "Registrar un vehículo de este cliente", que al guardar sigue directo al mantenimiento. Si lo escrito parece una placa que no existe, ofrece registrarla y seguir. **Registrar sin vehículo** queda como enlace secundario (`?sinVehiculo=1`). En la ficha del cliente, cada vehículo tiene **Nuevo mantenimiento**, y un cliente sin vehículos ofrece "Registrar vehículo y mantenimiento". El modelo no cambia: Mantenimiento → Vehículo → Cliente.
+
 ### 3.3.1 Cliente y teléfono
 Desde la ficha del vehículo: nombre y teléfono, ambos opcionales, con la nota "Agrega el teléfono si quieres avisarle". Nunca son obligatorios (D-08).
 
@@ -116,6 +118,18 @@ La UI forma parte de R3 (DEC-52). **Ingreso** y **Ajuste** cambian así; **Conta
 - **Stock que requiere atención**, en Inventario: agotados y negativos (solo productos con conteo) y cuántos productos siguen sin conteo inicial, con acceso a Contar (BR-P19). Es una lista, no un gráfico, y no hay stock mínimo.
 - Los errores se validan en el formulario antes de enviar (líneas vacías, cantidades ≤ 0, productos repetidos), para no mostrar los mensajes de validación de la API, que hoy están en inglés.
 
+#### Cambios del 2026-10-06 (DEC-90 a DEC-92)
+
+- **Recepciones y compras** (la misma pantalla de Recepciones): arriba, "Comprado en <mes>" con flechas de mes (`GET /inventory/receipts/summary`); cada recepción del historial muestra su total pagado o "Sin monto". Se llega desde Inventario (botón **Compras**, con texto también en móvil) y desde **Más → Recepciones y compras**. En **Recibir**, cada línea tiene "Total pagado S/" opcional y el formulario muestra el total; si el producto tiene una forma mayor a 1 (p. ej. Balde de 5 galones), un atajo "+1 Balde (5 galón)" suma su capacidad a la cantidad.
+- **Producto:** la unidad de stock se elige con chips (unidad, galón, litro y las que ya usa el catálogo) u "Otra…"; un número no se acepta. Si el producto ya tiene una unidad inválida (p. ej. "0"), se avisa y se puede guardar el resto sin tocarla. En la ficha, sección **Formas de venta** (Configurar / Editar): nombre, cuánto descuenta (capacidad, para el balde) y precio; atajos Octavo, Cuarto, Galón y Balde cuando la unidad es galón (la capacidad del balde la escribe el dueño).
+
+#### Balde (DEC-93)
+
+- **Componente del balde** (SVG con los colores de la app, sin fotos): balde con asa cuyo nivel baja con las ventas; "13.5 L / 20 L", contenido, capacidad y equivalente en galones; "Además N baldes cerrados" si hay más de uno; "Agotado" en 0. Grande en el inventario del producto y en su ficha; barra en la lista de Inventario y en la línea de Vender ("Quedaría en el balde").
+- **Producto:** "Se vende de un envase abierto" con nombre (Balde) y capacidad (20). En Formas de venta, con unidad litro, atajos 1/4 de galón (1 L) y 1/8 de galón (0.5 L), sin precio.
+- **Recibir:** "+1 Balde (20 L)" suma la capacidad.
+- **Vender (precio por operación):** al elegir la presentación, la línea muestra **Presentación** (1/4 de galón), **Cantidad** (1 L) y **Precio de venta** (S/ ___, vacío y con el foco si la forma no tiene precio sugerido); se edita antes de cobrar y sin él no se puede cobrar. Los chips muestran la cantidad (1 L, 0.5 L) y, si existe, el precio sugerido.
+
 ### 3.7 Configuración
 Plantilla de WhatsApp con vista previa, días de anticipación, regla por defecto cuando hay km y fecha, política de stock insuficiente y código de país. Todos los valores abiertos aparecen vacíos o marcados como provisionales.
 
@@ -141,6 +155,8 @@ La UI forma parte de R5 (DEC-60). Sigue el patrón actual del frontend: sin TanS
 - El historial, el detalle y la anulación de ventas son pantallas genéricas (B-135), implementadas el 2026-09-26 junto con R5 (con autorización del usuario): `/ventas` y `/ventas/:id`, en **Más → Ventas**. R5 las reutiliza con `source=WASH` y no crea pantallas duplicadas (DEC-68). La pantalla **Vender** (B-134) sigue sin implementar.
 
 ### 3.10 Vender (R4, B-134: implementado el 2026-09-26, sin commit)
+
+**Formas de venta (DEC-91, 2026-10-06):** si el producto tiene formas, la línea muestra "¿Cómo lo vendes?" con un chip por forma y su precio; hasta elegir una no se puede cobrar. Elegirla pone su precio, la cantidad pasa a contarse en esa forma ("Cantidad (Octavo)") y la línea dice cuánto descuenta del stock. Tocar otra vez el producto abre otra línea para otra forma. Los productos sin formas no cambian. Lo de abajo describe la versión de R4.
 
 Venta de mostrador (`source = COUNTER`), sin cliente, placa, lavado ni mantenimiento (DEC-44). Ruta `/ventas/nueva`, desde **Vender** en Inicio y en el historial de ventas. Diseño: `10-OPERACION-REAL.md` §2.5 (Venta de productos). Contrato: `06-API.md` §2, Ventas.
 

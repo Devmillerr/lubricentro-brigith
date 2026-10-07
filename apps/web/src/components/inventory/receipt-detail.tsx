@@ -8,11 +8,13 @@ import {
   type InventoryReceipt,
 } from '@/lib/inventory/receipts';
 import type { Product } from '@/lib/products/format';
+import { formatMoney } from '@/lib/sales/format';
 
 /**
  * Cabecera y líneas de una recepción (07-UI-UX.md §3.6, "Historial de
- * recepciones"): producto, cantidad recibida y saldo resultante. Solo
- * lectura: los movimientos no se editan (BR-P3).
+ * recepciones"): producto, cantidad recibida, monto pagado si se registró
+ * (DEC-90) y saldo resultante. Solo lectura: los movimientos no se editan
+ * (BR-P3). Las recepciones anteriores no tienen monto: no se inventa.
  */
 export function ReceiptDetail({
   receipt,
@@ -23,6 +25,7 @@ export function ReceiptDetail({
   products: Map<string, Product>;
 }) {
   const note = present(receipt.note);
+  const missingCost = receipt.lines.filter((line) => line.purchaseCost === null).length;
 
   return (
     <div className="flex flex-col gap-5">
@@ -32,6 +35,20 @@ export function ReceiptDetail({
           {receiptDateFormat.format(new Date(receipt.occurredAt))}
         </p>
         <p className="text-[var(--muted-foreground)]">{productCountLabel(receipt.lines.length)}</p>
+        <p className="flex items-baseline justify-between gap-3 border-t border-[var(--border)] pt-2">
+          <span className="font-semibold">Total pagado</span>
+          {receipt.totalCost !== null ? (
+            <span className="text-lg font-bold">{formatMoney(receipt.totalCost)}</span>
+          ) : (
+            <span className="text-[var(--muted-foreground)]">Sin monto registrado</span>
+          )}
+        </p>
+        {receipt.totalCost !== null && missingCost > 0 && (
+          <p className="text-xs text-[var(--muted-foreground)]">
+            {missingCost === 1 ? '1 producto sin monto' : `${missingCost} productos sin monto`}: no
+            se suma al total.
+          </p>
+        )}
         {note && (
           <p className="flex items-start gap-2 break-words">
             <StickyNote
@@ -72,12 +89,17 @@ export function ReceiptDetail({
                       </span>
                     )}
                   </span>
-                  <span className="shrink-0 text-base font-semibold">
-                    +{formatQuantity(line.quantityDelta)}
-                    {product && (
-                      <span className="ml-1 text-xs font-normal text-[var(--muted-foreground)]">
-                        {product.unit}
-                      </span>
+                  <span className="flex shrink-0 flex-col items-end">
+                    <span className="text-base font-semibold">
+                      +{formatQuantity(line.quantityDelta)}
+                      {product && (
+                        <span className="ml-1 text-xs font-normal text-[var(--muted-foreground)]">
+                          {product.unit}
+                        </span>
+                      )}
+                    </span>
+                    {line.purchaseCost !== null && (
+                      <span className="text-sm">{formatMoney(line.purchaseCost)}</span>
                     )}
                   </span>
                 </Link>

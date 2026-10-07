@@ -46,7 +46,33 @@ export class SaleLineResponse {
   @ApiProperty({ type: String, nullable: true })
   codeSnapshot!: string | null;
 
-  @ApiProperty({ type: String, description: 'Decimal(12,3) serializado como string.' })
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Forma de venta usada (DEC-91). null = unidad del producto.',
+  })
+  saleUnitId!: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Nombre de la forma al vender ("Octavo", "Balde"). null sin forma.',
+  })
+  saleUnitLabel!: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Equivalencia al vender (Decimal(12,3) como string): stock descontado = quantity × saleUnitFactor. null sin forma.',
+  })
+  saleUnitFactor!: string | null;
+
+  @ApiProperty({
+    type: String,
+    description:
+      'Decimal(12,3) serializado como string. En la forma de venta si la hay; si no, en la unidad del producto.',
+  })
   quantity!: string;
 
   @ApiProperty({ type: String, description: 'Precio aplicado. Decimal(10,2) como string.' })
@@ -175,6 +201,9 @@ function toSaleLineResponse(line: SaleLine): SaleLineResponse {
     washTypeId: line.washTypeId,
     descriptionSnapshot: line.descriptionSnapshot,
     codeSnapshot: line.codeSnapshot,
+    saleUnitId: line.saleUnitId,
+    saleUnitLabel: line.saleUnitLabel,
+    saleUnitFactor: line.saleUnitFactor?.toString() ?? null,
     quantity: line.quantity.toString(),
     unitPrice: line.unitPrice.toString(),
     subtotal: line.subtotal.toString(),

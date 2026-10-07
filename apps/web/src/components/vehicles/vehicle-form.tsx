@@ -30,11 +30,17 @@ const MAX_YEAR = 2100;
  * exige única por negocio (BR-C6, 409 `PLATE_ALREADY_EXISTS`). Al editar, el
  * modelo y el año no se pueden quitar (la API no acepta null en esos campos),
  * solo cambiar. Un vehículo creado sin cliente (desde la búsqueda por placa)
- * lleva a su ficha.
+ * lleva a su ficha. Con `thenMaintenance` (al registrarlo desde "Nuevo
+ * mantenimiento"), lleva directo al mantenimiento de ese vehículo.
  */
 export function VehicleForm(
   props:
-    | { mode: 'create'; customerId: string | null; initialPlate?: string }
+    | {
+        mode: 'create';
+        customerId: string | null;
+        initialPlate?: string;
+        thenMaintenance?: boolean;
+      }
     | { mode: 'edit'; vehicle: Vehicle },
 ) {
   const router = useRouter();
@@ -126,7 +132,11 @@ export function VehicleForm(
     }
 
     if (result.ok) {
-      router.push(!vehicle && !customerId ? `/vehiculos/${result.data.id}` : backHref);
+      if (!vehicle && props.mode === 'create' && props.thenMaintenance) {
+        router.push(`/vehiculos/${result.data.id}/mantenimientos/nuevo`);
+      } else {
+        router.push(!vehicle && !customerId ? `/vehiculos/${result.data.id}` : backHref);
+      }
       return;
     }
     const apiErrors = result.failure.fieldErrors;

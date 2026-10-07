@@ -1,11 +1,15 @@
 'use client';
 
 import { Banknote, Minus, Plus, Smartphone, Trash2 } from 'lucide-react';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { FormError } from '@/components/customers/form-error';
 import { ReceiptProductPicker } from '@/components/inventory/receipt-product-picker';
 import { StockHint } from '@/components/maintenance/product-picker';
 import { Button } from '@/components/ui/button';
+import { Chip } from '@/components/ui/chip';
+import { BucketGauge, hasContainer } from '@/components/products/bucket-gauge';
+import { formatQuantity } from '@/lib/inventory/format';
+import { shortUnit } from '@/lib/products/container';
 import { Field, Textarea } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { api, type Schemas } from '@/lib/api/client';
@@ -18,20 +22,36 @@ import {
   MAX_SALE_TEXT,
   PAYMENT_LABELS,
   formatCents,
+  formatMoney,
   parsePrice,
   priceInput,
   subtotalCents,
   type PaymentMethod,
 } from '@/lib/sales/format';
+import { equivalenceLabel, fitsStockDecimals, stockFor, type SaleUnit } from '@/lib/products/units';
 import { cn } from '@/lib/utils';
 import { useSubmitLock } from '@/lib/use-submit-lock';
 
 export type CreateSaleResult = Schemas['CreateSaleResponse'];
 
 interface Line {
+  /** Clave local: un producto con formas puede ir en varias líneas (octavo y galón). */
+  key: string;
   product: ProductWithStock;
+  /** Forma de venta elegida (DEC-91); null en productos sin formas o mientras no se elige. */
+  saleUnit: SaleUnit | null;
   quantity: string;
   price: string;
+}
+
+let lineCounter = 0;
+function newLineKey(): string {
+  lineCounter += 1;
+  return `line-${lineCounter}`;
+}
+
+function hasSaleUnits(product: ProductWithStock): boolean {
+  return product.saleUnits.length > 0;
 }
 
 type LineErrors = Record<string, string>;
@@ -60,6 +80,15 @@ const ERROR_MESSAGES = {
  * el cobrado es el que devuelve `POST /sales`. Lleva `Idempotency-Key`:
  * reintentar sin cambios no cobra dos veces. Stock insuficiente es un 422
  * (`BLOCK`, DEC-26): no se guarda nada y se marca la línea para corregirla.
+ *
+ * Formas de venta (DEC-91): si el producto las tiene (octavo, cuarto, galón,
+ * balde…), la línea pide elegir una antes de cobrar. El precio es siempre el
+ * de esta venta (`unitPrice` por línea, DEC-29): si la forma tiene un precio
+ * configurado se propone, si no se escribe; nunca se toma el de otra forma ni
+ * el de ventas anteriores, y el inventario no depende de él (1/4 de galón
+ * siempre descuenta 1 L). La línea muestra presentación, cantidad en la
+ * unidad de stock y precio de venta. El mismo producto puede ir en varias
+ * líneas, una por forma. Los productos sin formas se venden como siempre.
  */
 export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => void }) {
   const [lines, setLines] = useState<Line[]>([]);
@@ -72,63 +101,114 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
   const lock = useSubmitLock();
   const idempotency = useIdempotencyKey();
 
-  const quantities = new Map(lines.map((line) => [line.product.id, line.quantity]));
+  // Para el buscador: cuánto se lleva de cada producto (la primera línea).
+  const quantities = new Map<string, string>();
+  for (const line of lines) {
+    if (!quantities.has(line.product.id)) quantities.set(line.product.id, line.quantity);
+  }
   const totalCents = lines.reduce((sum, line) => {
     const quantity = parseQuantity(line.quantity);
     const price = parsePrice(line.price);
     return quantity === null || price === null ? sum : sum + subtotalCents(quantity, price);
   }, 0);
+  // Stock que descontaría el carrito, por producto (para el balde, DEC-93).
+  const consumedByProduct = new Map<string, number>();
+  for (const line of lines) {
+    const quantity = parseQuantity(line.quantity);
+    if (quantity === null) continue;
+    const stock = line.saleUnit ? stockFor(quantity, line.saleUnit.factor) : quantity;
+    consumedByProduct.set(
+      line.product.id,
+      Math.round(((consumedByProduct.get(line.product.id) ?? 0) + stock) * 1000) / 1000,
+    );
+  }
   const allPriced = lines.every(
     (line) => parseQuantity(line.quantity) !== null && parsePrice(line.price) !== null,
   );
 
-  function clearErrors(productId?: string) {
+  function clearErrors(key?: string) {
     setFailure(null);
     setFormError(null);
-    if (productId && lineErrors[productId]) {
+    if (key && lineErrors[key]) {
       const next = { ...lineErrors };
-      delete next[productId];
+      delete next[key];
       setLineErrors(next);
     }
   }
 
+  /**
+   * Tocar un producto suma 1 a su línea. Con formas de venta: si hay una
+   * línea sin forma elegida, se suma ahí; si no, se abre otra línea para
+   * elegir la forma (p. ej. un octavo y además un galón).
+   */
   function addProduct(product: ProductWithStock) {
-    clearErrors(product.id);
+    setFailure(null);
+    setFormError(null);
     setLines((current) => {
-      if (current.some((line) => line.product.id === product.id)) {
+      const target = hasSaleUnits(product)
+        ? current.find((line) => line.product.id === product.id && line.saleUnit === null)
+        : current.find((line) => line.product.id === product.id);
+      if (target) {
         return current.map((line) =>
-          line.product.id === product.id
-            ? { ...line, quantity: stepQuantity(line.quantity, 1) }
-            : line,
+          line.key === target.key ? { ...line, quantity: stepQuantity(line.quantity, 1) } : line,
         );
       }
-      return [...current, { product, quantity: '1', price: priceInput(product.salePrice) }];
+      return [
+        ...current,
+        {
+          key: newLineKey(),
+          product,
+          saleUnit: null,
+          quantity: '1',
+          // Con formas, el precio sale de la forma elegida: no se precarga el del producto.
+          price: hasSaleUnits(product) ? '' : priceInput(product.salePrice),
+        },
+      ];
     });
   }
 
-  function update(productId: string, patch: Partial<Pick<Line, 'quantity' | 'price'>>) {
-    clearErrors(productId);
+  function update(key: string, patch: Partial<Pick<Line, 'quantity' | 'price'>>) {
+    clearErrors(key);
+    setLines((current) => current.map((line) => (line.key === key ? { ...line, ...patch } : line)));
+  }
+
+  /** Elegir la forma pone su precio (el del catálogo de esa forma, o vacío para escribirlo). */
+  function chooseSaleUnit(key: string, saleUnit: SaleUnit) {
+    clearErrors(key);
     setLines((current) =>
-      current.map((line) => (line.product.id === productId ? { ...line, ...patch } : line)),
+      current.map((line) =>
+        line.key === key ? { ...line, saleUnit, price: priceInput(saleUnit.salePrice) } : line,
+      ),
     );
   }
 
-  function remove(productId: string) {
-    clearErrors(productId);
-    setLines((current) => current.filter((line) => line.product.id !== productId));
+  function remove(key: string) {
+    clearErrors(key);
+    setLines((current) => current.filter((line) => line.key !== key));
   }
 
   function validate(): { lines: LineErrors; form: string | null } {
     const found: LineErrors = {};
-    for (const { product, quantity, price } of lines) {
+    const seen = new Set<string>();
+    for (const { key, product, saleUnit, quantity, price } of lines) {
       const parsedQuantity = parseQuantity(quantity);
-      if (parsedQuantity === null || parsedQuantity <= 0) {
-        found[product.id] = 'Cantidad mayor que 0 (hasta 3 decimales).';
+      const pairKey = `${product.id}:${saleUnit?.id ?? ''}`;
+      if (hasSaleUnits(product) && !saleUnit) {
+        found[key] = 'Elige cómo lo vendes (octavo, galón, balde…).';
+      } else if (seen.has(pairKey)) {
+        found[key] = saleUnit
+          ? `Ya hay una línea de «${saleUnit.label}»: suma la cantidad ahí.`
+          : 'Producto repetido.';
+      } else if (parsedQuantity === null || parsedQuantity <= 0) {
+        found[key] = 'Cantidad mayor que 0 (hasta 3 decimales).';
+      } else if (saleUnit && !fitsStockDecimals(parsedQuantity, saleUnit.factor)) {
+        found[key] = 'Con esta forma, usa una cantidad entera.';
       } else if (price.trim() === '') {
-        found[product.id] = 'Escribe el precio que cobras en esta venta.';
+        found[key] = 'Escribe el precio de venta de esta operación.';
       } else if (parsePrice(price) === null) {
-        found[product.id] = 'Precio de 0 o más, con hasta 2 decimales.';
+        found[key] = 'Precio de 0 o más, con hasta 2 decimales.';
       }
+      seen.add(pairKey);
     }
     let form: string | null = null;
     if (lines.length === 0) form = 'Agrega al menos un producto.';
@@ -152,6 +232,7 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
       paymentMethod: payment,
       lines: lines.map((line) => ({
         productId: line.product.id,
+        ...(line.saleUnit ? { saleUnitId: line.saleUnit.id } : {}),
         quantity: parseQuantity(line.quantity)!,
         unitPrice: parsePrice(line.price)!,
       })),
@@ -179,17 +260,19 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
     const marked: LineErrors = {};
     for (const [field, message] of Object.entries(result.failure.fieldErrors)) {
       const match = /^lines\.(\d+)\./.exec(field);
-      const product = match ? lines[Number(match[1])]?.product : undefined;
-      if (product) marked[product.id] ??= message;
+      const line = match ? lines[Number(match[1])] : undefined;
+      if (line) marked[line.key] ??= message;
     }
     // 422 INSUFFICIENT_STOCK: el saldo y la cantidad vienen en `errors[lines]` y
     // el producto solo en el texto de `detail`.
     if (result.failure.code === 'INSUFFICIENT_STOCK') {
       const detail =
         result.failure.classified.kind === 'client' ? result.failure.classified.detail : '';
-      const product = lines.find((line) => detail.includes(line.product.id))?.product;
+      const line = lines.find((candidate) => detail.includes(candidate.product.id));
       const stockMessage = result.failure.fieldErrors.lines ?? 'Stock insuficiente.';
-      if (product) marked[product.id] = `Stock insuficiente. ${stockMessage}.`;
+      if (line) {
+        marked[line.key] = `Stock insuficiente. ${stockMessage} ${line.product.unit}.`;
+      }
     }
     setLineErrors(marked);
     setFailure(result.failure);
@@ -219,11 +302,13 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
             <ul className="flex flex-col gap-2">
               {lines.map((line) => (
                 <LineRow
-                  key={line.product.id}
+                  key={line.key}
                   line={line}
-                  error={lineErrors[line.product.id]}
-                  onChange={(patch) => update(line.product.id, patch)}
-                  onRemove={() => remove(line.product.id)}
+                  error={lineErrors[line.key]}
+                  onChange={(patch) => update(line.key, patch)}
+                  onChooseUnit={(saleUnit) => chooseSaleUnit(line.key, saleUnit)}
+                  consumed={consumedByProduct.get(line.product.id) ?? 0}
+                  onRemove={() => remove(line.key)}
                 />
               ))}
             </ul>
@@ -313,19 +398,36 @@ function LineRow({
   line,
   error,
   onChange,
+  onChooseUnit,
+  consumed,
   onRemove,
 }: {
   line: Line;
   error?: string;
   onChange: (patch: Partial<Pick<Line, 'quantity' | 'price'>>) => void;
+  onChooseUnit: (saleUnit: SaleUnit) => void;
+  /** Lo que descuenta todo el carrito de este producto, en su unidad de stock. */
+  consumed: number;
   onRemove: () => void;
 }) {
-  const { product } = line;
+  const { product, saleUnit } = line;
   const quantity = parseQuantity(line.quantity);
   const price = parsePrice(line.price);
-  const quantityId = `sale-qty-${product.id}`;
-  const priceId = `sale-price-${product.id}`;
-  const errorId = `sale-line-${product.id}-error`;
+  const quantityId = `sale-qty-${line.key}`;
+  const priceId = `sale-price-${line.key}`;
+  const errorId = `sale-line-${line.key}-error`;
+  const withUnits = hasSaleUnits(product);
+  const quantityLabel = saleUnit ? `unidades de ${saleUnit.label}` : product.unit;
+  const stockUnit = shortUnit(product.unit);
+  const priceRef = useRef<HTMLInputElement>(null);
+
+  // Al elegir una presentación sin precio, el foco va al precio de esta venta.
+  const saleUnitId = saleUnit?.id;
+  useEffect(() => {
+    if (saleUnitId && priceRef.current && priceRef.current.value === '') {
+      priceRef.current.focus();
+    }
+  }, [saleUnitId]);
 
   return (
     <li className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
@@ -344,10 +446,65 @@ function LineRow({
           <Trash2 className="size-4" aria-hidden />
         </Button>
       </div>
+      {withUnits && (
+        <div className="flex flex-col gap-1.5">
+          <span id={`${line.key}-units`} className="text-xs text-[var(--muted-foreground)]">
+            ¿Cómo lo vendes?
+          </span>
+          <div role="group" aria-labelledby={`${line.key}-units`} className="flex flex-wrap gap-2">
+            {product.saleUnits.map((unit) => (
+              <Chip
+                key={unit.id}
+                selected={saleUnit?.id === unit.id}
+                onClick={() => onChooseUnit(unit)}
+                className="flex-col items-start gap-0 rounded-lg px-3 py-1 leading-tight"
+              >
+                <span>{unit.label}</span>
+                <span className="text-xs font-normal opacity-80">
+                  {formatQuantity(unit.factor)} {stockUnit}
+                  {unit.salePrice ? ` · sugerido ${formatMoney(unit.salePrice)}` : ''}
+                </span>
+              </Chip>
+            ))}
+          </div>
+        </div>
+      )}
+      {saleUnit && (
+        <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 rounded-md bg-[var(--muted)] px-3 py-2.5 text-sm">
+          <dt className="font-semibold">Presentación:</dt>
+          <dd>{saleUnit.label}</dd>
+          <dt className="font-semibold">Cantidad:</dt>
+          <dd>
+            {quantity !== null
+              ? `${formatQuantity(stockFor(quantity, saleUnit.factor))} ${stockUnit}`
+              : '—'}
+          </dd>
+          <dt className="font-semibold">
+            <label htmlFor={priceId}>
+              Precio de venta{quantity !== null && quantity !== 1 ? ' (c/u)' : ''}:
+            </label>
+          </dt>
+          <dd className="flex items-center gap-1.5">
+            <span className="text-[var(--muted-foreground)]">S/</span>
+            <Input
+              ref={priceRef}
+              id={priceId}
+              inputMode="decimal"
+              autoComplete="off"
+              value={line.price}
+              placeholder="0.00"
+              onChange={(event) => onChange({ price: event.target.value })}
+              aria-invalid={!!error || undefined}
+              aria-describedby={error ? errorId : undefined}
+              className="h-11 w-28 text-right text-lg"
+            />
+          </dd>
+        </dl>
+      )}
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex flex-col gap-1">
           <label htmlFor={quantityId} className="text-xs text-[var(--muted-foreground)]">
-            Cantidad ({product.unit})
+            {saleUnit ? `Cuántas (${quantityLabel})` : `Cantidad (${quantityLabel})`}
           </label>
           <div className="flex items-center gap-1">
             <Button
@@ -381,22 +538,24 @@ function LineRow({
             </Button>
           </div>
         </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor={priceId} className="text-xs text-[var(--muted-foreground)]">
-            Precio (S/)
-          </label>
-          <Input
-            id={priceId}
-            inputMode="decimal"
-            autoComplete="off"
-            value={line.price}
-            placeholder="0.00"
-            onChange={(event) => onChange({ price: event.target.value })}
-            aria-invalid={!!error || undefined}
-            aria-describedby={error ? errorId : undefined}
-            className="w-24 text-right"
-          />
-        </div>
+        {!saleUnit && (
+          <div className="flex flex-col gap-1">
+            <label htmlFor={priceId} className="text-xs text-[var(--muted-foreground)]">
+              Precio (S/)
+            </label>
+            <Input
+              id={priceId}
+              inputMode="decimal"
+              autoComplete="off"
+              value={line.price}
+              placeholder="0.00"
+              onChange={(event) => onChange({ price: event.target.value })}
+              aria-invalid={!!error || undefined}
+              aria-describedby={error ? errorId : undefined}
+              className="w-24 text-right"
+            />
+          </div>
+        )}
         <div className="ml-auto flex flex-col items-end gap-1">
           <span className="text-xs text-[var(--muted-foreground)]">Subtotal</span>
           <span className="flex h-11 items-center font-semibold">
@@ -406,6 +565,23 @@ function LineRow({
           </span>
         </div>
       </div>
+      {hasContainer(product) && product.tracksStock && product.stock?.isCounted && (
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-[var(--muted-foreground)]">
+            Quedaría en el {(product.containerLabel ?? 'envase').toLocaleLowerCase('es')}
+          </span>
+          <BucketGauge
+            product={product}
+            balance={Math.round((product.stock.balance - consumed) * 1000) / 1000}
+            size="sm"
+          />
+        </div>
+      )}
+      {saleUnit && quantity !== null && product.tracksStock && !hasContainer(product) && (
+        <p className="text-xs text-[var(--muted-foreground)]">
+          Descuenta {equivalenceLabel(stockFor(quantity, saleUnit.factor), product.unit)} del stock
+        </p>
+      )}
       {error && (
         <p id={errorId} role="alert" className="text-sm text-[var(--danger)]">
           {error}

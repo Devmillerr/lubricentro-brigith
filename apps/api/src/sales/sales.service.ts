@@ -8,6 +8,7 @@ import {
   SaleSource,
   SaleStatus,
   type Product,
+  type ProductSaleUnit,
   type Sale,
   type SaleLine,
 } from '@prisma/client';
@@ -47,17 +48,16 @@ const QUANTITY_DECIMALS = 3;
 const PRICE_DECIMALS = 2;
 
 /**
- * Entrada de una venta de mostrador (R4). Tipo interno del dominio: el DTO
- * público con class-validator se agrega junto con el endpoint. Sin
- * `saleUnitId` (formas de venta fuera de R4) y sin total: lo calcula el
- * servidor.
+ * Entrada de una venta de mostrador (R4). Tipo interno del dominio. Sin
+ * total: lo calcula el servidor. `saleUnitId` es opcional (DEC-91): sin él,
+ * la cantidad va en la unidad del producto.
  */
 export interface CreateSaleInput {
   id?: string;
   paymentMethod: PaymentMethod;
   occurredAt?: string;
   note?: string;
-  lines: { productId: string; quantity: number; unitPrice: number }[];
+  lines: { productId: string; saleUnitId?: string; quantity: number; unitPrice: number }[];
 }
 
 export interface SaleWithLines extends Sale {
@@ -107,8 +107,11 @@ export class SalesService {
    * 1. La forma se valida antes de abrir la transacción (líneas, cantidades,
    *    precios, repetidos, nota).
    * 2. Se leen los productos: inexistente o de otro negocio → 404
-   *    `PRODUCT_NOT_FOUND`; inactivo → 409 `PRODUCT_INACTIVE` (BR-P21). La
-   *    lectura no bloquea filas.
+   *    `PRODUCT_NOT_FOUND`; inactivo → 409 `PRODUCT_INACTIVE` (BR-P21). Y
+   *    las formas de venta (DEC-91): inexistente o de otro producto → 404
+   *    `SALE_UNIT_NOT_FOUND`; desactivada → 409 `SALE_UNIT_INACTIVE`. Con
+   *    forma, el stock que se descuenta es `cantidad × equivalencia` (debe
+   *    caber en 3 decimales). La lectura no bloquea filas.
    * 3. El StockLedger bloquea los productos que controlan stock y aplica
    *    `BLOCK` (DEC-26): si uno con conteo no alcanza, 422
    *    `INSUFFICIENT_STOCK` y no se escribe nada. Vuelve a exigir producto
@@ -138,6 +141,15 @@ export class SalesService {
       });
       const productById = new Map(products.map((product) => [product.id, product]));
       assertSellable(lines, productById);
+      const saleUnitIds = lines.flatMap((line) => (line.saleUnitId ? [line.saleUnitId] : []));
+      const saleUnits =
+        saleUnitIds.length === 0
+          ? []
+          : await tx.productSaleUnit.findMany({ where: { id: { in: saleUnitIds } } });
+      const stockQuantities = resolveStockQuantities(
+        lines,
+        new Map(saleUnits.map((unit) => [unit.id, unit])),
+      );
 
       const { warnings } = await applyStockMovements(tx, {
         businessId,
@@ -145,11 +157,12 @@ export class SalesService {
         policy: 'BLOCK',
         insufficientStockField: 'lines',
         entries: lines
-          .filter((line) => productById.get(line.productId)!.tracksStock)
-          .map((line) => ({
+          .map((line, index) => ({ line, stock: stockQuantities[index]! }))
+          .filter(({ line }) => productById.get(line.productId)!.tracksStock)
+          .map(({ line, stock }) => ({
             productId: line.productId,
             type: InventoryMovementType.SALE,
-            quantityDelta: -line.quantity,
+            quantityDelta: -stock.quantity.toNumber(),
             requireActiveProduct: true,
             refType: SALE_REF_TYPE,
             refId: saleId,
@@ -165,12 +178,16 @@ export class SalesService {
         paymentMethod: input.paymentMethod,
         occurredAt,
         note: input.note,
-        lines: lines.map((line) => {
+        lines: lines.map((line, index) => {
           const product = productById.get(line.productId)!;
+          const unit = stockQuantities[index]!.unit;
           return {
             kind: SaleLineKind.PRODUCT,
             productId: product.id,
             washTypeId: null,
+            saleUnitId: unit?.id ?? null,
+            saleUnitLabel: unit?.label ?? null,
+            saleUnitFactor: unit?.factor ?? null,
             descriptionSnapshot: product.name,
             codeSnapshot: product.code ?? null,
             quantity: line.quantity,
@@ -248,7 +265,8 @@ export class SalesService {
    *    anulaciones simultáneas con claves distintas no generan dos
    *    `SALE_VOID`: la segunda espera y encuentra la venta ya anulada.
    * 2. Por cada línea con `movesStock = true`, un `SALE_VOID` que devuelve la
-   *    cantidad al stock. Sin `requireActiveProduct`: se anula aunque el
+   *    cantidad al stock: `quantity × saleUnitFactor` copiado al vender
+   *    (DEC-91), aunque la forma haya cambiado después. Sin `requireActiveProduct`: se anula aunque el
    *    producto se haya desactivado después (BR-P21).
    *
    * La venta, sus líneas y sus movimientos originales no se borran ni se
@@ -308,7 +326,9 @@ export class SalesService {
           .map((line) => ({
             productId: line.productId!,
             type: InventoryMovementType.SALE_VOID,
-            quantityDelta: Number(line.quantity),
+            quantityDelta: new Prisma.Decimal(line.quantity)
+              .times(line.saleUnitFactor ?? 1)
+              .toNumber(),
             refType: SALE_REF_TYPE,
             refId: id,
             occurredAt,
@@ -333,6 +353,10 @@ export interface SaleLineDraft {
   washTypeId: string | null;
   descriptionSnapshot: string;
   codeSnapshot: string | null;
+  /** Solo en líneas `PRODUCT` vendidas con una forma de venta (DEC-91). */
+  saleUnitId?: string | null;
+  saleUnitLabel?: string | null;
+  saleUnitFactor?: Prisma.Decimal | null;
   quantity: number;
   /** `number` en mostrador (lo envía el cliente); `Decimal` en el lavado (el `amount` de la opción). */
   unitPrice: number | Prisma.Decimal;
@@ -397,6 +421,7 @@ export async function writeSale(
 
 interface PricedLine {
   productId: string;
+  saleUnitId?: string;
   quantity: number;
   unitPrice: number;
   subtotal: Prisma.Decimal;
@@ -405,8 +430,10 @@ interface PricedLine {
 /**
  * Forma de la venta (06-API.md §2): de 1 a 50 líneas, un método de pago
  * (DEC-30), cantidad > 0 con hasta 3 decimales, precio ≥ 0 con hasta 2, nota
- * de hasta 500 y sin productos repetidos. Devuelve las líneas con su
- * subtotal: `quantity × unitPrice` redondeado half-up a 2 decimales.
+ * de hasta 500 y sin repetir producto y forma de venta (el mismo producto
+ * puede ir en dos líneas con formas distintas, p. ej. un octavo y un galón,
+ * DEC-91). Devuelve las líneas con su subtotal: `quantity × unitPrice`
+ * redondeado half-up a 2 decimales.
  */
 function validateCreateSale(input: CreateSaleInput): PricedLine[] {
   const errors: FieldError[] = [];
@@ -450,7 +477,8 @@ function validateCreateSale(input: CreateSaleInput): PricedLine[] {
 
   const seen = new Set<string>();
   for (const [index, line] of lines.entries()) {
-    if (seen.has(line.productId)) {
+    const key = `${line.productId}:${line.saleUnitId ?? ''}`;
+    if (seen.has(key)) {
       throw new ProblemException({
         status: HttpStatus.BAD_REQUEST,
         code: 'DUPLICATE_PRODUCT_LINE',
@@ -458,7 +486,7 @@ function validateCreateSale(input: CreateSaleInput): PricedLine[] {
         errors: [{ field: `lines.${index}.productId`, message: 'Producto repetido.' }],
       });
     }
-    seen.add(line.productId);
+    seen.add(key);
   }
 
   // Subtotal y total son Decimal(10,2): una cantidad y un precio válidos por
@@ -523,6 +551,57 @@ function assertSellable(lines: PricedLine[], productById: Map<string, Product>):
       });
     }
   }
+}
+
+/**
+ * Stock que descuenta cada línea (DEC-91): sin forma, la cantidad tal cual
+ * (unidad del producto); con forma, `cantidad × equivalencia`. La forma debe
+ * ser del producto de la línea (si no, 404 `SALE_UNIT_NOT_FOUND`) y estar
+ * activa (409 `SALE_UNIT_INACTIVE`). El resultado se guarda en
+ * `Decimal(12,3)`: si no cabe en 3 decimales o supera el máximo, 400.
+ */
+function resolveStockQuantities(
+  lines: PricedLine[],
+  unitById: Map<string, ProductSaleUnit>,
+): { quantity: Prisma.Decimal; unit: ProductSaleUnit | null }[] {
+  const errors: FieldError[] = [];
+  const result = lines.map((line, index) => {
+    const quantity = new Prisma.Decimal(String(line.quantity));
+    if (!line.saleUnitId) return { quantity, unit: null };
+    const unit = unitById.get(line.saleUnitId);
+    if (!unit || unit.productId !== line.productId) {
+      throw new ProblemException({
+        status: HttpStatus.NOT_FOUND,
+        code: 'SALE_UNIT_NOT_FOUND',
+        title: 'Forma de venta no encontrada',
+        errors: [
+          { field: `lines.${index}.saleUnitId`, message: 'No es una forma de venta del producto.' },
+        ],
+      });
+    }
+    if (!unit.isActive) {
+      throw new ProblemException({
+        status: HttpStatus.CONFLICT,
+        code: 'SALE_UNIT_INACTIVE',
+        title: 'La forma de venta está desactivada',
+        errors: [
+          { field: `lines.${index}.saleUnitId`, message: `«${unit.label}» ya no se vende.` },
+        ],
+      });
+    }
+    const stock = quantity.times(unit.factor);
+    if (stock.decimalPlaces() > QUANTITY_DECIMALS) {
+      errors.push({
+        field: `lines.${index}.quantity`,
+        message: `Con «${unit.label}», esa cantidad descuenta ${stock.toString()}: usa una cantidad entera o que dé hasta ${QUANTITY_DECIMALS} decimales.`,
+      });
+    } else if (stock.greaterThan(new Prisma.Decimal(String(MAX_QUANTITY)))) {
+      errors.push({ field: `lines.${index}.quantity`, message: MAX_QUANTITY_MESSAGE });
+    }
+    return { quantity: stock, unit };
+  });
+  if (errors.length > 0) throw new ValidationProblemException(errors);
+  return result;
 }
 
 /** Motivo obligatorio (BR-V7): sin texto → 400; hasta 500 caracteres. */

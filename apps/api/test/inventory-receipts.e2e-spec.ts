@@ -115,7 +115,16 @@ describeIfTestDb('POST /api/v1/inventory/receipts (e2e)', () => {
     }).expect(201);
 
     expect(Object.keys(res.body).sort()).toEqual(
-      ['businessId', 'createdAt', 'createdById', 'id', 'lines', 'note', 'occurredAt'].sort(),
+      [
+        'businessId',
+        'createdAt',
+        'createdById',
+        'id',
+        'lines',
+        'note',
+        'occurredAt',
+        'totalCost',
+      ].sort(),
     );
     expect(res.body).toMatchObject({
       businessId,
@@ -323,7 +332,16 @@ describeIfTestDb('POST /api/v1/inventory/receipts (e2e)', () => {
       expect(Object.keys(first.body).sort()).toEqual(['items', 'nextCursor']);
       expect(first.body.items).toHaveLength(1);
       expect(Object.keys(first.body.items[0]).sort()).toEqual(
-        ['businessId', 'createdAt', 'createdById', 'id', 'lineCount', 'note', 'occurredAt'].sort(),
+        [
+          'businessId',
+          'createdAt',
+          'createdById',
+          'id',
+          'lineCount',
+          'note',
+          'occurredAt',
+          'totalCost',
+        ].sort(),
       );
       expect(first.body.items[0]).toMatchObject({
         id: newer.body.id,

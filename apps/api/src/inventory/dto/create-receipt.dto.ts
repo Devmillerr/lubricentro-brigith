@@ -11,13 +11,22 @@ import {
   IsString,
   IsUUID,
   Max,
+  Min,
   MaxLength,
   ValidateNested,
 } from 'class-validator';
-import { MAX_QUANTITY, MAX_QUANTITY_MESSAGE } from '../../common/decimal-limits';
+import {
+  MAX_MONEY,
+  MAX_MONEY_MESSAGE,
+  MAX_QUANTITY,
+  MAX_QUANTITY_MESSAGE,
+} from '../../common/decimal-limits';
 import { MAX_RECEIPT_LINES, type ReceiptBatchInput } from '../inventory.service';
 
-/** Una línea de la recepción: producto y cantidad recibida (BR-P6). */
+/**
+ * Una línea de la recepción: producto, cantidad recibida (BR-P6) y, si se
+ * conoce, cuánto se pagó en total por esa línea (DEC-90).
+ */
 export class ReceiptLineDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID('all', { message: 'El producto no es válido.' })
@@ -34,13 +43,30 @@ export class ReceiptLineDto {
   @IsPositive({ message: 'La cantidad debe ser mayor que 0.' })
   @Max(MAX_QUANTITY, { message: MAX_QUANTITY_MESSAGE })
   quantity!: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Total pagado por la línea (no por unidad), en soles. Opcional: sin monto, la línea se registra igual (DEC-90).',
+    minimum: 0,
+    maximum: MAX_MONEY,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber(
+    { maxDecimalPlaces: 2 },
+    { message: 'El monto debe ser un número con hasta 2 decimales.' },
+  )
+  @Min(0, { message: 'El monto no puede ser negativo.' })
+  @Max(MAX_MONEY, { message: MAX_MONEY_MESSAGE })
+  purchaseCost?: number;
 }
 
 /**
  * Recepción en lote (R3, 06-API.md §2 "Cambios de R3"): de 1 a 100 líneas,
  * sin productos repetidos (el servicio responde `DUPLICATE_PRODUCT_LINE`).
- * Sin proveedor ni costo (DEC-36). Los mensajes van en español porque la web
- * los muestra junto al campo.
+ * Sin proveedor; el monto pagado es opcional por línea (DEC-90, reabre
+ * DEC-36). Los mensajes van en español porque la web los muestra junto al
+ * campo.
  */
 export class CreateReceiptDto implements ReceiptBatchInput {
   @ApiPropertyOptional({

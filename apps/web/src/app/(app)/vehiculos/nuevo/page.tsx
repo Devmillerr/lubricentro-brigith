@@ -8,7 +8,9 @@ import { VehicleForm } from '@/components/vehicles/vehicle-form';
 
 /**
  * Registrar un vehículo sin cliente (BR-C4), desde "Crear vehículo con esta
- * placa" del Inicio (07-UI-UX.md §3.1). `?placa=` precarga la placa buscada.
+ * placa" del Inicio (07-UI-UX.md §3.1) o desde "Nuevo mantenimiento".
+ * `?placa=` precarga la placa buscada; `?siguiente=mantenimiento` sigue al
+ * mantenimiento del vehículo al guardarlo.
  */
 export default function NewVehicleWithoutCustomerPage() {
   return (
@@ -22,6 +24,14 @@ export default function NewVehicleWithoutCustomerPage() {
 }
 
 function Form() {
-  const plate = useSearchParams().get('placa') ?? '';
-  return <VehicleForm mode="create" customerId={null} initialPlate={plate} />;
+  const params = useSearchParams();
+  const plate = params.get('placa') ?? '';
+  return (
+    <VehicleForm
+      mode="create"
+      customerId={null}
+      initialPlate={plate}
+      thenMaintenance={params.get('siguiente') === 'mantenimiento'}
+    />
+  );
 }
