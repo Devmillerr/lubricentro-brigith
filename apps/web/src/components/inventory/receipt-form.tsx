@@ -12,6 +12,7 @@ import { useIdempotencyKey } from '@/lib/api/idempotency';
 import { callApi, failureMessage, type ApiFailure } from '@/lib/api/request';
 import { formatQuantity, parseQuantity, type ProductWithStock } from '@/lib/inventory/format';
 import { formatCents, parsePrice } from '@/lib/sales/format';
+import { shortUnit } from '@/lib/products/container';
 import {
   MAX_RECEIPT_LINES,
   MAX_RECEIPT_NOTE,
@@ -326,8 +327,17 @@ function LineRow({
   const inputId = `receipt-line-${product.id}`;
   const costId = `receipt-cost-${product.id}`;
   const onQuantity = (quantity: string) => onChange({ quantity });
-  // Atajos para recibir por forma (p. ej. +1 Balde = +5 galón): la cantidad va en la unidad de stock.
-  const bigUnits = product.saleUnits.filter((unit) => Number(unit.factor) > 1);
+  // Atajos para recibir por envase o forma (p. ej. +1 Balde = +20 litros): la
+  // cantidad va en la unidad de stock. Con envase (DEC-93) se usa su capacidad.
+  const bigUnits = product.containerCapacity
+    ? [
+        {
+          id: 'container',
+          label: product.containerLabel ?? 'Envase',
+          factor: product.containerCapacity,
+        },
+      ]
+    : product.saleUnits.filter((unit) => Number(unit.factor) > 1);
 
   return (
     <li className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
@@ -396,7 +406,7 @@ function LineRow({
               }}
             >
               <Plus className="mr-1 size-4" aria-hidden />1 {unit.label} (
-              {formatQuantity(unit.factor)} {product.unit})
+              {formatQuantity(unit.factor)} {shortUnit(product.unit)})
             </Button>
           ))}
         </div>

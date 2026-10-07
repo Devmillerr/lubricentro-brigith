@@ -207,3 +207,102 @@ describeIfTestDb('Unidades, formas de venta y monto de recepciones (e2e)', () =>
     return { id: (me.body.businessId ?? me.body.business?.id) as string };
   }
 });
+
+describeIfTestDb('Envase abierto del producto (DEC-93, e2e)', () => {
+  let app: INestApplication;
+  let prisma: PrismaService;
+  let token: string;
+
+  const server = () => app.getHttpServer() as Parameters<typeof request>[0];
+  const auth = (req: request.Test) => req.set('Authorization', `Bearer ${token}`);
+
+  beforeAll(async () => {
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+    app = moduleRef.createNestApplication();
+    applyGlobalPrefix(app);
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+        exceptionFactory: validationExceptionFactory,
+      }),
+    );
+    app.useGlobalFilters(new ProblemDetailsFilter());
+    await app.init();
+    prisma = app.get(PrismaService);
+
+    const suffix = randomUUID();
+    const password = randomUUID();
+    const business = await prisma.business.create({
+      data: { name: `E2E DEC-93 ${suffix}`, slug: `e2e-dec93-${suffix}` },
+    });
+    await prisma.user.create({
+      data: {
+        businessId: business.id,
+        name: 'E2E DEC-93',
+        username: `e2e-dec93-${suffix}`,
+        passwordHash: await argon2.hash(password, { type: argon2.argon2id }),
+      },
+    });
+    const login = await request(server())
+      .post('/api/v1/auth/login')
+      .send({ username: `e2e-dec93-${suffix}`, password })
+      .expect(200);
+    token = login.body.accessToken as string;
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('POST /products con balde de 20 L devuelve el envase; sin envase, null', async () => {
+    const bucket = await auth(request(server()).post('/api/v1/products'))
+      .send({
+        name: 'Aceite Balde granel',
+        unit: 'litro',
+        containerCapacity: 20,
+        containerLabel: 'Balde',
+      })
+      .expect(201);
+    expect(bucket.body).toMatchObject({ containerCapacity: '20', containerLabel: 'Balde' });
+
+    const normal = await auth(request(server()).post('/api/v1/products'))
+      .send({ name: 'Filtro', unit: 'unidad' })
+      .expect(201);
+    expect(normal.body).toMatchObject({ containerCapacity: null, containerLabel: null });
+  });
+
+  it('rechaza capacidad ≤ 0, capacidad sin nombre y nombre sin capacidad', async () => {
+    await auth(request(server()).post('/api/v1/products'))
+      .send({ name: 'X', unit: 'litro', containerCapacity: 0, containerLabel: 'Balde' })
+      .expect(400);
+    const noLabel = await auth(request(server()).post('/api/v1/products'))
+      .send({ name: 'X', unit: 'litro', containerCapacity: 20 })
+      .expect(400);
+    expect(noLabel.body.errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'containerLabel' })]),
+    );
+    await auth(request(server()).post('/api/v1/products'))
+      .send({ name: 'X', unit: 'litro', containerLabel: 'Balde' })
+      .expect(400);
+  });
+
+  it('PATCH agrega y quita el envase; no toca saldo ni movimientos', async () => {
+    const created = await auth(request(server()).post('/api/v1/products'))
+      .send({ name: 'Aceite Balde 15w40 diesel', unit: 'litro' })
+      .expect(201);
+    const id = created.body.id as string;
+    const withBucket = await auth(request(server()).patch(`/api/v1/products/${id}`))
+      .send({ containerCapacity: 20, containerLabel: 'Balde' })
+      .expect(200);
+    expect(withBucket.body).toMatchObject({ containerCapacity: '20', stockQuantity: '0' });
+    const removed = await auth(request(server()).patch(`/api/v1/products/${id}`))
+      .send({ containerCapacity: null, containerLabel: null })
+      .expect(200);
+    expect(removed.body).toMatchObject({ containerCapacity: null, containerLabel: null });
+    expect(await prisma.inventoryMovement.count({ where: { productId: id } })).toBe(0);
+  });
+});

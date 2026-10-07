@@ -8,6 +8,9 @@ import { FormError } from '@/components/customers/form-error';
 import { CompatibilitiesSection } from '@/components/products/compatibilities-section';
 import { ProductImage } from '@/components/products/product-image';
 import { SaleUnitsSection } from '@/components/products/sale-units-section';
+import { BucketGauge, hasContainer } from '@/components/products/bucket-gauge';
+import { formatQuantity } from '@/lib/inventory/format';
+import { shortUnit } from '@/lib/products/container';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge, PageHeader } from '@/components/ui/page-header';
 import { QueryError } from '@/components/ui/query-error';
@@ -82,7 +85,21 @@ export default function ProductDetailPage() {
         <Detail label="Stock">
           {product.tracksStock ? 'Controla stock' : 'No controla stock'}
         </Detail>
+        {hasContainer(product) && (
+          <Detail label="Envase">
+            {product.containerLabel} de {formatQuantity(product.containerCapacity)}{' '}
+            {shortUnit(product.unit)}
+          </Detail>
+        )}
       </dl>
+
+      {hasContainer(product) && product.tracksStock && (
+        <BucketGauge
+          product={product}
+          balance={Number(product.stockQuantity)}
+          counted={product.isCounted}
+        />
+      )}
 
       <Link href={`/inventario/${product.id}`} className={buttonVariants({ variant: 'outline' })}>
         <Boxes className="mr-2 size-4" aria-hidden />

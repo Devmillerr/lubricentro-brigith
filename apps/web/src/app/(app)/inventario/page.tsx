@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { StockAlerts } from '@/components/inventory/stock-alerts';
 import { buttonVariants } from '@/components/ui/button';
 import { StockBadge } from '@/components/inventory/stock-badge';
+import { BucketGauge, hasContainer } from '@/components/products/bucket-gauge';
 import { chipClass } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
@@ -211,6 +212,14 @@ function InventoryRow({ product, status }: { product: ProductWithStock; status: 
             <span className="mt-1 flex">
               <StockBadge status={status} />
             </span>
+          )}
+          {hasContainer(product) && product.stock && status !== 'not-counted' && (
+            <BucketGauge
+              product={product}
+              balance={product.stock.balance}
+              size="sm"
+              className="mt-1"
+            />
           )}
         </span>
         {showBalance && product.stock && (

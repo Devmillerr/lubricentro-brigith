@@ -22,6 +22,7 @@ import {
   type MovementType,
 } from '@/lib/inventory/format';
 import { findProduct } from '@/lib/products/product-lookup';
+import { BucketGauge, hasContainer } from '@/components/products/bucket-gauge';
 import { cn } from '@/lib/utils';
 
 /** Inventario de un producto: saldo, Contar / Ingreso / Ajuste e historial. */
@@ -96,6 +97,13 @@ export default function ProductInventoryPage() {
             negative={stock.data.balance < 0}
             tracksStock={data.tracksStock}
           />
+          {hasContainer(data) && data.tracksStock && (
+            <BucketGauge
+              product={data}
+              balance={stock.data.balance}
+              counted={stock.data.isCounted}
+            />
+          )}
 
           <StockOperationForm
             productId={data.id}

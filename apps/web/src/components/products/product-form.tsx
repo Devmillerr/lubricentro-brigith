@@ -16,6 +16,7 @@ import { CategoryPicker } from './category-picker';
 import { NewCategoryForm } from './new-category-form';
 import { UnitPicker } from './unit-picker';
 import { isValidUnit, UNIT_ERROR, UNIT_SUGGESTIONS } from '@/lib/products/units';
+import { parseQuantity } from '@/lib/inventory/format';
 import { useSubmitLock } from '@/lib/use-submit-lock';
 
 type Values = {
@@ -28,6 +29,10 @@ type Values = {
   categoryId: string;
   salePrice: string;
   tracksStock: boolean;
+  /** Envase abierto (DEC-93): nombre y capacidad, juntos u omitidos. */
+  hasContainer: boolean;
+  containerLabel: string;
+  containerCapacity: string;
 };
 type FieldErrors = Partial<Record<keyof Values, string>>;
 
@@ -61,6 +66,9 @@ export function ProductForm({ product }: { product?: Product }) {
     categoryId: product?.categoryId ?? '',
     salePrice: formatPrice(product?.salePrice ?? null) ?? '',
     tracksStock: product?.tracksStock ?? true,
+    hasContainer: Boolean(product?.containerCapacity),
+    containerLabel: product?.containerLabel ?? '',
+    containerCapacity: product?.containerCapacity ? String(Number(product.containerCapacity)) : '',
   });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [failure, setFailure] = useState<ApiFailure | null>(null);
@@ -113,6 +121,14 @@ export function ProductForm({ product }: { product?: Product }) {
         found.salePrice = 'Usa como máximo 2 decimales.';
       }
     }
+    if (values.hasContainer) {
+      if (!values.containerLabel.trim()) found.containerLabel = 'Escribe el nombre del envase.';
+      const capacity = parseQuantity(values.containerCapacity);
+      if (capacity === null || capacity <= 0) {
+        found.containerCapacity = 'Capacidad mayor que 0, con hasta 3 decimales.';
+      }
+      if (!isValidUnit(values.unit)) found.unit = UNIT_ERROR;
+    }
     return found;
   }
 
@@ -127,6 +143,8 @@ export function ProductForm({ product }: { product?: Product }) {
     setSubmitting(true);
 
     const price = values.salePrice.trim() ? Number(values.salePrice.replace(',', '.')) : null;
+    const containerCapacity = values.hasContainer ? parseQuantity(values.containerCapacity) : null;
+    const containerLabel = values.hasContainer ? values.containerLabel.trim() : null;
     let result;
     if (product) {
       const body: Schemas['UpdateProductDto'] = {};
@@ -143,6 +161,15 @@ export function ProductForm({ product }: { product?: Product }) {
         body.salePrice = price;
       }
       if (values.tracksStock !== product.tracksStock) body.tracksStock = values.tracksStock;
+      const currentCapacity =
+        product.containerCapacity === null ? null : Number(product.containerCapacity);
+      if (
+        containerCapacity !== currentCapacity ||
+        containerLabel !== (product.containerLabel ?? null)
+      ) {
+        body.containerCapacity = containerCapacity;
+        body.containerLabel = containerLabel;
+      }
       if (Object.keys(body).length === 0) {
         router.push(`/productos/${product.id}`);
         return;
@@ -161,6 +188,10 @@ export function ProductForm({ product }: { product?: Product }) {
       }
       if (values.categoryId) body.categoryId = values.categoryId;
       if (price !== null) body.salePrice = price;
+      if (containerCapacity !== null && containerLabel) {
+        body.containerCapacity = containerCapacity;
+        body.containerLabel = containerLabel;
+      }
       result = await callApi(api.POST('/products', { body }));
     }
 
@@ -180,6 +211,8 @@ export function ProductForm({ product }: { product?: Product }) {
       unit: apiErrors.unit,
       categoryId: apiErrors.categoryId,
       salePrice: apiErrors.salePrice,
+      containerLabel: apiErrors.containerLabel,
+      containerCapacity: apiErrors.containerCapacity,
     });
     if (!codeTaken) setFailure(result.failure);
     lock.release();
@@ -350,6 +383,54 @@ export function ProductForm({ product }: { product?: Product }) {
           aria-invalid={!!errors.salePrice || undefined}
         />
       </Field>
+
+      <fieldset className="flex flex-col gap-3 rounded-md border border-[var(--border)] p-3">
+        <legend className="sr-only">Envase abierto</legend>
+        <label className="flex min-h-11 items-start gap-3">
+          <input
+            type="checkbox"
+            checked={values.hasContainer}
+            onChange={(e) => update('hasContainer', e.target.checked)}
+            className="mt-0.5 size-5 shrink-0"
+          />
+          <span className="flex flex-col gap-0.5">
+            <span className="text-sm font-medium">Se vende de un envase abierto</span>
+            <span className="text-xs text-[var(--muted-foreground)]">
+              Por ejemplo, un balde del que se vende por partes. Se muestra cuánto queda.
+            </span>
+          </span>
+        </label>
+        {values.hasContainer && (
+          <div className="grid grid-cols-2 gap-3">
+            <Field id="containerLabel" label="Envase" error={errors.containerLabel}>
+              <Input
+                id="containerLabel"
+                value={values.containerLabel}
+                onChange={(e) => update('containerLabel', e.target.value)}
+                maxLength={30}
+                placeholder="Ej.: Balde"
+                autoComplete="off"
+                aria-invalid={!!errors.containerLabel || undefined}
+              />
+            </Field>
+            <Field
+              id="containerCapacity"
+              label={`Capacidad (${values.unit.trim() || 'unidad'})`}
+              error={errors.containerCapacity}
+            >
+              <Input
+                id="containerCapacity"
+                inputMode="decimal"
+                value={values.containerCapacity}
+                onChange={(e) => update('containerCapacity', e.target.value)}
+                placeholder="Ej.: 20"
+                autoComplete="off"
+                aria-invalid={!!errors.containerCapacity || undefined}
+              />
+            </Field>
+          </div>
+        )}
+      </fieldset>
 
       <label className="flex min-h-11 items-start gap-3 rounded-md border border-[var(--border)] p-3">
         <input

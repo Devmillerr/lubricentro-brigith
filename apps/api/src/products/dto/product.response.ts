@@ -66,7 +66,10 @@ export class ProductSaleUnitResponse {
 }
 
 /** `salePrice` y `stockQuantity` son `Decimal` en Prisma y viajan como string en el JSON. */
-export class ProductResponse implements Omit<Product, 'salePrice' | 'stockQuantity'> {
+export class ProductResponse implements Omit<
+  Product,
+  'salePrice' | 'stockQuantity' | 'containerCapacity'
+> {
   @ApiProperty()
   id!: string;
 
@@ -129,6 +132,21 @@ export class ProductResponse implements Omit<Product, 'salePrice' | 'stockQuanti
 
   @ApiProperty({ type: String, format: 'date-time' })
   updatedAt!: Date;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Capacidad del envase abierto en la unidad del producto (Decimal(12,3) como string), p. ej. "20" litros por balde (DEC-93). null = producto normal.',
+  })
+  containerCapacity!: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Nombre del envase ("Balde"). null = producto normal.',
+  })
+  containerLabel!: string | null;
 
   @ApiProperty({
     type: [ProductSaleUnitResponse],

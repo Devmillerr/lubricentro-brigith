@@ -14,9 +14,8 @@ import type { Product } from '@/lib/products/format';
 import { rememberProducts } from '@/lib/products/product-lookup';
 import {
   equivalenceLabel,
-  GALLON_PRESETS,
-  isGallonUnit,
   isValidUnit,
+  saleUnitPresets,
   type SaleUnit,
 } from '@/lib/products/units';
 import { formatMoney, parsePrice, priceInput } from '@/lib/sales/format';
@@ -125,7 +124,7 @@ export function SaleUnitsSection({
                   unit.salePrice ? 'font-semibold' : 'text-sm text-[var(--muted-foreground)]'
                 }
               >
-                {unit.salePrice ? formatMoney(unit.salePrice) : 'Precio al vender'}
+                {unit.salePrice ? `Sugerido ${formatMoney(unit.salePrice)}` : 'Precio al vender'}
               </span>
             </li>
           ))}
@@ -148,7 +147,7 @@ function SaleUnitsEditor({
   const [errors, setErrors] = useState<RowErrors>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const presets = isGallonUnit(product.unit) ? GALLON_PRESETS : [];
+  const presets = saleUnitPresets(product.unit);
   const usedLabels = new Set(rows.map((row) => row.label.trim().toLocaleLowerCase('es')));
 
   function addRow(label = '', factor = '') {
@@ -224,7 +223,8 @@ function SaleUnitsEditor({
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3">
       <p className="text-sm text-[var(--muted-foreground)]">
         El stock se cuenta en <strong className="font-semibold">{product.unit}</strong>. Para cada
-        forma, indica cuánto descuenta y su precio. Si lo dejas sin precio, se escribe al vender.
+        forma, indica cuánto descuenta. El precio se escribe en cada venta; si pones uno aquí, solo
+        se propone y se puede cambiar.
       </p>
 
       {rows.length === 0 && (
@@ -279,12 +279,14 @@ function SaleUnitsEditor({
                   />
                 </label>
                 <label className="flex flex-col gap-1">
-                  <span className="text-xs text-[var(--muted-foreground)]">Precio (S/)</span>
+                  <span className="text-xs text-[var(--muted-foreground)]">
+                    Precio sugerido (opcional)
+                  </span>
                   <Input
                     inputMode="decimal"
                     value={row.price}
                     onChange={(e) => updateRow(row.key, { price: e.target.value })}
-                    placeholder="Al vender"
+                    placeholder="Sin precio"
                     autoComplete="off"
                     aria-invalid={!!rowErrors.price || undefined}
                   />

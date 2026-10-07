@@ -43,6 +43,28 @@ export const GALLON_PRESETS: { label: string; factor: string }[] = [
   { label: 'Balde', factor: '' },
 ];
 
+/** "litro", "Litros", "l", "lt": el stock se cuenta en litros. */
+export function isLiterUnit(unit: string): boolean {
+  return ['litro', 'litros', 'l', 'lt', 'lts'].includes(normalized(unit));
+}
+
+/**
+ * Formas del aceite de balde contado en litros (DEC-93): 1 galón = 4 litros,
+ * así que 1/4 de galón = 1 L y 1/8 de galón = 0.5 L. Solo atajos; el precio
+ * no se asume.
+ */
+export const LITER_PRESETS: { label: string; factor: string }[] = [
+  { label: '1/4 de galón', factor: '1' },
+  { label: '1/8 de galón', factor: '0.5' },
+];
+
+/** Atajos de formas de venta según la unidad de stock. */
+export function saleUnitPresets(unit: string): { label: string; factor: string }[] {
+  if (isGallonUnit(unit)) return GALLON_PRESETS;
+  if (isLiterUnit(unit)) return LITER_PRESETS;
+  return [];
+}
+
 /** "= 0.125 galón" para mostrar la equivalencia de una forma. */
 export function equivalenceLabel(factor: string | number, unit: string): string {
   return `${formatQuantity(factor)} ${unit}`;

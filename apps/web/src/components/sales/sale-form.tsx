@@ -1,12 +1,15 @@
 'use client';
 
 import { Banknote, Minus, Plus, Smartphone, Trash2 } from 'lucide-react';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { FormError } from '@/components/customers/form-error';
 import { ReceiptProductPicker } from '@/components/inventory/receipt-product-picker';
 import { StockHint } from '@/components/maintenance/product-picker';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
+import { BucketGauge, hasContainer } from '@/components/products/bucket-gauge';
+import { formatQuantity } from '@/lib/inventory/format';
+import { shortUnit } from '@/lib/products/container';
 import { Field, Textarea } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { api, type Schemas } from '@/lib/api/client';
@@ -79,10 +82,13 @@ const ERROR_MESSAGES = {
  * (`BLOCK`, DEC-26): no se guarda nada y se marca la línea para corregirla.
  *
  * Formas de venta (DEC-91): si el producto las tiene (octavo, cuarto, galón,
- * balde…), la línea pide elegir una antes de cobrar y toma su precio; nunca
- * el de otra forma. La cantidad va en esa forma y la línea muestra cuánto
- * descuenta del stock. El mismo producto puede ir en varias líneas, una por
- * forma. Los productos sin formas se venden como siempre, en su unidad.
+ * balde…), la línea pide elegir una antes de cobrar. El precio es siempre el
+ * de esta venta (`unitPrice` por línea, DEC-29): si la forma tiene un precio
+ * configurado se propone, si no se escribe; nunca se toma el de otra forma ni
+ * el de ventas anteriores, y el inventario no depende de él (1/4 de galón
+ * siempre descuenta 1 L). La línea muestra presentación, cantidad en la
+ * unidad de stock y precio de venta. El mismo producto puede ir en varias
+ * líneas, una por forma. Los productos sin formas se venden como siempre.
  */
 export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => void }) {
   const [lines, setLines] = useState<Line[]>([]);
@@ -105,6 +111,17 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
     const price = parsePrice(line.price);
     return quantity === null || price === null ? sum : sum + subtotalCents(quantity, price);
   }, 0);
+  // Stock que descontaría el carrito, por producto (para el balde, DEC-93).
+  const consumedByProduct = new Map<string, number>();
+  for (const line of lines) {
+    const quantity = parseQuantity(line.quantity);
+    if (quantity === null) continue;
+    const stock = line.saleUnit ? stockFor(quantity, line.saleUnit.factor) : quantity;
+    consumedByProduct.set(
+      line.product.id,
+      Math.round(((consumedByProduct.get(line.product.id) ?? 0) + stock) * 1000) / 1000,
+    );
+  }
   const allPriced = lines.every(
     (line) => parseQuantity(line.quantity) !== null && parsePrice(line.price) !== null,
   );
@@ -187,7 +204,7 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
       } else if (saleUnit && !fitsStockDecimals(parsedQuantity, saleUnit.factor)) {
         found[key] = 'Con esta forma, usa una cantidad entera.';
       } else if (price.trim() === '') {
-        found[key] = 'Escribe el precio que cobras en esta venta.';
+        found[key] = 'Escribe el precio de venta de esta operación.';
       } else if (parsePrice(price) === null) {
         found[key] = 'Precio de 0 o más, con hasta 2 decimales.';
       }
@@ -290,6 +307,7 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
                   error={lineErrors[line.key]}
                   onChange={(patch) => update(line.key, patch)}
                   onChooseUnit={(saleUnit) => chooseSaleUnit(line.key, saleUnit)}
+                  consumed={consumedByProduct.get(line.product.id) ?? 0}
                   onRemove={() => remove(line.key)}
                 />
               ))}
@@ -381,12 +399,15 @@ function LineRow({
   error,
   onChange,
   onChooseUnit,
+  consumed,
   onRemove,
 }: {
   line: Line;
   error?: string;
   onChange: (patch: Partial<Pick<Line, 'quantity' | 'price'>>) => void;
   onChooseUnit: (saleUnit: SaleUnit) => void;
+  /** Lo que descuenta todo el carrito de este producto, en su unidad de stock. */
+  consumed: number;
   onRemove: () => void;
 }) {
   const { product, saleUnit } = line;
@@ -396,7 +417,17 @@ function LineRow({
   const priceId = `sale-price-${line.key}`;
   const errorId = `sale-line-${line.key}-error`;
   const withUnits = hasSaleUnits(product);
-  const quantityLabel = saleUnit ? saleUnit.label : product.unit;
+  const quantityLabel = saleUnit ? `unidades de ${saleUnit.label}` : product.unit;
+  const stockUnit = shortUnit(product.unit);
+  const priceRef = useRef<HTMLInputElement>(null);
+
+  // Al elegir una presentación sin precio, el foco va al precio de esta venta.
+  const saleUnitId = saleUnit?.id;
+  useEffect(() => {
+    if (saleUnitId && priceRef.current && priceRef.current.value === '') {
+      priceRef.current.focus();
+    }
+  }, [saleUnitId]);
 
   return (
     <li className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
@@ -430,17 +461,50 @@ function LineRow({
               >
                 <span>{unit.label}</span>
                 <span className="text-xs font-normal opacity-80">
-                  {unit.salePrice ? formatMoney(unit.salePrice) : 'precio al vender'}
+                  {formatQuantity(unit.factor)} {stockUnit}
+                  {unit.salePrice ? ` · sugerido ${formatMoney(unit.salePrice)}` : ''}
                 </span>
               </Chip>
             ))}
           </div>
         </div>
       )}
+      {saleUnit && (
+        <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 rounded-md bg-[var(--muted)] px-3 py-2.5 text-sm">
+          <dt className="font-semibold">Presentación:</dt>
+          <dd>{saleUnit.label}</dd>
+          <dt className="font-semibold">Cantidad:</dt>
+          <dd>
+            {quantity !== null
+              ? `${formatQuantity(stockFor(quantity, saleUnit.factor))} ${stockUnit}`
+              : '—'}
+          </dd>
+          <dt className="font-semibold">
+            <label htmlFor={priceId}>
+              Precio de venta{quantity !== null && quantity !== 1 ? ' (c/u)' : ''}:
+            </label>
+          </dt>
+          <dd className="flex items-center gap-1.5">
+            <span className="text-[var(--muted-foreground)]">S/</span>
+            <Input
+              ref={priceRef}
+              id={priceId}
+              inputMode="decimal"
+              autoComplete="off"
+              value={line.price}
+              placeholder="0.00"
+              onChange={(event) => onChange({ price: event.target.value })}
+              aria-invalid={!!error || undefined}
+              aria-describedby={error ? errorId : undefined}
+              className="h-11 w-28 text-right text-lg"
+            />
+          </dd>
+        </dl>
+      )}
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex flex-col gap-1">
           <label htmlFor={quantityId} className="text-xs text-[var(--muted-foreground)]">
-            Cantidad ({quantityLabel})
+            {saleUnit ? `Cuántas (${quantityLabel})` : `Cantidad (${quantityLabel})`}
           </label>
           <div className="flex items-center gap-1">
             <Button
@@ -474,22 +538,24 @@ function LineRow({
             </Button>
           </div>
         </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor={priceId} className="text-xs text-[var(--muted-foreground)]">
-            Precio (S/)
-          </label>
-          <Input
-            id={priceId}
-            inputMode="decimal"
-            autoComplete="off"
-            value={line.price}
-            placeholder="0.00"
-            onChange={(event) => onChange({ price: event.target.value })}
-            aria-invalid={!!error || undefined}
-            aria-describedby={error ? errorId : undefined}
-            className="w-24 text-right"
-          />
-        </div>
+        {!saleUnit && (
+          <div className="flex flex-col gap-1">
+            <label htmlFor={priceId} className="text-xs text-[var(--muted-foreground)]">
+              Precio (S/)
+            </label>
+            <Input
+              id={priceId}
+              inputMode="decimal"
+              autoComplete="off"
+              value={line.price}
+              placeholder="0.00"
+              onChange={(event) => onChange({ price: event.target.value })}
+              aria-invalid={!!error || undefined}
+              aria-describedby={error ? errorId : undefined}
+              className="w-24 text-right"
+            />
+          </div>
+        )}
         <div className="ml-auto flex flex-col items-end gap-1">
           <span className="text-xs text-[var(--muted-foreground)]">Subtotal</span>
           <span className="flex h-11 items-center font-semibold">
@@ -499,7 +565,19 @@ function LineRow({
           </span>
         </div>
       </div>
-      {saleUnit && quantity !== null && product.tracksStock && (
+      {hasContainer(product) && product.tracksStock && product.stock?.isCounted && (
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-[var(--muted-foreground)]">
+            Quedaría en el {(product.containerLabel ?? 'envase').toLocaleLowerCase('es')}
+          </span>
+          <BucketGauge
+            product={product}
+            balance={Math.round((product.stock.balance - consumed) * 1000) / 1000}
+            size="sm"
+          />
+        </div>
+      )}
+      {saleUnit && quantity !== null && product.tracksStock && !hasContainer(product) && (
         <p className="text-xs text-[var(--muted-foreground)]">
           Descuenta {equivalenceLabel(stockFor(quantity, saleUnit.factor), product.unit)} del stock
         </p>

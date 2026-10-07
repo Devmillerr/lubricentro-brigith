@@ -511,3 +511,231 @@ describe('Venta fraccionada aislada: un producto nuevo de 5 galones por caso', (
     expect(await balanceOf(productId)).toBe(5);
   });
 });
+
+/**
+ * Balde abierto en litros (DEC-93): capacidad 20 L, vendido solo por 1/4 de
+ * galón (1 L) y 1/8 de galón (0.5 L), sin precios asumidos. El saldo es el
+ * contenido disponible. Productos de prueba, sin datos reales.
+ */
+describe('Balde de 20 litros vendido por 1/4 y 1/8 de galón (DEC-93)', () => {
+  async function bucketProduct(tenant: Tenant, name: string) {
+    const product = await products.create(tenant.businessId, {
+      name,
+      unit: 'litro',
+      containerCapacity: 20,
+      containerLabel: 'Balde',
+    });
+    const configured = await products.setSaleUnits(tenant.businessId, product.id, [
+      { label: '1/4 de galón', factor: 1 },
+      { label: '1/8 de galón', factor: 0.5 },
+    ]);
+    // Conteo inicial en 0 (el saldo real lo pone el dueño), luego el balde lleno.
+    await inventory.count(tenant.businessId, tenant.userId, {
+      productId: product.id,
+      countedQuantity: 0,
+    });
+    const [quarter, eighth] = configured.saleUnits;
+    return { id: product.id, product: configured, quarter: quarter!, eighth: eighth! };
+  }
+
+  const receiveBucket = (tenant: Tenant, productId: string, buckets = 1) =>
+    inventory.createReceiptBatch(tenant.businessId, tenant.userId, {
+      lines: [{ productId, quantity: 20 * buckets }],
+    });
+
+  it('se configura con capacidad, envase y solo dos formas, sin precio asumido', async () => {
+    const tenant = await createTenant();
+    const { product } = await bucketProduct(tenant, 'Aceite Balde granel');
+    expect(product.unit).toBe('litro');
+    expect(product.containerCapacity?.toString()).toBe('20');
+    expect(product.containerLabel).toBe('Balde');
+    expect(
+      product.saleUnits.map((unit) => [unit.label, unit.factor.toString(), unit.salePrice]),
+    ).toEqual([
+      ['1/4 de galón', '1', null],
+      ['1/8 de galón', '0.5', null],
+    ]);
+  });
+
+  it('20 L → 1/4 → 19 → 1/8 → 18.5 → 1/4 → 17.5 → 1/8 → 17 (precio escrito al vender)', async () => {
+    const tenant = await createTenant();
+    const { id, quarter, eighth } = await bucketProduct(tenant, 'Aceite Balde 25w60 diesel');
+    await receiveBucket(tenant, id);
+    expect(await balanceOf(id)).toBe(20);
+
+    const expected = [
+      [quarter, 19],
+      [eighth, 18.5],
+      [quarter, 17.5],
+      [eighth, 17],
+    ] as const;
+    for (const [unit, remaining] of expected) {
+      const price = unit === quarter ? 12 : 7;
+      const { sale } = await sell(tenant, [
+        { productId: id, saleUnitId: unit.id, quantity: 1, unitPrice: price },
+      ]);
+      expect(Number(sale.total)).toBe(price);
+      const movement = await prisma.inventoryMovement.findFirstOrThrow({
+        where: { refType: SALE_REF_TYPE, refId: sale.id },
+      });
+      expect(Number(movement.quantityDelta)).toBe(-Number(unit.factor));
+      expect(Number(movement.resultingBalance)).toBe(remaining);
+      expect(await balanceOf(id)).toBe(remaining);
+    }
+  });
+
+  it('con 0.5 L: 1/4 se rechaza sin guardar nada, 1/8 vacía el balde y luego nada se vende', async () => {
+    const tenant = await createTenant();
+    const { id, quarter, eighth } = await bucketProduct(tenant, 'Aceite Balde 15w40 diesel');
+    await receiveBucket(tenant, id);
+    // 39 octavos = 19.5 L: quedan 0.5 L.
+    await sell(tenant, [{ productId: id, saleUnitId: eighth.id, quantity: 39, unitPrice: 7 }]);
+    expect(await balanceOf(id)).toBe(0.5);
+
+    await expect(
+      sell(tenant, [{ productId: id, saleUnitId: quarter.id, quantity: 1, unitPrice: 12 }]),
+    ).rejects.toMatchObject({ code: 'INSUFFICIENT_STOCK' });
+    expect(await balanceOf(id)).toBe(0.5);
+
+    await sell(tenant, [{ productId: id, saleUnitId: eighth.id, quantity: 1, unitPrice: 7 }]);
+    expect(await balanceOf(id)).toBe(0);
+
+    // Agotado: aparece en las alertas existentes y no deja vender más.
+    const alerts = await inventory.getAlerts(tenant.businessId);
+    expect(alerts.outOfStock.map((product) => product.productId)).toContain(id);
+    await expect(
+      sell(tenant, [{ productId: id, saleUnitId: eighth.id, quantity: 1, unitPrice: 7 }]),
+    ).rejects.toMatchObject({ code: 'INSUFFICIENT_STOCK' });
+  });
+
+  it('anular devuelve exactamente los litros descontados', async () => {
+    const tenant = await createTenant();
+    const { id, quarter, eighth } = await bucketProduct(tenant, 'Balde anulación');
+    await receiveBucket(tenant, id);
+    const { sale } = await sell(tenant, [
+      { productId: id, saleUnitId: quarter.id, quantity: 2, unitPrice: 12 },
+      { productId: id, saleUnitId: eighth.id, quantity: 3, unitPrice: 7 },
+    ]);
+    expect(await balanceOf(id)).toBe(16.5);
+    await sales.void(tenant.businessId, tenant.userId, sale.id, { reason: 'Prueba' });
+    expect(await balanceOf(id)).toBe(20);
+  });
+
+  it('dos baldes recibidos = 40 L y la venta sigue descontando litros del total', async () => {
+    const tenant = await createTenant();
+    const { id, quarter } = await bucketProduct(tenant, 'Balde doble');
+    await receiveBucket(tenant, id, 2);
+    expect(await balanceOf(id)).toBe(40);
+    await sell(tenant, [{ productId: id, saleUnitId: quarter.id, quantity: 1, unitPrice: 12 }]);
+    expect(await balanceOf(id)).toBe(39);
+  });
+
+  it('los tres productos de balde son independientes entre sí', async () => {
+    const tenant = await createTenant();
+    const a = await bucketProduct(tenant, 'Aceite Balde granel');
+    const b = await bucketProduct(tenant, 'Aceite Balde 25w60 diesel');
+    const c = await bucketProduct(tenant, 'Aceite Balde 15w40 diesel');
+    for (const product of [a, b, c]) await receiveBucket(tenant, product.id);
+    await sell(tenant, [
+      { productId: a.id, saleUnitId: a.quarter.id, quantity: 1, unitPrice: 12 },
+      { productId: b.id, saleUnitId: b.eighth.id, quantity: 1, unitPrice: 7 },
+    ]);
+    expect(await balanceOf(a.id)).toBe(19);
+    expect(await balanceOf(b.id)).toBe(19.5);
+    expect(await balanceOf(c.id)).toBe(20);
+    // Las formas de un balde no sirven para otro.
+    await expect(
+      sell(tenant, [{ productId: c.id, saleUnitId: a.quarter.id, quantity: 1, unitPrice: 12 }]),
+    ).rejects.toMatchObject({ code: 'SALE_UNIT_NOT_FOUND' });
+  });
+
+  it('valida el envase: capacidad y nombre juntos y unidad válida; sin envase, producto normal', async () => {
+    const tenant = await createTenant();
+    await expect(
+      products.create(tenant.businessId, { name: 'X', unit: 'litro', containerCapacity: 20 }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(
+      products.create(tenant.businessId, { name: 'X', unit: 'litro', containerLabel: 'Balde' }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    const legacy = await prisma.product.create({
+      data: { businessId: tenant.businessId, name: 'Antiguo', unit: '0' },
+    });
+    await expect(
+      products.update(tenant.businessId, legacy.id, {
+        containerCapacity: 20,
+        containerLabel: 'Balde',
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    const untouched = await prisma.product.findFirstOrThrow({ where: { id: legacy.id } });
+    expect(untouched.containerCapacity).toBeNull();
+
+    // Quitar el envase deja el producto normal.
+    const { id } = await bucketProduct(tenant, 'Balde que se quita');
+    const plain = await products.update(tenant.businessId, id, {
+      containerCapacity: null,
+      containerLabel: null,
+    });
+    expect(plain.containerCapacity).toBeNull();
+    expect(plain.containerLabel).toBeNull();
+
+    const normal = await products.create(tenant.businessId, { name: 'Filtro', unit: 'unidad' });
+    expect(normal.containerCapacity).toBeNull();
+    expect(normal.containerLabel).toBeNull();
+  });
+});
+
+/**
+ * Precio decidido en cada venta (2026-10-06): las formas 1/4 y 1/8 no tienen
+ * precio fijo; cada venta guarda el suyo y el inventario no depende de él.
+ */
+describe('Precio del balde decidido en cada venta', () => {
+  it('1/4 a S/ 10, 1/4 a S/ 11 y 1/8 a S/ 6: tres ventas válidas, cada una con su precio y sus litros', async () => {
+    const tenant = await createTenant();
+    const product = await products.create(tenant.businessId, {
+      name: 'Aceite Balde granel',
+      unit: 'litro',
+      containerCapacity: 20,
+      containerLabel: 'Balde',
+    });
+    const configured = await products.setSaleUnits(tenant.businessId, product.id, [
+      { label: '1/4 de galón', factor: 1 },
+      { label: '1/8 de galón', factor: 0.5 },
+    ]);
+    const [quarter, eighth] = configured.saleUnits;
+    expect(quarter!.salePrice).toBeNull();
+    expect(eighth!.salePrice).toBeNull();
+    await inventory.count(tenant.businessId, tenant.userId, {
+      productId: product.id,
+      countedQuantity: 20,
+    });
+
+    const plan = [
+      { unit: quarter!, price: 10, liters: 1, remaining: 19 },
+      { unit: quarter!, price: 11, liters: 1, remaining: 18 },
+      { unit: eighth!, price: 6, liters: 0.5, remaining: 17.5 },
+    ];
+    const saleIds: string[] = [];
+    for (const step of plan) {
+      const { sale } = await sell(tenant, [
+        { productId: product.id, saleUnitId: step.unit.id, quantity: 1, unitPrice: step.price },
+      ]);
+      saleIds.push(sale.id);
+      expect(Number(sale.total)).toBe(step.price);
+      expect(Number(sale.lines[0]!.unitPrice)).toBe(step.price);
+      expect(Number(sale.lines[0]!.saleUnitFactor)).toBe(step.liters);
+      expect(await balanceOf(product.id)).toBe(step.remaining);
+    }
+
+    // Cada venta conserva su propio precio: la segunda no cambió la primera.
+    const stored = await prisma.saleLine.findMany({
+      where: { saleId: { in: saleIds } },
+      include: { sale: true },
+      orderBy: { sale: { createdAt: 'asc' } },
+    });
+    expect(stored.map((line) => Number(line.unitPrice))).toEqual([10, 11, 6]);
+    // Y la forma sigue sin precio configurado.
+    const units = await prisma.productSaleUnit.findMany({ where: { productId: product.id } });
+    expect(units.every((unit) => unit.salePrice === null)).toBe(true);
+  });
+});

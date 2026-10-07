@@ -189,6 +189,11 @@ export class ProductsService {
   }
 
   async create(businessId: string, dto: CreateProductDto): Promise<ProductWithSaleUnits> {
+    assertContainer({
+      unit: dto.unit,
+      containerCapacity: dto.containerCapacity ?? null,
+      containerLabel: dto.containerLabel?.trim() || null,
+    });
     if (dto.categoryId) {
       await this.ensureCategoryExists(businessId, dto.categoryId);
     }
@@ -212,6 +217,8 @@ export class ProductsService {
           // confiar en el default de Postgres, que no todo entorno de
           // prueba simula (ver test/support/fake-scoped-prisma.ts).
           tracksStock: dto.tracksStock ?? true,
+          containerCapacity: dto.containerCapacity,
+          containerLabel: dto.containerLabel?.trim() || undefined,
         },
       });
     } catch (error) {
@@ -224,7 +231,26 @@ export class ProductsService {
     id: string,
     dto: UpdateProductDto,
   ): Promise<ProductWithSaleUnits> {
-    await this.ensureExists(businessId, id);
+    const existing = await this.findExisting(businessId, id);
+    if (dto.containerLabel) dto.containerLabel = dto.containerLabel.trim() || null;
+    // Se valida el resultado final: lo enviado sobre lo que ya tiene.
+    if (
+      dto.containerCapacity !== undefined ||
+      dto.containerLabel !== undefined ||
+      (dto.unit !== undefined && existing.containerCapacity !== null)
+    ) {
+      assertContainer({
+        unit: dto.unit ?? existing.unit,
+        containerCapacity:
+          dto.containerCapacity !== undefined
+            ? dto.containerCapacity
+            : existing.containerCapacity === null
+              ? null
+              : Number(existing.containerCapacity),
+        containerLabel:
+          dto.containerLabel !== undefined ? dto.containerLabel || null : existing.containerLabel,
+      });
+    }
 
     if (dto.categoryId) {
       await this.ensureCategoryExists(businessId, dto.categoryId);
@@ -384,6 +410,14 @@ export class ProductsService {
     return [categoryId, ...children.map((child) => child.id)];
   }
 
+  private async findExisting(businessId: string, id: string): Promise<Product> {
+    const existing = await forBusiness(this.prisma, businessId).product.findFirst({
+      where: { id },
+    });
+    if (!existing) throw this.notFound();
+    return existing;
+  }
+
   private async ensureExists(businessId: string, id: string): Promise<void> {
     const existing = await forBusiness(this.prisma, businessId).product.findFirst({
       where: { id },
@@ -475,4 +509,30 @@ function hasDecimals(value: number, maxDecimals: number): boolean {
     Number.isFinite(value) &&
     new Prisma.Decimal(String(value)).decimalPlaces() <= maxDecimals
   );
+}
+
+/**
+ * Envase abierto (DEC-93): capacidad y nombre van juntos (los dos o ninguno),
+ * y la capacidad se expresa en la unidad del producto, que debe ser válida
+ * (DEC-92). Sin envase, el producto es normal y no se valida nada más.
+ */
+function assertContainer(product: {
+  unit: string;
+  containerCapacity: number | null;
+  containerLabel: string | null;
+}): void {
+  const errors: FieldError[] = [];
+  if (product.containerCapacity !== null && !product.containerLabel) {
+    errors.push({
+      field: 'containerLabel',
+      message: 'Escribe el nombre del envase (p. ej. Balde).',
+    });
+  }
+  if (product.containerLabel && product.containerCapacity === null) {
+    errors.push({ field: 'containerCapacity', message: 'Indica la capacidad del envase.' });
+  }
+  if (product.containerCapacity !== null && !isValidUnit(product.unit)) {
+    errors.push({ field: 'unit', message: UNIT_MESSAGE });
+  }
+  if (errors.length > 0) throw new ValidationProblemException(errors);
 }

@@ -319,6 +319,13 @@ model Product {
   /// Tiene al menos un COUNT (BR-P8). También en caché, escrito por el StockLedger.
   isCounted     Boolean @default(false)
 
+  /// Envase abierto del que se vende (DEC-93): p. ej. un balde de 20 litros.
+  /// Opcionales y juntos. El saldo sigue siendo `stockQuantity` (en `unit`);
+  /// el contenido del envase abierto y los envases cerrados se derivan de él
+  /// y de esta capacidad, sin guardarse aparte. Nulos = producto normal.
+  containerCapacity Decimal? @db.Decimal(12, 3)
+  containerLabel    String?
+
   /// Opcionales (R2, BR-P19b): se eligen de sugerencias (`GET /products/facets`),
   /// nunca se inventan ni se exigen.
   viscosity    String?

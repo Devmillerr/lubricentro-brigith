@@ -123,6 +123,13 @@ La UI forma parte de R3 (DEC-52). **Ingreso** y **Ajuste** cambian así; **Conta
 - **Recepciones y compras** (la misma pantalla de Recepciones): arriba, "Comprado en <mes>" con flechas de mes (`GET /inventory/receipts/summary`); cada recepción del historial muestra su total pagado o "Sin monto". Se llega desde Inventario (botón **Compras**, con texto también en móvil) y desde **Más → Recepciones y compras**. En **Recibir**, cada línea tiene "Total pagado S/" opcional y el formulario muestra el total; si el producto tiene una forma mayor a 1 (p. ej. Balde de 5 galones), un atajo "+1 Balde (5 galón)" suma su capacidad a la cantidad.
 - **Producto:** la unidad de stock se elige con chips (unidad, galón, litro y las que ya usa el catálogo) u "Otra…"; un número no se acepta. Si el producto ya tiene una unidad inválida (p. ej. "0"), se avisa y se puede guardar el resto sin tocarla. En la ficha, sección **Formas de venta** (Configurar / Editar): nombre, cuánto descuenta (capacidad, para el balde) y precio; atajos Octavo, Cuarto, Galón y Balde cuando la unidad es galón (la capacidad del balde la escribe el dueño).
 
+#### Balde (DEC-93)
+
+- **Componente del balde** (SVG con los colores de la app, sin fotos): balde con asa cuyo nivel baja con las ventas; "13.5 L / 20 L", contenido, capacidad y equivalente en galones; "Además N baldes cerrados" si hay más de uno; "Agotado" en 0. Grande en el inventario del producto y en su ficha; barra en la lista de Inventario y en la línea de Vender ("Quedaría en el balde").
+- **Producto:** "Se vende de un envase abierto" con nombre (Balde) y capacidad (20). En Formas de venta, con unidad litro, atajos 1/4 de galón (1 L) y 1/8 de galón (0.5 L), sin precio.
+- **Recibir:** "+1 Balde (20 L)" suma la capacidad.
+- **Vender (precio por operación):** al elegir la presentación, la línea muestra **Presentación** (1/4 de galón), **Cantidad** (1 L) y **Precio de venta** (S/ ___, vacío y con el foco si la forma no tiene precio sugerido); se edita antes de cobrar y sin él no se puede cobrar. Los chips muestran la cantidad (1 L, 0.5 L) y, si existe, el precio sugerido.
+
 ### 3.7 Configuración
 Plantilla de WhatsApp con vista previa, días de anticipación, regla por defecto cuando hay km y fecha, política de stock insuficiente y código de país. Todos los valores abiertos aparecen vacíos o marcados como provisionales.
 

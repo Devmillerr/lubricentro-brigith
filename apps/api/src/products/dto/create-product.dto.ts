@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
   Max,
@@ -12,7 +13,12 @@ import {
   Matches,
   MaxLength,
 } from 'class-validator';
-import { MAX_MONEY, MAX_MONEY_MESSAGE } from '../../common/decimal-limits';
+import {
+  MAX_MONEY,
+  MAX_MONEY_MESSAGE,
+  MAX_QUANTITY,
+  MAX_QUANTITY_MESSAGE,
+} from '../../common/decimal-limits';
 import { UNIT_MESSAGE, UNIT_PATTERN } from '../catalog-suggestions';
 
 /**
@@ -85,4 +91,31 @@ export class CreateProductDto {
   @IsOptional()
   @IsBoolean()
   tracksStock?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Capacidad del envase abierto del que se vende, en la unidad del producto (p. ej. 20 litros por balde, DEC-93). Va junto con containerLabel.',
+    minimum: 0,
+    exclusiveMinimum: true,
+    maximum: MAX_QUANTITY,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber(
+    { maxDecimalPlaces: 3 },
+    { message: 'La capacidad debe ser un número con hasta 3 decimales.' },
+  )
+  @IsPositive({ message: 'La capacidad debe ser mayor que 0.' })
+  @Max(MAX_QUANTITY, { message: MAX_QUANTITY_MESSAGE })
+  containerCapacity?: number;
+
+  @ApiPropertyOptional({
+    description: 'Nombre del envase (p. ej. "Balde", DEC-93). Va junto con containerCapacity.',
+    maxLength: 30,
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty({ message: 'Escribe el nombre del envase.' })
+  @MaxLength(30, { message: 'El nombre del envase admite hasta 30 caracteres.' })
+  containerLabel?: string;
 }
