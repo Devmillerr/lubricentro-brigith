@@ -6,11 +6,13 @@ import {
 } from '@prisma/client';
 import { PageOf } from '../../common/openapi/page.dto';
 import type {
+  ReceiptLinePreview,
   ReceiptsMonthSummary,
   StockAlertProduct,
   StockAlerts,
   StockView,
 } from '../inventory.service';
+import type { ReceiptProductSummary } from '../receipt-summary';
 
 export class StockViewResponse implements StockView {
   @ApiProperty()
@@ -159,6 +161,39 @@ export class InventoryReceiptSummaryResponse implements Omit<InventoryReceiptRes
 
   @ApiProperty({ description: 'Cantidad de productos (líneas PURCHASE_IN) de la recepción.' })
   lineCount!: number;
+
+  @ApiProperty({
+    type: () => ReceiptLinePreviewResponse,
+    isArray: true,
+    description:
+      'Hasta 3 líneas, por nombre de producto, para ver qué llegó sin abrir la recepción (DEC-94).',
+  })
+  preview!: ReceiptLinePreviewResponse[];
+}
+
+/** Línea de una recepción en el historial (DEC-94). */
+export class ReceiptLinePreviewResponse implements ReceiptLinePreview {
+  @ApiProperty()
+  productId!: string;
+
+  @ApiProperty()
+  name!: string;
+
+  @ApiProperty({ description: 'Unidad de stock del producto (litro, unidad…).' })
+  unit!: string;
+
+  @ApiProperty({
+    type: String,
+    description: 'Cantidad recibida en la unidad del producto (Decimal como string).',
+  })
+  quantity!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Monto pagado por la línea (2 decimales). null = sin monto.',
+  })
+  purchaseCost!: string | null;
 }
 
 export class InventoryReceiptSummaryPageResponse extends PageOf(InventoryReceiptSummaryResponse) {}
@@ -193,6 +228,64 @@ export class ReceiptsMonthSummaryResponse implements ReceiptsMonthSummary {
     description: 'Líneas del mes sin monto, también de recepciones con monto parcial.',
   })
   linesWithoutCost!: number;
+
+  @ApiProperty({
+    type: () => ReceiptProductSummaryResponse,
+    isArray: true,
+    description:
+      'Lo comprado de cada producto en el mes (DEC-94): primero lo que más se pagó; los productos sin monto al final.',
+  })
+  products!: ReceiptProductSummaryResponse[];
+}
+
+/** Lo comprado de un producto en un mes (DEC-94). Nada se estima. */
+export class ReceiptProductSummaryResponse implements ReceiptProductSummary {
+  @ApiProperty()
+  productId!: string;
+
+  @ApiProperty()
+  name!: string;
+
+  @ApiProperty({ type: String, nullable: true })
+  brand!: string | null;
+
+  @ApiProperty({
+    description: 'Unidad de stock del producto: la cantidad va en ella, sin convertir.',
+  })
+  unit!: string;
+
+  @ApiProperty({
+    type: String,
+    description: 'Suma de lo recibido, con o sin monto (Decimal como string).',
+  })
+  quantity!: string;
+
+  @ApiProperty({ description: 'Recepciones distintas en las que llegó.' })
+  receiptCount!: number;
+
+  @ApiProperty({
+    type: String,
+    description:
+      'Suma de los montos registrados (2 decimales). "0.00" si ninguna línea tiene monto.',
+  })
+  totalCost!: string;
+
+  @ApiProperty({
+    type: String,
+    description: 'Cantidad recibida en líneas con monto: la base del costo unitario.',
+  })
+  quantityWithCost!: string;
+
+  @ApiProperty({ description: 'Líneas sin monto: no entran al total ni al costo unitario.' })
+  linesWithoutCost!: number;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Costo por unidad de stock, calculado: totalCost / quantityWithCost (2 decimales). null si no hay monto.',
+  })
+  unitCost!: string | null;
 }
 
 /** Producto en una lista de alertas de stock (R3, BR-P19). */

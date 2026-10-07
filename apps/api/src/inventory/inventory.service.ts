@@ -11,7 +11,6 @@ import {
   ValidationProblemException,
   type FieldError,
 } from '../common/exceptions/problem.exception';
-import type { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { paginate, type Page } from '../common/pagination';
 import { forBusiness } from '../prisma/business-scope';
 import { PrismaService } from '../prisma/prisma.service';
@@ -20,6 +19,8 @@ import type { CreateCountDto } from './dto/create-count.dto';
 import type { ListMovementsQueryDto } from './dto/list-movements-query.dto';
 import { MAX_MONEY, MAX_MONEY_MESSAGE } from '../common/decimal-limits';
 import { resolveDashboardPeriod } from '../dashboard/dashboard-period';
+import type { ListReceiptsQueryDto } from './dto/list-receipts-query.dto';
+import { summarizeReceiptLinesByProduct, type ReceiptProductSummary } from './receipt-summary';
 import { applyStockMovements, type StockEntry } from './stock-ledger';
 
 export interface StockView {
@@ -64,9 +65,28 @@ export interface StockAlerts {
   notCountedCount: number;
 }
 
-/** Elemento del historial de recepciones: la cabecera y cuántas líneas tiene. */
+/** Línea de una recepción vista desde el historial (DEC-94). */
+export interface ReceiptLinePreview {
+  productId: string;
+  name: string;
+  unit: string;
+  /** Cantidad recibida, en la unidad de stock del producto (Decimal como string). */
+  quantity: string;
+  /** Monto pagado por la línea; `null` si no se registró (DEC-90). */
+  purchaseCost: string | null;
+}
+
+/** Productos que se adelantan en cada fila del historial (DEC-94). */
+export const RECEIPT_PREVIEW_LINES = 3;
+
+/**
+ * Elemento del historial de recepciones: la cabecera, cuántas líneas tiene y
+ * las primeras, por nombre de producto (DEC-94), para saber qué llegó sin
+ * abrir la recepción.
+ */
 export interface ReceiptSummary extends InventoryReceipt {
   lineCount: number;
+  preview: ReceiptLinePreview[];
 }
 
 /**
@@ -87,6 +107,8 @@ export interface ReceiptsMonthSummary {
   receiptsWithoutCost: number;
   /** Líneas del mes sin monto (incluye las de recepciones con monto parcial). */
   linesWithoutCost: number;
+  /** Lo comprado de cada producto en el mes (DEC-94). */
+  products: ReceiptProductSummary[];
 }
 
 /**
@@ -262,15 +284,23 @@ export class InventoryService {
 
   /**
    * Historial de recepciones (R3), de la más reciente a la más antigua por
-   * `occurredAt`, con `id` como desempate estable para el cursor. Dos
-   * consultas por página, sin importar cuántas recepciones traiga: las
-   * cabeceras y un `groupBy` que cuenta las líneas de todas a la vez.
+   * `occurredAt`, con `id` como desempate estable para el cursor. Con
+   * `month` (DEC-94), solo las de ese mes en la zona del negocio; sin él,
+   * todo el historial. Dos consultas por página, sin importar cuántas
+   * recepciones traiga: las cabeceras y sus líneas con el producto, de las
+   * que salen la cantidad de líneas y la vista previa.
    */
-  async listReceipts(businessId: string, query: PaginationQueryDto): Promise<Page<ReceiptSummary>> {
+  async listReceipts(
+    businessId: string,
+    query: ListReceiptsQueryDto,
+    now: Date = new Date(),
+  ): Promise<Page<ReceiptSummary>> {
     const limit = query.limit ?? 20;
     const scoped = forBusiness(this.prisma, businessId);
+    const period = query.month ? await this.monthPeriod(businessId, query.month, now) : null;
 
     const rows = await scoped.inventoryReceipt.findMany({
+      where: period ? { occurredAt: { gte: period.from, lt: period.to } } : {},
       orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
@@ -278,18 +308,34 @@ export class InventoryService {
     const page = paginate(rows, limit);
     if (page.items.length === 0) return { items: [], nextCursor: page.nextCursor };
 
-    const counts = await scoped.inventoryMovement.groupBy({
-      by: ['refId'],
+    const lines = await scoped.inventoryMovement.findMany({
       where: { refType: RECEIPT_REF_TYPE, refId: { in: page.items.map((r) => r.id) } },
-      _count: { _all: true },
+      include: { product: true },
     });
-    const countByReceipt = new Map(counts.map((c) => [c.refId, c._count._all]));
+    const linesByReceipt = new Map<string, typeof lines>();
+    for (const line of lines) {
+      const list = linesByReceipt.get(line.refId!) ?? [];
+      list.push(line);
+      linesByReceipt.set(line.refId!, list);
+    }
 
     return {
-      items: page.items.map((receipt) => ({
-        ...receipt,
-        lineCount: countByReceipt.get(receipt.id) ?? 0,
-      })),
+      items: page.items.map((receipt) => {
+        const receiptLines = (linesByReceipt.get(receipt.id) ?? []).sort((a, b) =>
+          a.product.name.localeCompare(b.product.name, 'es'),
+        );
+        return {
+          ...receipt,
+          lineCount: receiptLines.length,
+          preview: receiptLines.slice(0, RECEIPT_PREVIEW_LINES).map((line) => ({
+            productId: line.productId,
+            name: line.product.name,
+            unit: line.product.unit,
+            quantity: line.quantityDelta.toString(),
+            purchaseCost: line.purchaseCost?.toFixed(2) ?? null,
+          })),
+        };
+      }),
       nextCursor: page.nextCursor,
     };
   }
@@ -298,27 +344,16 @@ export class InventoryService {
    * Total comprado en el mes `month` (`YYYY-MM`, por defecto el actual) en
    * la zona horaria del negocio (DEC-79, DEC-90). Suma `totalCost` de las
    * cabeceras, que guardan la suma de sus líneas; no estima lo que no tiene
-   * monto: lo informa aparte. Tres consultas, sin importar el volumen.
+   * monto: lo informa aparte. Desde DEC-94 también da lo comprado de cada
+   * producto, a partir de las mismas líneas. Cuatro consultas, sin importar
+   * el volumen.
    */
   async receiptsMonthSummary(
     businessId: string,
     month: string | undefined,
     now: Date = new Date(),
   ): Promise<ReceiptsMonthSummary> {
-    const business = await this.prisma.business.findUniqueOrThrow({
-      where: { id: businessId },
-      select: { timezone: true },
-    });
-    if (month !== undefined && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
-      throw new ValidationProblemException([
-        { field: 'month', message: 'El mes debe tener el formato YYYY-MM.' },
-      ]);
-    }
-    const period = resolveDashboardPeriod(
-      { period: 'month', ...(month ? { date: `${month}-01` } : {}) },
-      business.timezone,
-      now,
-    );
+    const period = await this.monthPeriod(businessId, month, now);
     const scoped = forBusiness(this.prisma, businessId);
     const where = { occurredAt: { gte: period.from, lt: period.to } };
     const [totals, receiptsWithoutCost, receipts] = await Promise.all([
@@ -330,15 +365,15 @@ export class InventoryService {
       scoped.inventoryReceipt.count({ where: { ...where, totalCost: null } }),
       scoped.inventoryReceipt.findMany({ where, select: { id: true } }),
     ]);
-    const linesWithoutCost =
+    const lines =
       receipts.length === 0
-        ? 0
-        : await scoped.inventoryMovement.count({
+        ? []
+        : await scoped.inventoryMovement.findMany({
             where: {
               refType: RECEIPT_REF_TYPE,
               refId: { in: receipts.map((receipt) => receipt.id) },
-              purchaseCost: null,
             },
+            include: { product: true },
           });
     return {
       month: period.date.slice(0, 7),
@@ -348,8 +383,27 @@ export class InventoryService {
       receiptCount: totals._count._all,
       totalCost: new Prisma.Decimal(totals._sum.totalCost ?? 0).toFixed(2),
       receiptsWithoutCost,
-      linesWithoutCost,
+      linesWithoutCost: lines.filter((line) => line.purchaseCost === null).length,
+      products: summarizeReceiptLinesByProduct(lines),
     };
+  }
+
+  /** Mes calendario `YYYY-MM` (por defecto el actual) en la zona del negocio. */
+  private async monthPeriod(businessId: string, month: string | undefined, now: Date) {
+    const business = await this.prisma.business.findUniqueOrThrow({
+      where: { id: businessId },
+      select: { timezone: true },
+    });
+    if (month !== undefined && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+      throw new ValidationProblemException([
+        { field: 'month', message: 'El mes debe tener el formato YYYY-MM.' },
+      ]);
+    }
+    return resolveDashboardPeriod(
+      { period: 'month', ...(month ? { date: `${month}-01` } : {}) },
+      business.timezone,
+      now,
+    );
   }
 
   /**

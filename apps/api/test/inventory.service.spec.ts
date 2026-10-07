@@ -572,7 +572,7 @@ describe('InventoryService.listReceipts / getReceipt (R3)', () => {
 
     expect(page.items).toHaveLength(5);
     expect(page.items.every((r) => r.lineCount === 2)).toBe(true);
-    expect(operations).toEqual(['InventoryReceipt.findMany', 'InventoryMovement.groupBy']);
+    expect(operations).toEqual(['InventoryReceipt.findMany', 'InventoryMovement.findMany']);
   });
 
   it('aislamiento: cada negocio solo ve sus recepciones', async () => {

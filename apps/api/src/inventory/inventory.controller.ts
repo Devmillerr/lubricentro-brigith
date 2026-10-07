@@ -20,13 +20,13 @@ import {
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AccessTokenPayload } from '../auth/types/jwt-payload';
-import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { ProblemException } from '../common/exceptions/problem.exception';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { CreateAdjustmentDto } from './dto/create-adjustment.dto';
 import { CreateCountDto } from './dto/create-count.dto';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { ListMovementsQueryDto } from './dto/list-movements-query.dto';
+import { ListReceiptsQueryDto } from './dto/list-receipts-query.dto';
 import { ReceiptsSummaryQueryDto } from './dto/receipts-summary-query.dto';
 import { StockQueryDto } from './dto/stock-query.dto';
 import { InventoryService } from './inventory.service';
@@ -104,11 +104,11 @@ export class InventoryController {
     return result.body;
   }
 
-  /** Historial de recepciones, de la más reciente a la más antigua (R3). */
+  /** Historial de recepciones, de la más reciente a la más antigua (R3); con `month`, solo ese mes (DEC-94). */
   @ApiOkResponse({ type: InventoryReceiptSummaryPageResponse })
   @ApiErrors({ 400: VALIDATION_ERRORS })
   @Get('receipts')
-  listReceipts(@CurrentUser() user: AccessTokenPayload, @Query() query: PaginationQueryDto) {
+  listReceipts(@CurrentUser() user: AccessTokenPayload, @Query() query: ListReceiptsQueryDto) {
     return this.inventoryService.listReceipts(user.businessId, query);
   }
 
