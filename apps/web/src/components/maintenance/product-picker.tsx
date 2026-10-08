@@ -8,7 +8,8 @@ import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
 import { present } from '@/lib/customers/format';
-import { formatQuantity, type ProductWithStock } from '@/lib/inventory/format';
+import type { ProductWithStock } from '@/lib/inventory/format';
+import { formatStock } from '@/lib/products/container';
 import type { Product } from '@/lib/products/format';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
 
@@ -25,7 +26,7 @@ export function StockHint({ product }: { product: ProductWithStock }) {
     );
   return (
     <span className="text-xs text-[var(--muted-foreground)]">
-      Saldo {formatQuantity(product.stock.balance)} {product.unit}
+      Saldo {formatStock(product.stock.balance, product.unit)}
     </span>
   );
 }

@@ -1,6 +1,5 @@
 import {
   ChevronRight,
-  ChartColumn,
   KeyRound,
   PackagePlus,
   Receipt,
@@ -32,15 +31,9 @@ const SECTIONS: { label: string; description: string; icon: LucideIcon; href: st
   },
   {
     label: 'Configuración',
-    description: 'Plantilla de WhatsApp, anticipación y políticas',
+    description: 'Mensaje de WhatsApp, avisos, categorías y lavados',
     icon: Settings,
     href: '/configuracion',
-  },
-  {
-    label: 'Resumen del piloto',
-    description: 'Indicadores de adopción, mantenimiento e inventario',
-    icon: ChartColumn,
-    href: '/resumen',
   },
   {
     label: 'Cambiar contraseña',

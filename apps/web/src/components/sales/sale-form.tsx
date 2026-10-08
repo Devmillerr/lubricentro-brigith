@@ -4,8 +4,13 @@ import { Banknote, Minus, Plus, Smartphone, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { FormError } from '@/components/customers/form-error';
 import { ReceiptProductPicker } from '@/components/inventory/receipt-product-picker';
-import { StockHint } from '@/components/maintenance/product-picker';
 import { Button } from '@/components/ui/button';
+import {
+  CHECKOUT_BUTTON_CLASS,
+  CHECKOUT_PENDING_CLASS,
+  CheckoutBar,
+  revealStep,
+} from '@/components/ui/checkout-bar';
 import { Chip } from '@/components/ui/chip';
 import { BucketGauge, hasContainer } from '@/components/products/bucket-gauge';
 import { formatQuantity } from '@/lib/inventory/format';
@@ -125,6 +130,17 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
   const allPriced = lines.every(
     (line) => parseQuantity(line.quantity) !== null && parsePrice(line.price) !== null,
   );
+  // Qué falta para cobrar: el botón lo dice en vez de esperar al toque.
+  const pending =
+    lines.length === 0
+      ? 'Agrega un producto'
+      : lines.some((line) => hasSaleUnits(line.product) && !line.saleUnit)
+        ? 'Elige cómo se vende'
+        : !allPriced
+          ? 'Completa cantidad y precio'
+          : !payment
+            ? 'Elige Efectivo o Yape'
+            : null;
 
   function clearErrors(key?: string) {
     setFailure(null);
@@ -223,8 +239,23 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
     if (submitting) return;
     const found = validate();
     setLineErrors(found.lines);
-    setFormError(found.form);
     setFailure(null);
+    if (pending) {
+      // El botón ya dice qué falta: se lleva a la vista ese paso.
+      setFormError(null);
+      const firstLine = lines.find((line) => found.lines[line.key]);
+      revealStep(
+        document.getElementById(
+          lines.length === 0
+            ? 'sale-products'
+            : firstLine
+              ? `sale-line-${firstLine.key}`
+              : 'sale-payment',
+        ),
+      );
+      return;
+    }
+    setFormError(found.form);
     if (found.form || Object.keys(found.lines).length > 0 || !payment) return;
 
     const trimmedNote = note.trim();
@@ -271,7 +302,7 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
       const line = lines.find((candidate) => detail.includes(candidate.product.id));
       const stockMessage = result.failure.fieldErrors.lines ?? 'Stock insuficiente.';
       if (line) {
-        marked[line.key] = `Stock insuficiente. ${stockMessage} ${line.product.unit}.`;
+        marked[line.key] = `Stock insuficiente. ${stockMessage} ${shortUnit(line.product.unit)}.`;
       }
     }
     setLineErrors(marked);
@@ -282,13 +313,15 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
     <form
       onSubmit={handleSubmit}
       noValidate
-      className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_24rem] md:items-start"
+      className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_24rem] md:grid-rows-[auto_1fr] md:items-start"
     >
-      <Section title="Agregar productos">
+      {/* En pantallas anchas ocupa las dos filas: la barra queda bajo Pago, no bajo la lista. */}
+      <Section id="sale-products" title="Agregar productos" className="md:row-span-2">
         <ReceiptProductPicker
           quantities={quantities}
           onAdd={addProduct}
           searchLabel="Buscar producto para vender por nombre, marca, código o viscosidad"
+          stockDisplay="balance"
         />
       </Section>
 
@@ -313,18 +346,15 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
               ))}
             </ul>
           )}
-          {lines.length > 0 && (
-            <div className="flex items-baseline justify-between gap-3 border-t border-[var(--border)] pt-3">
-              <span className="font-semibold">Total</span>
-              <span className="text-xl font-semibold">
-                {allPriced ? formatCents(totalCents) : '—'}
-              </span>
-            </div>
-          )}
         </Section>
 
         <Section title="Pago">
-          <div role="group" aria-label="Método de pago" className="grid grid-cols-2 gap-3">
+          <div
+            id="sale-payment"
+            role="group"
+            aria-label="Método de pago"
+            className="grid scroll-mt-24 grid-cols-2 gap-3"
+          >
             {(['CASH', 'YAPE'] as const).map((method) => {
               const Icon = method === 'CASH' ? Banknote : Smartphone;
               const selected = payment === method;
@@ -360,23 +390,32 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
             />
           </Field>
         </Section>
-
-        {formError && <FormError>{formError}</FormError>}
-        {failure && (
-          <FormError>
-            {/* El total lo calcula la API y no tiene campo propio en el formulario. */}
-            {failure.fieldErrors.total ?? failureMessage(failure, ERROR_MESSAGES)}
-          </FormError>
-        )}
-
-        <Button type="submit" size="lg" disabled={submitting}>
-          {submitting
-            ? 'Cobrando…'
-            : lines.length > 0 && allPriced
-              ? `Cobrar ${formatCents(totalCents)}`
-              : 'Cobrar'}
-        </Button>
       </div>
+
+      {/* Hija directa del formulario: `sticky` no sale de su contenedor, y así la
+          barra acompaña todo el recorrido, también por la lista de productos. */}
+      <CheckoutBar
+        className="md:col-start-2"
+        error={
+          (formError || failure) && (
+            <FormError>
+              {/* El total lo calcula la API y no tiene campo propio en el formulario. */}
+              {formError ??
+                failure?.fieldErrors.total ??
+                (failure ? failureMessage(failure, ERROR_MESSAGES) : null)}
+            </FormError>
+          )
+        }
+      >
+        <Button
+          type="submit"
+          size="lg"
+          disabled={submitting}
+          className={cn(CHECKOUT_BUTTON_CLASS, pending && CHECKOUT_PENDING_CLASS)}
+        >
+          {submitting ? 'Cobrando…' : (pending ?? `Cobrar ${formatCents(totalCents)}`)}
+        </Button>
+      </CheckoutBar>
     </form>
   );
 }
@@ -385,9 +424,19 @@ function countLabel(count: number): string {
   return count === 1 ? '1 producto' : `${count} productos`;
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  id,
+  title,
+  className,
+  children,
+}: {
+  id?: string;
+  title: string;
+  className?: string;
+  children: ReactNode;
+}) {
   return (
-    <section className="flex flex-col gap-3">
+    <section id={id} className={cn('flex scroll-mt-24 flex-col gap-3', className)}>
       <h3 className="text-base font-semibold">{title}</h3>
       {children}
     </section>
@@ -417,8 +466,8 @@ function LineRow({
   const priceId = `sale-price-${line.key}`;
   const errorId = `sale-line-${line.key}-error`;
   const withUnits = hasSaleUnits(product);
-  const quantityLabel = saleUnit ? `unidades de ${saleUnit.label}` : product.unit;
   const stockUnit = shortUnit(product.unit);
+  const quantityLabel = saleUnit ? `unidades de ${saleUnit.label}` : stockUnit;
   const priceRef = useRef<HTMLInputElement>(null);
 
   // Al elegir una presentación sin precio, el foco va al precio de esta venta.
@@ -430,12 +479,12 @@ function LineRow({
   }, [saleUnitId]);
 
   return (
-    <li className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
+    <li
+      id={`sale-line-${line.key}`}
+      className="flex scroll-mt-24 flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3"
+    >
       <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="font-medium break-words">{product.name}</span>
-          <StockHint product={product} />
-        </div>
+        <span className="min-w-0 font-medium break-words">{product.name}</span>
         <Button
           type="button"
           variant="outline"
@@ -556,14 +605,14 @@ function LineRow({
             />
           </div>
         )}
-        <div className="ml-auto flex flex-col items-end gap-1">
-          <span className="text-xs text-[var(--muted-foreground)]">Subtotal</span>
-          <span className="flex h-11 items-center font-semibold">
-            {quantity !== null && price !== null
-              ? formatCents(subtotalCents(quantity, price))
-              : '—'}
-          </span>
-        </div>
+        {quantity !== null && quantity !== 1 && price !== null && (
+          <div className="ml-auto flex flex-col items-end gap-1">
+            <span className="text-xs text-[var(--muted-foreground)]">Subtotal</span>
+            <span className="flex h-11 items-center font-semibold">
+              {formatCents(subtotalCents(quantity, price))}
+            </span>
+          </div>
+        )}
       </div>
       {hasContainer(product) && product.tracksStock && product.stock?.isCounted && (
         <div className="flex flex-col gap-1">

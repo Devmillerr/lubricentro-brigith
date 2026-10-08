@@ -8,7 +8,7 @@ import { BrandLockup } from '@/components/brand/brand-mark';
 import { Button } from '@/components/ui/button';
 import { logout, type Me } from '@/lib/auth/session';
 import { cn } from '@/lib/utils';
-import { isActive, NAV_ITEMS, type NavItem } from './nav-items';
+import { activeNavItem, NAV_ITEMS, type NavItem } from './nav-items';
 
 /**
  * Carcasa de las pantallas con sesión. Mobile-first (07-UI-UX.md, D-01):
@@ -18,7 +18,7 @@ import { isActive, NAV_ITEMS, type NavItem } from './nav-items';
  */
 export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
   const pathname = usePathname();
-  const current = NAV_ITEMS.find((item) => isActive(item, pathname));
+  const current = activeNavItem(pathname);
 
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[15rem_minmax(0,1fr)]">
@@ -29,7 +29,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
         </div>
         <nav aria-label="Principal" className="flex flex-1 flex-col gap-1 p-3">
           {NAV_ITEMS.map((item) => (
-            <SidebarLink key={item.label} item={item} active={isActive(item, pathname)} />
+            <SidebarLink key={item.label} item={item} active={item === current} />
           ))}
         </nav>
         <div className="flex flex-col gap-3 border-t border-[var(--border)] p-4">
@@ -66,7 +66,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-4 border-t border-[var(--border)] bg-[var(--surface)] pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgb(0_0_0/0.05)] md:hidden"
         >
           {NAV_ITEMS.map((item) => (
-            <BottomTab key={item.label} item={item} active={isActive(item, pathname)} />
+            <BottomTab key={item.label} item={item} active={item === current} />
           ))}
         </nav>
       </div>

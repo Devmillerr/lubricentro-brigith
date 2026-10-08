@@ -8,20 +8,34 @@ function setup() {
 }
 
 describe('CustomersService', () => {
-  it('crea un cliente sin ningún campo obligatorio (BR-C3)', async () => {
+  it('crea un cliente solo con el teléfono o solo con el nombre (BR-C3)', async () => {
     const { service } = setup();
 
-    const customer = await service.create('biz-a', 'user-a', {});
+    const byPhone = await service.create('biz-a', 'user-a', { phone: '987654321' });
+    const byName = await service.create('biz-a', 'user-a', { name: 'Ana' });
 
-    expect(customer.id).toEqual(expect.any(String));
-    expect(customer.name).toBeUndefined();
-    expect(customer.phone).toBeUndefined();
+    expect(byPhone.id).toEqual(expect.any(String));
+    expect(byPhone.name).toBeUndefined();
+    expect(byName.phone).toBeUndefined();
+  });
+
+  it('rechaza un cliente sin nombre ni teléfono, también con espacios (BR-C3)', async () => {
+    const { service, customers } = setup();
+
+    await expect(service.create('biz-a', 'user-a', {})).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      errors: [{ field: 'name', message: expect.any(String) }],
+    });
+    await expect(
+      service.create('biz-a', 'user-a', { name: '  ', phone: ' ', notes: 'solo nota' }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(customers.size).toBe(0);
   });
 
   it('usa el id enviado por el cliente si llega', async () => {
     const { service } = setup();
 
-    const customer = await service.create('biz-a', 'user-a', { id: 'custom-id' });
+    const customer = await service.create('biz-a', 'user-a', { id: 'custom-id', name: 'Ana' });
 
     expect(customer.id).toBe('custom-id');
   });
@@ -97,6 +111,19 @@ describe('CustomersService', () => {
 
     expect(updated.name).toBe('Ana');
     expect(updated.phone).toBe('999888777');
+  });
+
+  it('update rechaza dejar el cliente sin nombre ni teléfono (BR-C3)', async () => {
+    const { service, customers } = setup();
+    const customer = await service.create('biz-a', 'user-a', { name: 'Ana' });
+
+    await expect(service.update('biz-a', customer.id, { name: '' })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+    expect(customers.get(customer.id)?.name).toBe('Ana');
+
+    const withPhone = await service.update('biz-a', customer.id, { name: '', phone: '999' });
+    expect(withPhone.phone).toBe('999');
   });
 
   it('update rechaza con CUSTOMER_NOT_FOUND si el cliente es de otro negocio', async () => {

@@ -36,7 +36,7 @@ Ninguna regla de este documento convierte una hipótesis en hecho. Los valores c
 |---|---|---|
 | BR-C1 | La placa es la entrada rápida y prioritaria para cambios de aceite y mantenimientos. | [DECISIÓN] D-07 |
 | BR-C2 | La placa **no** es obligatoria en otras operaciones (venta rápida y lavado, en Fase 2). | [DECISIÓN] D-07 |
-| BR-C3 | Un cliente se puede registrar sin teléfono. | [DECISIÓN] D-08 |
+| BR-C3 | Un cliente se puede registrar sin teléfono, pero necesita al menos el nombre o el teléfono: un cliente vacío no se puede buscar ni avisar. Vale también al editar. | [DECISIÓN] D-08; nombre o teléfono, 2026-10-08 |
 | BR-C4 | Un vehículo se puede registrar sin cliente. | [TÉCNICO] |
 | BR-C5 | Un vehículo siempre tiene placa. | [TÉCNICO] (revisable, ver BR-C10) |
 | BR-C6 | La placa se normaliza (mayúsculas, sin espacios ni guiones) para buscar y comparar; también se conserva como fue escrita. Es única por negocio. No se valida un formato de placa. | [TÉCNICO] |

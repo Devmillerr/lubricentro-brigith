@@ -61,7 +61,7 @@ No hay registro público ni correo: la cuenta se entrega ya creada, con una cont
 | Método | Ruta | Descripción |
 |---|---|---|
 | GET | `/customers?search=` | Buscar por nombre o teléfono |
-| POST | `/customers` | Crear. Nada es obligatorio (BR-C3) |
+| POST | `/customers` | Crear. Nombre o teléfono, al menos uno (BR-C3): sin ninguno, 400 `VALIDATION_ERROR` en `name`; igual en `PATCH` si la edición los dejaría vacíos |
 | GET | `/customers/:id` | Detalle con sus vehículos |
 | PATCH | `/customers/:id` | Editar |
 | DELETE | `/customers/:id` | Desactivar |

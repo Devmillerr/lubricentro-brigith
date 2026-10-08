@@ -59,7 +59,7 @@ Cada punto abierto es **una columna de configuración**, no una estructura: deci
 `id, businessId, name, username (único global, DEC-25), passwordHash, role, isActive`. En el MVP el único rol es `OWNER` (P-12 sin responder). Agregar otro rol es una migración de un valor, no de estructura.
 
 ### Customer
-`id, businessId, name?, phone?, notes?, isActive`. Ningún campo obligatorio salvo el id (BR-C3).
+`id, businessId, name?, phone?, notes?, isActive`. Columnas opcionales; la API exige nombre o teléfono (BR-C3).
 
 ### VehicleModel
 `id, businessId, make?, model, yearFrom?, yearTo?, engineNote?, isActive`. `make` es opcional desde R2: el texto del dueño se guarda tal cual en `model`. Año y motor son opcionales: el nivel de detalle de la compatibilidad se define con datos (BR-F6).

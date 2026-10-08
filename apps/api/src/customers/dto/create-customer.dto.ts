@@ -1,7 +1,10 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
-/** Ningún campo es obligatorio salvo el id, que el servidor genera si no llega (BR-C3). */
+/**
+ * Nombre o teléfono: al menos uno (BR-C3; lo valida el servicio). El id lo
+ * genera el servidor si no llega.
+ */
 export class CreateCustomerDto {
   @ApiPropertyOptional({ description: 'UUID opcional; si no se envía, lo genera el servidor.' })
   @IsOptional()

@@ -5,6 +5,7 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { useState } from 'react';
 import { FormError } from '@/components/customers/form-error';
 import { Button } from '@/components/ui/button';
+import { CHECKOUT_BUTTON_CLASS, CheckoutBar } from '@/components/ui/checkout-bar';
 import { Field, Textarea } from '@/components/ui/field';
 import { api } from '@/lib/api/client';
 import { useIdempotencyKey } from '@/lib/api/idempotency';
@@ -173,17 +174,24 @@ export function WashForm({
         </Field>
       )}
 
-      {error && <FormError>{error}</FormError>}
-
-      <Button size="lg" onClick={submit} disabled={!ready || saving}>
-        {saving
-          ? 'Cobrando…'
-          : price
-            ? `Cobrar ${formatMoney(price.amount)}`
-            : type
-              ? 'Elige el precio'
-              : 'Elige el vehículo'}
-      </Button>
+      <CheckoutBar error={error && <FormError>{error}</FormError>}>
+        <Button
+          size="lg"
+          onClick={submit}
+          disabled={!ready || saving}
+          className={CHECKOUT_BUTTON_CLASS}
+        >
+          {saving
+            ? 'Cobrando…'
+            : !type
+              ? 'Elige el vehículo'
+              : !price
+                ? 'Elige el precio'
+                : !payment
+                  ? 'Elige Efectivo o Yape'
+                  : `Cobrar ${formatMoney(price.amount)}`}
+        </Button>
+      </CheckoutBar>
     </div>
   );
 }

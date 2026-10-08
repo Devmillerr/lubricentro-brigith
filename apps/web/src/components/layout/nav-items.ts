@@ -11,30 +11,30 @@ export interface NavItem {
 
 /**
  * Navegación del MVP (07-UI-UX.md §2): Inicio, Avisar, Productos y Más.
- * "Más" agrupa Clientes, Ventas (historial), Recepciones y compras (que vive en
- * Inventario, dentro de Productos), Configuración, Resumen del piloto y la
- * cuenta (cambiar contraseña).
+ *
+ * Cada pestaña marca también las pantallas que se abren desde ella: los
+ * cobros y el trabajo del día (Vender, Lavado, Mantenimiento, la ficha del
+ * vehículo que se busca por placa) son de Inicio; Clientes, el historial de
+ * Ventas, Configuración y la cuenta son de "Más". Si dos rutas coinciden, gana
+ * la más específica: `/ventas/nueva` es de Inicio aunque `/ventas` sea de Más.
  * Las pestañas sin pantalla se muestran deshabilitadas en vez de llevar a una
  * ruta inexistente.
  */
 export const NAV_ITEMS: NavItem[] = [
-  // Lavado (R5) se abre desde Inicio: es un cobro rápido del día a día.
-  { label: 'Inicio', href: '/dashboard', icon: House, sections: ['/lavado'] },
+  {
+    label: 'Inicio',
+    href: '/dashboard',
+    icon: House,
+    sections: ['/lavado', '/ventas/nueva', '/mantenimientos', '/vehiculos'],
+  },
   { label: 'Avisar', href: '/avisar', icon: Bell },
+  // Recepciones y compras viven en Inventario, dentro de Productos.
   { label: 'Productos', href: '/productos', icon: Package, sections: ['/inventario'] },
   {
     label: 'Más',
     href: '/mas',
     icon: Ellipsis,
-    sections: [
-      '/clientes',
-      '/vehiculos',
-      '/mantenimientos',
-      '/ventas',
-      '/resumen',
-      '/configuracion',
-      '/cuenta',
-    ],
+    sections: ['/clientes', '/ventas', '/configuracion', '/cuenta'],
   },
 ];
 
@@ -42,7 +42,27 @@ function matches(base: string, pathname: string): boolean {
   return pathname === base || pathname.startsWith(`${base}/`);
 }
 
-export function isActive(item: NavItem, pathname: string): boolean {
-  if (item.href === null) return false;
-  return [item.href, ...(item.sections ?? [])].some((base) => matches(base, pathname));
+/** Largo de la ruta más específica de la pestaña que coincide; -1 si ninguna. */
+function matchLength(item: NavItem, pathname: string): number {
+  if (item.href === null) return -1;
+  return Math.max(
+    -1,
+    ...[item.href, ...(item.sections ?? [])]
+      .filter((base) => matches(base, pathname))
+      .map((base) => base.length),
+  );
+}
+
+/** La pestaña de la pantalla actual: la de la ruta más específica que coincide. */
+export function activeNavItem(pathname: string): NavItem | undefined {
+  let best: NavItem | undefined;
+  let bestLength = -1;
+  for (const item of NAV_ITEMS) {
+    const length = matchLength(item, pathname);
+    if (length > bestLength) {
+      best = item;
+      bestLength = length;
+    }
+  }
+  return best;
 }

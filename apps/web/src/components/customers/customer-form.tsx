@@ -14,10 +14,14 @@ import { useSubmitLock } from '@/lib/use-submit-lock';
 type Values = { name: string; phone: string; notes: string };
 const FIELDS = ['name', 'phone', 'notes'] as const;
 
+/** Mensaje de BR-C3, igual al de la API. */
+const IDENTITY_ERROR = 'Escribe el nombre o el teléfono del cliente.';
+
 /**
- * Alta y edición de cliente. Ningún campo es obligatorio (BR-C3). Al editar
- * solo se envían los campos que cambiaron; dejar uno vacío lo borra (la API
- * no acepta null en estos campos, así que se envía texto vacío).
+ * Alta y edición de cliente. Hace falta al menos nombre o teléfono (BR-C3); lo
+ * demás es opcional. Al editar solo se envían los campos que cambiaron; dejar
+ * uno vacío lo borra (la API no acepta null en estos campos, así que se envía
+ * texto vacío).
  */
 export function CustomerForm({ customer }: { customer?: Customer }) {
   const router = useRouter();
@@ -29,14 +33,22 @@ export function CustomerForm({ customer }: { customer?: Customer }) {
   const [submitting, setSubmitting] = useState(false);
   const lock = useSubmitLock();
   const [failure, setFailure] = useState<ApiFailure | null>(null);
+  const [identityError, setIdentityError] = useState(false);
 
   function update(field: keyof Values, value: string) {
     setValues((current) => ({ ...current, [field]: value }));
+    if (field !== 'notes') setIdentityError(false);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitting) return;
+    if (!values.name.trim() && !values.phone.trim()) {
+      setIdentityError(true);
+      setFailure(null);
+      document.getElementById('name')?.focus();
+      return;
+    }
     if (!lock.acquire()) return;
     setSubmitting(true);
     setFailure(null);
@@ -73,15 +85,18 @@ export function CustomerForm({ customer }: { customer?: Customer }) {
     setSubmitting(false);
   }
 
-  const fieldError = (field: keyof Values) => failure?.fieldErrors[field];
+  const fieldError = (field: keyof Values) =>
+    field === 'name' && identityError ? IDENTITY_ERROR : failure?.fieldErrors[field];
+  // El 400 de BR-C3 ya se muestra en el campo: no se repite arriba.
+  const showFailure = failure && !failure.fieldErrors.name;
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      {failure && (
+      {showFailure && (
         <FormError>{failureMessage(failure, { notFound: 'Este cliente ya no existe.' })}</FormError>
       )}
 
-      <Field id="name" label="Nombre" optional error={fieldError('name')}>
+      <Field id="name" label="Nombre" error={fieldError('name')}>
         <Input
           id="name"
           value={values.name}
@@ -95,8 +110,7 @@ export function CustomerForm({ customer }: { customer?: Customer }) {
       <Field
         id="phone"
         label="Teléfono"
-        optional
-        hint="Se usa para avisar por WhatsApp."
+        hint="Para avisarle por WhatsApp."
         error={fieldError('phone')}
       >
         <Input

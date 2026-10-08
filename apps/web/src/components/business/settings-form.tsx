@@ -1,42 +1,35 @@
 'use client';
 
-import { CircleCheck, Info } from 'lucide-react';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { CircleCheck, Plus } from 'lucide-react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { FormError } from '@/components/customers/form-error';
 import { Button } from '@/components/ui/button';
+import { chipClass } from '@/components/ui/chip';
 import { Field, Select, Textarea } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage, type ApiFailure } from '@/lib/api/request';
 import {
   changedSettings,
-  STOCK_POLICY_LABELS,
-  TEMPLATE_VARIABLES,
+  previewTemplate,
+  TEMPLATE_FIELDS,
+  templatePlaceholder,
   toValues,
   validate,
   type Business,
   type SettingsField,
   type SettingsValues,
-  type StockPolicy,
 } from '@/lib/business/settings';
 import { DUE_RULE_LABELS } from '@/lib/maintenance/format';
 
 type FieldErrors = Partial<Record<SettingsField, string>>;
 
-const FIELDS: SettingsField[] = [
-  'whatsappTemplate',
-  'reminderLeadDays',
-  'defaultDueRuleWhenBoth',
-  'insufficientStockPolicy',
-  'currency',
-  'defaultCountryCode',
-];
+const FIELDS: SettingsField[] = ['whatsappTemplate', 'reminderLeadDays', 'defaultDueRuleWhenBoth'];
 
 /**
  * Configuración del negocio (07-UI-UX.md §3.7) con `PATCH /business/settings`.
- * Todos los valores abiertos pueden quedar sin definir (`null`); cada campo
- * explica qué hace el sistema mientras tanto. Solo se envían los campos que
- * cambiaron.
+ * Solo los ajustes que hoy tienen efecto (ver `SettingsValues`). Solo se
+ * envían los campos que cambiaron.
  */
 export function SettingsForm({ business: initial }: { business: Business }) {
   const [saved, setSaved] = useState(initial);
@@ -45,6 +38,7 @@ export function SettingsForm({ business: initial }: { business: Business }) {
   const [failure, setFailure] = useState<ApiFailure | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+  const templateRef = useRef<HTMLTextAreaElement>(null);
 
   const pending = changedSettings(saved, values);
   const dirty = Object.keys(pending).length > 0;
@@ -53,6 +47,20 @@ export function SettingsForm({ business: initial }: { business: Business }) {
     setValues((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
     setJustSaved(false);
+  }
+
+  /** Inserta un dato del aviso donde está el cursor (o al final). */
+  function insertField(token: string) {
+    const area = templateRef.current;
+    const text = values.whatsappTemplate;
+    const start = area?.selectionStart ?? text.length;
+    const end = area?.selectionEnd ?? text.length;
+    const next = `${text.slice(0, start)}${token}${text.slice(end)}`;
+    update('whatsappTemplate', next);
+    requestAnimationFrame(() => {
+      area?.focus();
+      area?.setSelectionRange(start + token.length, start + token.length);
+    });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -83,59 +91,60 @@ export function SettingsForm({ business: initial }: { business: Business }) {
     if (!shownByField) setFailure(result.failure);
   }
 
-  const days = values.reminderLeadDays.trim();
-
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6" noValidate>
       <Section title="WhatsApp">
         <Field
           id="whatsappTemplate"
-          label="Plantilla del mensaje"
-          optional
-          hint={`Puedes usar ${TEMPLATE_VARIABLES.join(', ')}; se reemplazan con los datos de cada aviso. La vista previa con datos reales aparece en el detalle de cada aviso.`}
+          label="Mensaje de aviso"
+          hint="Se abre ya escrito en WhatsApp; puedes cambiarlo antes de enviarlo."
           error={errors.whatsappTemplate}
         >
           <Textarea
+            ref={templateRef}
             id="whatsappTemplate"
-            rows={5}
+            rows={4}
             value={values.whatsappTemplate}
             onChange={(e) => update('whatsappTemplate', e.target.value)}
             maxLength={4000}
+            placeholder="Hola, le recordamos que su vehículo…"
             aria-invalid={!!errors.whatsappTemplate || undefined}
           />
         </Field>
-        {!values.whatsappTemplate.trim() && (
-          <Unset>El enlace de WhatsApp abre el chat sin mensaje; el texto lo escribes tú.</Unset>
-        )}
-
-        <Field
-          id="defaultCountryCode"
-          label="Código de país"
-          optional
-          error={errors.defaultCountryCode}
-          hint="Todavía no se usa: la forma de convertir los teléfonos a formato internacional está pendiente de definir."
-        >
-          <Input
-            id="defaultCountryCode"
-            inputMode="tel"
-            value={values.defaultCountryCode}
-            onChange={(e) => update('defaultCountryCode', e.target.value)}
-            maxLength={10}
-            autoComplete="off"
-            aria-invalid={!!errors.defaultCountryCode || undefined}
-          />
-        </Field>
-        {!values.defaultCountryCode.trim() && (
-          <Unset>El enlace usa el teléfono tal como está guardado, sin código de país.</Unset>
-        )}
+        <div className="flex flex-col gap-2">
+          <span id="template-fields" className="text-sm font-medium">
+            Agregar al mensaje
+          </span>
+          <div role="group" aria-labelledby="template-fields" className="flex flex-wrap gap-2">
+            {TEMPLATE_FIELDS.map((field) => (
+              // Botón de acción, no un interruptor: estilo de chip sin `aria-pressed`.
+              <button
+                key={field.label}
+                type="button"
+                onClick={() => insertField(templatePlaceholder(field))}
+                className={chipClass(false)}
+              >
+                <Plus className="size-3.5" aria-hidden />
+                {field.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
+          <span className="text-xs font-medium text-[var(--muted-foreground)]">Así se verá</span>
+          <p className="text-sm break-words whitespace-pre-wrap">
+            {values.whatsappTemplate.trim()
+              ? previewTemplate(values.whatsappTemplate)
+              : 'Sin mensaje: WhatsApp se abre con el chat vacío.'}
+          </p>
+        </div>
       </Section>
 
-      <Section title="Avisos y mantenimiento">
+      <Section title="Avisos">
         <Field
           id="reminderLeadDays"
           label="Días de anticipación"
-          optional
-          hint="Cuántos días antes de la próxima fecha aparece el aviso en «Avisar»."
+          hint="Cuántos días antes de la fecha aparece en Avisar. Vacío: el mismo día."
           error={errors.reminderLeadDays}
         >
           <Input
@@ -149,13 +158,10 @@ export function SettingsForm({ business: initial }: { business: Business }) {
             aria-invalid={!!errors.reminderLeadDays || undefined}
           />
         </Field>
-        {!days && <Unset>Corresponde avisar desde la fecha exacta, sin anticipación.</Unset>}
 
         <Field
           id="defaultDueRuleWhenBoth"
-          label="Regla cuando hay próximo km y fecha"
-          optional
-          hint="Se preselecciona al registrar un mantenimiento; se puede cambiar en cada uno."
+          label="Con próximo km y fecha, avisar"
           error={errors.defaultDueRuleWhenBoth}
         >
           <Select
@@ -169,54 +175,11 @@ export function SettingsForm({ business: initial }: { business: Business }) {
             }
             aria-invalid={!!errors.defaultDueRuleWhenBoth || undefined}
           >
-            <option value="">Sin definir</option>
+            <option value="">Elegir en cada mantenimiento</option>
             <option value="ANY">{DUE_RULE_LABELS.ANY}</option>
             <option value="ALL">{DUE_RULE_LABELS.ALL}</option>
           </Select>
         </Field>
-        {!values.defaultDueRuleWhenBoth && (
-          <Unset>No se preselecciona nada: eliges la regla en cada mantenimiento.</Unset>
-        )}
-      </Section>
-
-      <Section title="Inventario">
-        <Field
-          id="insufficientStockPolicy"
-          label="Si un mantenimiento deja stock negativo"
-          hint="Valor provisional hasta que se decida (el sistema empieza con «Guardar y avisar»)."
-          error={errors.insufficientStockPolicy}
-        >
-          <Select
-            id="insufficientStockPolicy"
-            value={values.insufficientStockPolicy}
-            onChange={(e) => update('insufficientStockPolicy', e.target.value as StockPolicy)}
-            aria-invalid={!!errors.insufficientStockPolicy || undefined}
-          >
-            {(Object.keys(STOCK_POLICY_LABELS) as StockPolicy[]).map((policy) => (
-              <option key={policy} value={policy}>
-                {STOCK_POLICY_LABELS[policy]}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        <Field
-          id="currency"
-          label="Moneda"
-          optional
-          hint="Todavía no se usa en ninguna pantalla."
-          error={errors.currency}
-        >
-          <Input
-            id="currency"
-            value={values.currency}
-            onChange={(e) => update('currency', e.target.value)}
-            maxLength={10}
-            autoComplete="off"
-            aria-invalid={!!errors.currency || undefined}
-          />
-        </Field>
-        {!values.currency.trim() && <Unset>Sin moneda definida.</Unset>}
       </Section>
 
       {failure && (
@@ -249,17 +212,5 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       <h3 className="text-lg font-bold">{title}</h3>
       {children}
     </section>
-  );
-}
-
-/** Aviso de campo sin definir (`null`) y qué hace el sistema mientras tanto. */
-function Unset({ children }: { children: ReactNode }) {
-  return (
-    <p className="-mt-1 flex items-start gap-2 text-xs text-[var(--muted-foreground)]">
-      <Info className="mt-px size-3.5 shrink-0" aria-hidden />
-      <span>
-        <span className="font-medium text-[var(--foreground)]">Sin definir.</span> {children}
-      </span>
-    </p>
   );
 }

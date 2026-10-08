@@ -8,7 +8,7 @@ export default function NewCustomerPage() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Nuevo cliente"
-        subtitle="Ningún dato es obligatorio; completa lo que tengas."
+        subtitle="Con el nombre o el teléfono basta."
         back={{ href: '/clientes', label: 'Clientes' }}
       />
       <CustomerForm />

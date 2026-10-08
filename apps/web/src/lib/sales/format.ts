@@ -50,11 +50,11 @@ export function parsePrice(raw: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-/** Precio del catálogo para precargar la línea ("12.5"); vacío si el producto no tiene precio. */
+/** Precio del catálogo para precargar la línea ("12.50"); vacío si el producto no tiene precio. */
 export function priceInput(salePrice: string | null): string {
   if (salePrice === null) return '';
   const value = Number(salePrice);
-  return Number.isFinite(value) ? String(value) : '';
+  return Number.isFinite(value) ? value.toFixed(2) : '';
 }
 
 /**
