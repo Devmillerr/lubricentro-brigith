@@ -2,7 +2,8 @@ import { CustomersService } from '../src/customers/customers.service';
 import { buildFakeScopedPrisma } from './support/fake-scoped-prisma';
 
 function setup() {
-  const { prisma, stores } = buildFakeScopedPrisma(['customer']);
+  // El id es la clave primaria: un segundo create con el mismo id da P2002, como en Postgres.
+  const { prisma, stores } = buildFakeScopedPrisma(['customer'], { customer: [['id']] });
   const service = new CustomersService(prisma);
   return { service, customers: stores.get('customer')! };
 }
@@ -38,6 +39,33 @@ describe('CustomersService', () => {
     const customer = await service.create('biz-a', 'user-a', { id: 'custom-id', name: 'Ana' });
 
     expect(customer.id).toBe('custom-id');
+  });
+
+  it('un reintento con el mismo id y los mismos datos devuelve el cliente ya creado', async () => {
+    const { service, customers } = setup();
+    const dto = { id: 'retry-id', name: 'Ana', phone: '987654321', notes: 'nota' };
+
+    const first = await service.create('biz-a', 'user-a', dto);
+    const retry = await service.create('biz-a', 'user-a', { ...dto });
+
+    expect(retry).toEqual(first);
+    expect(customers.size).toBe(1);
+  });
+
+  it('409 CUSTOMER_ID_CONFLICT si el id ya existe con otros datos o en otro negocio', async () => {
+    const { service, customers } = setup();
+    const dto = { id: 'taken-id', name: 'Ana', phone: '987654321', notes: 'nota' };
+    await service.create('biz-a', 'user-a', dto);
+
+    await expect(
+      service.create('biz-a', 'user-a', { ...dto, phone: '111222333' }),
+    ).rejects.toMatchObject({ status: 409, code: 'CUSTOMER_ID_CONFLICT' });
+    await expect(service.create('biz-b', 'user-b', dto)).rejects.toMatchObject({
+      status: 409,
+      code: 'CUSTOMER_ID_CONFLICT',
+    });
+    expect(customers.size).toBe(1);
+    expect(customers.get('taken-id')?.phone).toBe('987654321');
   });
 
   it('guarda el negocio y quién lo creó', async () => {

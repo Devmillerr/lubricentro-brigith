@@ -1,6 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type { Customer, Prisma } from '@prisma/client';
+import { Prisma, type Customer } from '@prisma/client';
 import {
   ProblemException,
   ValidationProblemException,
@@ -41,17 +41,32 @@ export class CustomersService {
 
   async create(businessId: string, userId: string, dto: CreateCustomerDto): Promise<Customer> {
     assertIdentifiable(dto.name, dto.phone);
-    return forBusiness(this.prisma, businessId).customer.create({
-      data: {
-        id: dto.id ?? randomUUID(),
-        // forBusiness sobrescribe businessId igual; se pasa para que el tipo compile (ver auth.service.ts).
-        businessId,
-        name: dto.name,
-        phone: dto.phone,
-        notes: dto.notes,
-        createdById: userId,
-      },
-    });
+    const scoped = forBusiness(this.prisma, businessId);
+    try {
+      return await scoped.customer.create({
+        data: {
+          id: dto.id ?? randomUUID(),
+          // forBusiness sobrescribe businessId igual; se pasa para que el tipo compile (ver auth.service.ts).
+          businessId,
+          name: dto.name,
+          phone: dto.phone,
+          notes: dto.notes,
+          createdById: userId,
+        },
+      });
+    } catch (error) {
+      if (!dto.id || !isUniqueViolation(error)) throw error;
+      // Reintento con el mismo id (doble toque, red que se cortó): si es el
+      // mismo cliente de este negocio con los mismos datos, ya está creado y
+      // se devuelve tal cual. Otro contenido u otro negocio: 409, nunca 500.
+      const existing = await scoped.customer.findFirst({ where: { id: dto.id } });
+      if (existing && isSameCustomer(existing, dto)) return existing;
+      throw new ProblemException({
+        status: HttpStatus.CONFLICT,
+        code: 'CUSTOMER_ID_CONFLICT',
+        title: 'Ya existe un cliente con ese id y otros datos',
+      });
+    }
   }
 
   async findOneWithVehicles(businessId: string, id: string): Promise<CustomerWithVehicles> {
@@ -103,6 +118,19 @@ export class CustomersService {
       title: 'Cliente no encontrado',
     });
   }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
+/** Lo guardado coincide con lo que se vuelve a enviar (un campo que no llega es null). */
+function isSameCustomer(existing: Customer, dto: CreateCustomerDto): boolean {
+  return (
+    existing.name === (dto.name ?? null) &&
+    existing.phone === (dto.phone ?? null) &&
+    existing.notes === (dto.notes ?? null)
+  );
 }
 
 /**

@@ -61,7 +61,7 @@ No hay registro público ni correo: la cuenta se entrega ya creada, con una cont
 | Método | Ruta | Descripción |
 |---|---|---|
 | GET | `/customers?search=` | Buscar por nombre o teléfono |
-| POST | `/customers` | Crear. Nombre o teléfono, al menos uno (BR-C3): sin ninguno, 400 `VALIDATION_ERROR` en `name`; igual en `PATCH` si la edición los dejaría vacíos |
+| POST | `/customers` | Crear. Nombre o teléfono, al menos uno (BR-C3): sin ninguno, 400 `VALIDATION_ERROR` en `name`; igual en `PATCH` si la edición los dejaría vacíos. Reintento con el mismo `id` y los mismos datos: 201 con el cliente ya creado, sin duplicar; mismo `id` con otros datos o de otro negocio: 409 `CUSTOMER_ID_CONFLICT` |
 | GET | `/customers/:id` | Detalle con sus vehículos |
 | PATCH | `/customers/:id` | Editar |
 | DELETE | `/customers/:id` | Desactivar |

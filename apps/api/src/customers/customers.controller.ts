@@ -49,7 +49,7 @@ export class CustomersController {
   }
 
   @ApiCreatedResponse({ type: CustomerResponse })
-  @ApiErrors({ 400: VALIDATION_ERRORS })
+  @ApiErrors({ 400: VALIDATION_ERRORS, 409: ['CUSTOMER_ID_CONFLICT'] })
   @Post()
   create(@CurrentUser() user: AccessTokenPayload, @Body() dto: CreateCustomerDto) {
     return this.customersService.create(user.businessId, user.sub, dto);
