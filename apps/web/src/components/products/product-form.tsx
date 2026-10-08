@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { api, type Schemas } from '@/lib/api/client';
 import { callApi, failureMessage, type ApiFailure } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
-import { formatPrice, type Product, type ProductCategory } from '@/lib/products/format';
+import type { Product, ProductCategory } from '@/lib/products/format';
+import { priceInput } from '@/lib/sales/format';
 import { rememberProducts } from '@/lib/products/product-lookup';
 import { AttributePicker } from './attribute-picker';
 import { CategoryPicker } from './category-picker';
@@ -64,7 +65,7 @@ export function ProductForm({ product }: { product?: Product }) {
     presentation: product?.presentation ?? '',
     unit: product?.unit ?? '',
     categoryId: product?.categoryId ?? '',
-    salePrice: formatPrice(product?.salePrice ?? null) ?? '',
+    salePrice: priceInput(product?.salePrice ?? null),
     tracksStock: product?.tracksStock ?? true,
     hasContainer: Boolean(product?.containerCapacity),
     containerLabel: product?.containerLabel ?? '',

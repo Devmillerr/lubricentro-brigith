@@ -20,8 +20,9 @@ import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
 import { present } from '@/lib/customers/format';
 import { categoryPath } from '@/lib/products/categories';
-import { formatPrice, type Product } from '@/lib/products/format';
+import type { Product } from '@/lib/products/format';
 import { findProduct, rememberProducts } from '@/lib/products/product-lookup';
+import { formatMoney } from '@/lib/sales/format';
 
 /**
  * Ficha del producto con sus formas de venta (DEC-91) y modelos compatibles;
@@ -81,7 +82,9 @@ export default function ProductDetailPage() {
         <Detail label="Presentación">{present(product.presentation)}</Detail>
         <Detail label="Unidad">{product.unit}</Detail>
         <Detail label="Categoría">{categoryText}</Detail>
-        <Detail label="Precio de venta">{formatPrice(product.salePrice) ?? 'Pendiente'}</Detail>
+        <Detail label="Precio de venta">
+          {product.salePrice !== null ? formatMoney(product.salePrice) : 'Pendiente'}
+        </Detail>
         <Detail label="Stock">
           {product.tracksStock ? 'Controla stock' : 'No controla stock'}
         </Detail>

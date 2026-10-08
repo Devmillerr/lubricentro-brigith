@@ -1,4 +1,5 @@
 import type { Schemas } from '@/lib/api/client';
+import { formatCentsMoney, toCents } from '@/lib/money';
 import type { SaleSource } from '@/lib/sales/format';
 
 export type Dashboard = Schemas['DashboardResponse'];
@@ -28,26 +29,8 @@ export const SERIES_COLOR: Record<SeriesSource, string> = {
   maintenance: 'var(--series-maintenance)',
 };
 
-/**
- * Monto decimal de la API ("123.40") a céntimos enteros, sin pasar por float:
- * los montos viajan como string (06-API.md §1) y así se suman y comparan exactos.
- */
-export function toCents(amount: string): number {
-  const trimmed = amount.trim();
-  const negative = trimmed.startsWith('-');
-  const [whole = '0', fraction = ''] = trimmed.replace(/^[-+]/, '').split('.');
-  const cents = Number(whole) * 100 + Number((fraction + '00').slice(0, 2));
-  return negative ? -cents : cents;
-}
-
-/** Céntimos a "S/ 1,234.50" (mismo formato que el resto de montos, con miles). */
-export function formatCentsMoney(cents: number): string {
-  const sign = cents < 0 ? '-' : '';
-  const abs = Math.abs(cents);
-  const whole = Math.floor(abs / 100).toLocaleString('en-US');
-  const fraction = String(abs % 100).padStart(2, '0');
-  return `${sign}S/ ${whole}.${fraction}`;
-}
+// El formato de dinero vive en `lib/money.ts` (uno solo para toda la app).
+export { formatCentsMoney, toCents };
 
 export function formatAmount(amount: string): string {
   return formatCentsMoney(toCents(amount));

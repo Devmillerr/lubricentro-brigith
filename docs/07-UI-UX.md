@@ -27,6 +27,8 @@ La pestaña activa es la de la pantalla actual, por la ruta más específica: Ve
 
 **Barra de cobro (2026-10-08):** en Vender, Lavado y Mantenimiento, el botón principal queda pegado encima de la barra inferior (respeta el área segura) mientras se recorre el formulario. Muestra el total ("Cobrar S/ 25.50", "Guardar y cobrar S/ 60.00") o lo que falta ("Agrega un producto", "Elige Efectivo o Yape"). En Vender, tocarlo con algo pendiente lleva a ese paso. En pantallas anchas vuelve a su lugar normal.
 
+**Importes (2026-10-08):** todo monto visible usa un solo formato, `S/ 25,474.50` (coma de miles, punto decimal), también los precios de Productos. Los campos de precio se escriben sin miles (`25474.50`). Solo cambia la presentación (`apps/web/src/lib/money.ts`).
+
 ## 3. Pantallas del MVP
 
 ### 3.1 Inicio

@@ -14,8 +14,9 @@ import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
 import { buildCategoryTree } from '@/lib/products/categories';
-import { formatPrice, type Product } from '@/lib/products/format';
+import type { Product } from '@/lib/products/format';
 import { rememberProducts } from '@/lib/products/product-lookup';
+import { formatMoney } from '@/lib/sales/format';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
 
 const PAGE_SIZE = 30;
@@ -280,7 +281,7 @@ export default function ProductsPage() {
 }
 
 function ProductCard({ product }: { product: Product }) {
-  const price = formatPrice(product.salePrice);
+  const price = product.salePrice !== null ? formatMoney(product.salePrice) : null;
   const details = [product.brand, product.viscosity, product.presentation].filter(Boolean);
   return (
     <Link

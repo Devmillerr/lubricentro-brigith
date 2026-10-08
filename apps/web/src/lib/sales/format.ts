@@ -68,18 +68,8 @@ export function subtotalCents(quantity: number, unitPrice: number): number {
   return Math.floor((units + 500) / 1000);
 }
 
-export function formatCents(cents: number): string {
-  return formatMoney(cents / 100);
-}
-
-/**
- * Monto de una venta o lavado. Viaja como string (Decimal) y se muestra en
- * soles con 2 decimales, como los montos confirmados de lavado (S/8, S/15…).
- */
-export function formatMoney(amount: string | number): string {
-  const value = typeof amount === 'string' ? Number(amount) : amount;
-  return Number.isFinite(value) ? `S/ ${value.toFixed(2)}` : `S/ ${amount}`;
-}
+/** Montos visibles: el formato único de `lib/money.ts` ("S/ 25,474.50"). */
+export { formatCentsMoney as formatCents, formatMoney } from '@/lib/money';
 
 export const saleDateFormat = dateTimeFormat();
 
