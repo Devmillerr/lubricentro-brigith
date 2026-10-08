@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"sin pruebas todavía en apps/web\"",
+    "test": "vitest run",
     "generate:api-client": "openapi-typescript ../../openapi.json -o src/lib/api/generated/schema.d.ts --default-non-nullable false"
   },
   "dependencies": {
@@ -35,6 +35,7 @@
     "postcss": "^8.5.28",
     "prettier": "^3.9.8",
     "tailwindcss": "^4.3.3",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "3.2.4"
   }
 }
