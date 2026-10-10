@@ -134,7 +134,7 @@ Coherencia: `KM` exige `nextDueKm`; `DATE` exige `nextDueDate`; `ANY`/`ALL` exig
 | Campo | Notas |
 |---|---|
 | id, businessId, productId | |
-| type | `COUNT`, `PURCHASE_IN`, `MAINTENANCE_USE`, `MAINTENANCE_VOID`, `ADJUSTMENT`, y los definidos `SALE`, `SALE_VOID` (salidas por venta; punto de entrada según DEC-24) (BR-P4, BR-P14) |
+| type | `COUNT`, `PURCHASE_IN`, `MAINTENANCE_USE`, `MAINTENANCE_VOID`, `ADJUSTMENT`, y los definidos `SALE`, `SALE_VOID` (salidas por venta; punto de entrada según DEC-24) (BR-P4, BR-P14). `PURCHASE_VOID` (R8, migración `r8_purchase_void`): anulación de una recepción; el StockLedger rechaza cualquier `PURCHASE_VOID` que deje el saldo negativo, tenga o no conteo el producto |
 | quantityDelta | Con signo. Entra +, sale − |
 | countedQuantity? | Solo en `COUNT`: la cantidad contada |
 | previousBalance? | Solo en `COUNT`: saldo calculado justo antes, para auditar la diferencia |
@@ -143,6 +143,8 @@ Coherencia: `KM` exige `nextDueKm`; `DATE` exige `nextDueDate`; `ANY`/`ALL` exig
 | resultingBalance? | Saldo del producto justo después del movimiento, calculado con la fila bloqueada. Nulo en filas anteriores a R1 |
 | createdById? | Usuario que lo registró. Nulo en filas anteriores a R1 |
 | occurredAt | |
+| ledgerSeq? | R8 (DEC-96): orden de registro, asignado por la base al insertar (secuencia `inventory_movements_ledgerSeq_seq`). Como el StockLedger inserta con el producto bloqueado, para un mismo producto refleja el orden real. Nulo en filas anteriores a R8 (no se rellenan) |
+| recordedAt? | R8: hora de registro (`clock_timestamp()`). Solo auditoría. Nulo en filas anteriores a R8 |
 
 **Solo se insertan filas; nunca se actualizan ni se borran** (BR-G5, BR-P3).
 
@@ -172,6 +174,24 @@ Un solo recordatorio abierto (`PENDING`/`CONTACTED`) por `(businessId, vehicleId
 
 ### IdempotencyRecord
 `businessId, key, endpoint, requestHash, responseStatus, responseBody, createdAt`. Único `(businessId, key, endpoint)` (migración `20260922200000_idempotency_key_per_endpoint`). Sirve a todas las escrituras críticas (mantenimientos, inventario, ventas, lavados y, en R6, el cobro de mantenimiento), por eso no es una columna de `Maintenance`. La purga tras un plazo técnico no está implementada. La atomicidad entre la reserva de la clave y el efecto (hallazgo A2) es deuda técnica fuera de R6 (DEC-76).
+
+### Compras, proveedores y cuentas por pagar (R8: DEC-95 a DEC-101)
+
+Todas las migraciones de R8 son aditivas (no rellenan ni cambian datos existentes) y llevan `BEGIN`/`COMMIT` explícitos: `prisma migrate deploy` no envuelve la migración en una transacción (comprobado en F0). Las columnas con valor por defecto sobre tablas con datos se agregan en dos pasos (columna sin valor por defecto y luego `SET DEFAULT`) para que las filas existentes queden en NULL.
+
+**`InventoryReceipt` (F1, migración `r8_ledger_seq_receipt_resolution`):** `laterStockResolution` (JSONB: por producto, `resolution`, `physicalQuantity` y los conteos o ajustes detectados) y `possibleDuplicateAcknowledged` (boolean). Un ajuste de regularización (`SET_PHYSICAL`) es un `ADJUSTMENT` con `refType = 'InventoryReceipt'`; las líneas de compra de una recepción son solo sus `PURCHASE_IN`.
+
+**`Supplier` (F2, migración `r8_suppliers_purchase_info`):** `id`, `businessId`, `name`, `taxId?` (normalizado; único por negocio), `phone?`, `note?`, `isActive`, `createdById`, `createdAt`, `updatedAt`. Único `(businessId, id)` para las FK compuestas. RLS activado.
+
+**`InventoryReceipt` (F2):** `supplierId?` con FK compuesta `(businessId, supplierId) → suppliers(businessId, id)` `ON DELETE/UPDATE RESTRICT` (no puede apuntar a un proveedor de otro negocio); `documentRef?`; `purchaseDate?` (`DATE`) y `purchaseDateSource?`; `purchaseInfoRecordedAt?`/`purchaseInfoRecordedById?`; `voidedAt?`, `voidedById?`, `voidReason?`. Único `(businessId, id)`. Índice único parcial `(businessId, supplierId, documentRef) WHERE documentRef IS NOT NULL AND voidedAt IS NULL`. `CHECK`: comprobante exige proveedor; fecha de compra y su origen juntos; anulación todo o nada.
+
+**`InventoryReceipt` (F4, migración `r8_supplier_payables`):** `currency?` (`PEN`/`USD`; NULL = soles), `purchaseExchangeRate?` (`Decimal(10,4)`, solo en USD: `CHECK`), `paymentTerms?` (`CASH`/`CREDIT`).
+
+**`SupplierPayable` (F4):** `id`, `businessId`, `supplierId` y `receiptId` con FK compuestas `(businessId, …)` `RESTRICT`, `currency`, `originalAmount` (`Decimal(10,2)`, > 0), `amountSource` (`RECEIPT_LINES`/`MANUAL`), `issueDate` (`DATE`), `issueDateReason?`, `termDays` (30), `dueDate` (`DATE`, ≥ `issueDate`), `dueDateSource` (`DEFAULT_TERM`/`AGREED`), `referenceExchangeRate?` (solo en USD), `paidAmount` (caché de lo aplicado, 0 ≤ … ≤ original), auditoría y anulación (todo o nada). Único `(businessId, id)`. Índice único parcial `(receiptId) WHERE voidedAt IS NULL`: una sola deuda activa por recepción. Moneda, monto, fecha base, plazo, recepción, proveedor y tipo de cambio de referencia no tienen vía de actualización. El estado no se guarda: se calcula al leer. RLS activado.
+
+**`SupplierPayableDueDateChange` (F4):** historial que solo se inserta: `kind` (`INITIAL`/`CHANGE`; `CHECK`: `previousDueDate` nulo solo en `INITIAL`), `previousDueDate?`, `newDueDate`, `reason` (no vacío), `createdById`, `createdAt`; FK compuesta a la deuda. RLS activado.
+
+**`SupplierPayment` (F5, migración `r8_supplier_payments`):** solo se inserta y se anula. `payableId` con FK compuesta `(businessId, payableId)` `RESTRICT`; `paidOn` (`DATE`); `paymentCurrency`, `amountPaid` (lo entregado); `debtCurrency` (copia); `exchangeRate?` (`Decimal(10,4)`); `computedAppliedAmount` y `appliedAmount` (`Decimal(10,2)`, en la moneda de la deuda); `settlesBalance`, `settlementReason?`; `method` (`CASH`/`YAPE`/`TRANSFER`/`OTHER`), `reference?`, `note?`; auditoría y anulación (todo o nada). `CHECK`: montos > 0; tipo de cambio presente si y solo si las monedas difieren, y > 0; sin liquidación, calculado = aplicado y sin motivo; con liquidación, monedas distintas, motivo y |calculado − aplicado| ≤ 0.01. `SupplierPayable.paidAmount` = Σ `appliedAmount` de los pagos activos, escrito en la misma transacción con la deuda bloqueada. RLS activado.
 
 ## 4. Tablas de la Fase 2 (no se crean en el MVP)
 

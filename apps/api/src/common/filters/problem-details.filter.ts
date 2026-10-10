@@ -17,6 +17,7 @@ interface ProblemDetailsBody {
   code: string;
   instance: string;
   errors?: FieldError[];
+  data?: unknown;
 }
 
 const DEFAULT_CODE_BY_STATUS: Record<number, string> = {
@@ -63,6 +64,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         code: exception.code,
         instance,
         errors: exception.errors,
+        ...(exception.data !== undefined ? { data: exception.data } : {}),
       };
     }
 

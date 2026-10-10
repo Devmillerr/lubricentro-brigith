@@ -72,6 +72,10 @@ model Business {
   maintenanceTypes       MaintenanceType[]
   maintenances           Maintenance[]
   reminders              Reminder[]
+  suppliers              Supplier[]
+  supplierPayables       SupplierPayable[]
+  dueDateChanges         SupplierPayableDueDateChange[]
+  supplierPayments       SupplierPayment[]
 
   @@map("businesses")
 }
@@ -106,7 +110,15 @@ model User {
   voidedMaintenances       Maintenance[]
   reminderContacts         ReminderContact[]
   inventoryMovements       InventoryMovement[]
-  inventoryReceipts        InventoryReceipt[]
+  inventoryReceipts        InventoryReceipt[]     @relation("ReceiptCreatedBy")
+  receiptsPurchaseInfo     InventoryReceipt[]     @relation("ReceiptPurchaseInfoBy")
+  voidedReceipts           InventoryReceipt[]     @relation("ReceiptVoidedBy")
+  createdSuppliers         Supplier[]             @relation("SupplierCreatedBy")
+  createdPayables          SupplierPayable[]      @relation("PayableCreatedBy")
+  voidedPayables           SupplierPayable[]      @relation("PayableVoidedBy")
+  dueDateChanges           SupplierPayableDueDateChange[] @relation("DueDateChangeBy")
+  createdSupplierPayments  SupplierPayment[]      @relation("SupplierPaymentCreatedBy")
+  voidedSupplierPayments   SupplierPayment[]      @relation("SupplierPaymentVoidedBy")
   createdSales             Sale[]                 @relation("SaleCreatedBy")
   voidedSales              Sale[]                 @relation("SaleVoidedBy")
 
@@ -418,6 +430,8 @@ enum InventoryMovementType {
   ADJUSTMENT
   SALE
   SALE_VOID
+  /// Anulación de una recepción (R8, DEC-97): devuelve lo que sumó. Nunca deja el saldo negativo.
+  PURCHASE_VOID
 }
 
 /// Todo cambio de stock es un movimiento; el saldo de un producto es la
@@ -465,7 +479,18 @@ model InventoryMovement {
 
   occurredAt DateTime @default(now())
 
+  /// Orden de registro (R8, DEC-96): lo asigna la base al insertar, después de
+  /// que el StockLedger bloqueó la fila del producto, así que para un mismo
+  /// producto refleja el orden real. NULL en los movimientos anteriores a R8
+  /// (no se rellenan). La columna se agregó en dos pasos (ver la migración).
+  ledgerSeq  Int?      @default(autoincrement())
+  /// Hora de registro (`clock_timestamp()`, no la del inicio de la
+  /// transacción). Solo auditoría. NULL en los movimientos anteriores a R8.
+  recordedAt DateTime? @default(dbgenerated("clock_timestamp()"))
+
   @@index([businessId, productId, occurredAt])
+  @@index([businessId, productId, ledgerSeq])
+  @@index([businessId, refType, refId])
   @@map("inventory_movements")
 }
 
@@ -488,13 +513,236 @@ model InventoryReceipt {
   /// ninguna lo tiene, como en todas las recepciones anteriores.
   totalCost Decimal? @db.Decimal(10, 2)
 
+  /// Recepción atrasada (R8, DEC-96): resolución elegida por producto ante
+  /// conteos o ajustes posteriores. NULL si no hubo ninguno.
+  laterStockResolution          Json?
+  /// true si se guardó pese a parecerse a otra recepción reciente (DEC-96).
+  possibleDuplicateAcknowledged Boolean?
+
   createdById String
-  createdBy   User   @relation(fields: [createdById], references: [id])
+  createdBy   User   @relation("ReceiptCreatedBy", fields: [createdById], references: [id])
 
   createdAt DateTime @default(now())
 
+  /// Proveedor (R8, DEC-95). FK compuesta: solo uno del mismo negocio.
+  supplierId String?
+  supplier   Supplier? @relation(fields: [businessId, supplierId], references: [businessId, id], onDelete: Restrict, onUpdate: Restrict)
+  /// Número de comprobante normalizado (mayúsculas, sin espacios). Único por
+  /// proveedor entre recepciones no anuladas (índice parcial en la migración).
+  documentRef String?
+  /// Fecha de compra (DEC-95): la del comprobante o, sin comprobante, la de la
+  /// recepción en la zona del negocio. Sin hora.
+  purchaseDate       DateTime?           @db.Date
+  purchaseDateSource PurchaseDateSource?
+  /// Cuándo y quién agregó proveedor, comprobante o fecha de compra a una
+  /// recepción ya registrada (DEC-95). NULL si vinieron al crearla.
+  purchaseInfoRecordedAt   DateTime?
+  purchaseInfoRecordedById String?
+  purchaseInfoRecordedBy   User?     @relation("ReceiptPurchaseInfoBy", fields: [purchaseInfoRecordedById], references: [id])
+
+  /// Anulación (R8, DEC-97): todo o nada (CHECK en la migración).
+  voidedAt   DateTime?
+  voidedById String?
+  voidedBy   User?     @relation("ReceiptVoidedBy", fields: [voidedById], references: [id])
+  voidReason String?
+
+  /// Moneda de los montos de la recepción (R8, DEC-99/100). NULL = PEN (las
+  /// recepciones anteriores no se rellenan).
+  currency             Currency?
+  /// Tipo de cambio del día de la compra (soles por 1 USD), opcional y solo en
+  /// USD (DEC-100). Se copia a la deuda como referencia.
+  purchaseExchangeRate Decimal?      @db.Decimal(10, 4)
+  /// Contado o crédito (DEC-98). NULL en las anteriores = contado.
+  paymentTerms         PaymentTerms?
+
+  payables SupplierPayable[]
+
+  @@unique([businessId, id])
   @@index([businessId, occurredAt])
+  @@index([businessId, supplierId, occurredAt])
   @@map("inventory_receipts")
+}
+
+/// Origen de la fecha de compra (R8, DEC-95).
+enum PurchaseDateSource {
+  DOCUMENT
+  RECEIPT_DATE
+}
+
+/// Proveedor (R8, DEC-95). Sin borrado físico: se desactiva (BR-G5).
+model Supplier {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  name     String
+  /// RUC u otro documento, normalizado. Único por negocio si existe.
+  taxId    String?
+  phone    String?
+  note     String?
+  isActive Boolean @default(true)
+
+  createdById String
+  createdBy   User     @relation("SupplierCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  receipts InventoryReceipt[]
+  payables SupplierPayable[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, taxId])
+  @@index([businessId, isActive, name])
+  @@map("suppliers")
+}
+
+enum Currency {
+  PEN
+  USD
+}
+
+enum PaymentTerms {
+  CASH
+  CREDIT
+}
+
+/// De dónde sale el monto de la deuda (DEC-98): la suma de las líneas o
+/// escrito a mano (deuda de una recepción ya registrada).
+enum PayableAmountSource {
+  RECEIPT_LINES
+  MANUAL
+}
+
+/// Vencimiento por el plazo predeterminado (30 días) o pactado con motivo.
+enum DueDateSource {
+  DEFAULT_TERM
+  AGREED
+}
+
+enum DueDateChangeKind {
+  INITIAL
+  CHANGE
+}
+
+/// Cuenta por pagar a un proveedor (R8, DEC-98). Nace con una compra al
+/// crédito (o se registra sobre una recepción existente). Moneda, monto
+/// original, fecha base, plazo, recepción, proveedor y tipo de cambio de
+/// referencia no cambian nunca. El estado se calcula al leer. Una sola deuda
+/// activa por recepción (índice parcial en la migración).
+model SupplierPayable {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  supplierId String
+  supplier   Supplier         @relation(fields: [businessId, supplierId], references: [businessId, id], onDelete: Restrict, onUpdate: Restrict)
+  receiptId  String
+  receipt    InventoryReceipt @relation(fields: [businessId, receiptId], references: [businessId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  currency              Currency
+  originalAmount        Decimal             @db.Decimal(10, 2)
+  amountSource          PayableAmountSource
+  /// Fecha base del plazo (sin hora): la de compra, salvo otra con motivo.
+  issueDate             DateTime            @db.Date
+  issueDateReason       String?
+  termDays              Int                 @default(30)
+  dueDate               DateTime            @db.Date
+  dueDateSource         DueDateSource
+  /// Soles por 1 USD, solo en deudas en USD (DEC-100). Opcional.
+  referenceExchangeRate Decimal?            @db.Decimal(10, 4)
+  /// Σ de lo aplicado por los pagos activos, en la moneda de la deuda. Solo lo
+  /// escribe el servicio de pagos con la fila bloqueada.
+  paidAmount            Decimal             @default(0) @db.Decimal(10, 2)
+
+  createdById String
+  createdBy   User     @relation("PayableCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  voidedAt   DateTime?
+  voidedById String?
+  voidedBy   User?     @relation("PayableVoidedBy", fields: [voidedById], references: [id])
+  voidReason String?
+
+  dueDateChanges SupplierPayableDueDateChange[]
+  payments       SupplierPayment[]
+
+  @@unique([businessId, id])
+  @@index([businessId, dueDate])
+  @@index([businessId, supplierId, dueDate])
+  @@index([businessId, receiptId])
+  @@map("supplier_payables")
+}
+
+/// Historial de vencimientos (R8, DEC-98): solo se inserta. `INITIAL` al nacer
+/// la deuda; `CHANGE` en cada cambio, con motivo.
+model SupplierPayableDueDateChange {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  payableId  String
+  payable    SupplierPayable @relation(fields: [businessId, payableId], references: [businessId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  kind            DueDateChangeKind
+  previousDueDate DateTime?         @db.Date
+  newDueDate      DateTime          @db.Date
+  reason          String
+  createdById     String
+  createdBy       User              @relation("DueDateChangeBy", fields: [createdById], references: [id])
+  createdAt       DateTime          @default(now())
+
+  @@index([businessId, payableId, createdAt])
+  @@map("supplier_payable_due_date_changes")
+}
+
+enum SupplierPaymentMethod {
+  CASH
+  YAPE
+  TRANSFER
+  OTHER
+}
+
+/// Pago a un proveedor (R8, DEC-99). Solo se inserta y se anula (nunca se
+/// edita). Guarda lo realmente entregado y su moneda, el tipo de cambio
+/// escrito (solo si las monedas difieren) y el monto aplicado a la deuda, en
+/// la moneda de la deuda. `computedAppliedAmount` es la conversión redondeada;
+/// `appliedAmount` difiere de ella solo en una liquidación de hasta un
+/// céntimo, con motivo (`settlesBalance`). CHECK en la migración.
+model SupplierPayment {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  payableId  String
+  payable    SupplierPayable @relation(fields: [businessId, payableId], references: [businessId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  /// Fecha real del pago (sin hora): entre la fecha base de la deuda y hoy.
+  paidOn                DateTime              @db.Date
+  paymentCurrency       Currency
+  amountPaid            Decimal               @db.Decimal(10, 2)
+  /// Copia de la moneda de la deuda, para validar el tipo de cambio con un CHECK.
+  debtCurrency          Currency
+  /// Soles por 1 USD, escrito a mano; solo si las monedas difieren.
+  exchangeRate          Decimal?              @db.Decimal(10, 4)
+  computedAppliedAmount Decimal               @db.Decimal(10, 2)
+  appliedAmount         Decimal               @db.Decimal(10, 2)
+  settlesBalance        Boolean               @default(false)
+  settlementReason      String?
+  method                SupplierPaymentMethod
+  reference             String?
+  note                  String?
+
+  createdById String
+  createdBy   User     @relation("SupplierPaymentCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  voidedAt   DateTime?
+  voidedById String?
+  voidedBy   User?     @relation("SupplierPaymentVoidedBy", fields: [voidedById], references: [id])
+  voidReason String?
+
+  @@index([businessId, payableId, paidOn])
+  @@index([businessId, paidOn])
+  @@map("supplier_payments")
 }
 
 // ---------------------------------------------------------------------------

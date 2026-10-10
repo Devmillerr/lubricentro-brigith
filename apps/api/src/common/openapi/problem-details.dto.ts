@@ -31,4 +31,11 @@ export class ProblemDetailsDto {
 
   @ApiPropertyOptional({ type: [FieldErrorDto] })
   errors?: FieldErrorDto[];
+
+  @ApiPropertyOptional({
+    description: 'Datos del caso (miembro de extensión), según el `code`. Ver 06-API.md.',
+    type: 'object',
+    additionalProperties: true,
+  })
+  data?: Record<string, unknown>;
 }

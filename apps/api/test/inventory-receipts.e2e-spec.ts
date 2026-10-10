@@ -116,14 +116,33 @@ describeIfTestDb('POST /api/v1/inventory/receipts (e2e)', () => {
 
     expect(Object.keys(res.body).sort()).toEqual(
       [
+        'adjustments',
         'businessId',
         'createdAt',
         'createdById',
+        'currency',
+        'documentRef',
         'id',
+        'laterStockResolution',
         'lines',
         'note',
         'occurredAt',
+        'payable',
+        'paymentTerms',
+        'possibleDuplicateAcknowledged',
+        'purchaseDate',
+        'purchaseExchangeRate',
+        'purchaseDateSource',
+        'purchaseInfoRecordedAt',
+        'purchaseInfoRecordedById',
+        'supplier',
+        'supplierId',
         'totalCost',
+        'voidReason',
+        'voidedAt',
+        'voidedById',
+        'voids',
+        'warnings',
       ].sort(),
     );
     expect(res.body).toMatchObject({
@@ -315,12 +334,14 @@ describeIfTestDb('POST /api/v1/inventory/receipts (e2e)', () => {
     it('200 lista: las más recientes primero, con lineCount, sin líneas y paginada', async () => {
       const a = await createProduct(businessId);
       const b = await createProduct(businessId);
+      // Las más recientes del archivo, dentro del margen de 5 min que admite R8
+      // para una fecha "adelantada" (las fechas futuras se rechazan).
       const older = await post({
-        occurredAt: '2030-01-01T10:00:00.000Z',
+        occurredAt: new Date(Date.now() + 60_000).toISOString(),
         lines: [{ productId: a, quantity: 1 }],
       }).expect(201);
       const newer = await post({
-        occurredAt: '2030-01-02T10:00:00.000Z',
+        occurredAt: new Date(Date.now() + 120_000).toISOString(),
         note: 'Aceites',
         lines: [
           { productId: a, quantity: 1 },
@@ -336,12 +357,24 @@ describeIfTestDb('POST /api/v1/inventory/receipts (e2e)', () => {
           'businessId',
           'createdAt',
           'createdById',
+          'currency',
+          'documentRef',
           'id',
           'lineCount',
           'note',
           'occurredAt',
+          'paymentTerms',
           'preview',
+          'purchaseDate',
+          'purchaseExchangeRate',
+          'purchaseDateSource',
+          'purchaseInfoRecordedAt',
+          'supplier',
+          'supplierId',
           'totalCost',
+          'voidReason',
+          'voidedAt',
+          'voidedById',
         ].sort(),
       );
       expect(first.body.items[0]).toMatchObject({

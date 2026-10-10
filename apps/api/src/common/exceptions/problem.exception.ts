@@ -12,6 +12,11 @@ export interface ProblemExceptionOptions {
   title: string;
   detail?: string;
   errors?: FieldError[];
+  /**
+   * Miembro de extensión (RFC 9457): datos del caso para que el frontend los
+   * muestre, p. ej. los conteos posteriores de una recepción atrasada (R8).
+   */
+  data?: unknown;
 }
 
 /**
@@ -24,12 +29,14 @@ export class ProblemException extends HttpException {
   public readonly code: string;
   public readonly title: string;
   public readonly errors?: FieldError[];
+  public readonly data?: unknown;
 
   constructor(options: ProblemExceptionOptions) {
     super(options.detail ?? options.title, options.status);
     this.code = options.code;
     this.title = options.title;
     this.errors = options.errors;
+    this.data = options.data;
   }
 }
 

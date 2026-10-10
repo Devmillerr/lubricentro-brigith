@@ -10,7 +10,7 @@ import { PrismaService } from './prisma.service';
  * Excepción: `MaintenanceItem` no tiene `businessId` propio (05-DATABASE.md
  * §3) — siempre se llega a través de `Maintenance`, que sí está aquí.
  */
-const BUSINESS_SCOPED_MODELS = new Set([
+export const BUSINESS_SCOPED_MODELS = new Set([
   'User',
   'RefreshToken',
   'IdempotencyRecord',
@@ -22,6 +22,10 @@ const BUSINESS_SCOPED_MODELS = new Set([
   'ProductCompatibility',
   'InventoryMovement',
   'InventoryReceipt',
+  'Supplier',
+  'SupplierPayable',
+  'SupplierPayableDueDateChange',
+  'SupplierPayment',
   'ProductSaleUnit',
   'Sale',
   'SaleLine',
