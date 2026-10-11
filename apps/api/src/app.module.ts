@@ -4,6 +4,8 @@ import { AuthModule } from './auth/auth.module';
 import { BusinessModule } from './business/business.module';
 import { validateEnv } from './config/env.validation';
 import { CustomersModule } from './customers/customers.module';
+import { SuppliersModule } from './suppliers/suppliers.module';
+import { PayablesModule } from './payables/payables.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { HealthModule } from './health/health.module';
 import { IdempotencyModule } from './idempotency/idempotency.module';
@@ -31,6 +33,8 @@ import { WashesModule } from './washes/washes.module';
     AuthModule,
     BusinessModule,
     CustomersModule,
+    SuppliersModule,
+    PayablesModule,
     VehiclesModule,
     ProductsModule,
     InventoryModule,

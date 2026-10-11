@@ -1,11 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { HttpStatus, Injectable } from '@nestjs/common';
-import {
-  InventoryMovementType,
-  Prisma,
-  type InventoryMovement,
-  type InventoryReceipt,
-} from '@prisma/client';
+import { InventoryMovementType, Prisma, type InventoryMovement } from '@prisma/client';
 import {
   ProblemException,
   ValidationProblemException,
@@ -21,7 +16,43 @@ import { MAX_MONEY, MAX_MONEY_MESSAGE } from '../common/decimal-limits';
 import { resolveDashboardPeriod } from '../dashboard/dashboard-period';
 import type { ListReceiptsQueryDto } from './dto/list-receipts-query.dto';
 import { summarizeReceiptLinesByProduct, type ReceiptProductSummary } from './receipt-summary';
-import { applyStockMovements, type StockEntry } from './stock-ledger';
+import {
+  assertReceiptNotInFuture,
+  findLaterStockChecks,
+  findPossibleDuplicateReceipt,
+  resolveLaterStockChecks,
+  validateLaterStockChoices,
+  type LaterStockChoice,
+} from './receipt-checks';
+import {
+  RECEIPT_SUPPLIER_SELECT,
+  assertDocumentFree,
+  assertDocumentHasSupplier,
+  assertPurchaseDate,
+  assertSupplierUsable,
+  duplicateDocument,
+  isDocumentUniqueViolation,
+  normalizeDocumentRef,
+  receiptView,
+  type ReceiptView,
+} from './receipt-purchase';
+import { localDateString, toDbDate } from '../common/date-only';
+import {
+  assertExchangeRate,
+  buildPayableDraft,
+  createPayable,
+  exchangeRateWarning,
+  type PayableDraft,
+} from '../payables/payable-rules';
+import { PAYABLE_INCLUDE, payableView, type PayableView } from '../payables/payable-view';
+import { assertNoActivePayments, lockPayable } from '../payables/payables.service';
+import {
+  assertNoLaterMovements,
+  assertReceiptHasLedgerSeq,
+  assertVoidKeepsStock,
+  lockReceipt,
+} from './receipt-void';
+import { applyStockMovements, lockProducts, type StockEntry } from './stock-ledger';
 
 export interface StockView {
   productId: string;
@@ -42,11 +73,45 @@ export interface ReceiptBatchInput {
   note?: string;
   /** `purchaseCost`: total pagado por la línea, opcional (DEC-90). */
   lines: { productId: string; quantity: number; purchaseCost?: number | null }[];
+  /** Resolución por producto ante conteos o ajustes posteriores (R8, DEC-96). */
+  laterStockChecks?: LaterStockChoice[];
+  /** Guardar aunque se parezca a otra recepción reciente (R8, DEC-96). */
+  acknowledgePossibleDuplicate?: boolean;
+  /** Proveedor, comprobante y fecha de compra (R8, DEC-95). */
+  supplierId?: string;
+  documentRef?: string;
+  purchaseDate?: string;
+  /** Moneda, tipo de cambio de la compra y condición de pago (R8, DEC-98 a DEC-100). */
+  currency?: 'PEN' | 'USD';
+  purchaseExchangeRate?: number;
+  paymentTerms?: 'CASH' | 'CREDIT';
+  /** Solo al crédito: vencimiento pactado con motivo. */
+  dueDate?: string;
+  dueDateReason?: string;
+}
+
+/** Datos de compra que se completan en una recepción ya registrada (R8, BR-K5). */
+export interface ReceiptPurchaseInfoInput {
+  supplierId?: string;
+  documentRef?: string;
+  purchaseDate?: string;
 }
 
 export interface ReceiptBatchResult {
-  receipt: InventoryReceipt;
+  receipt: ReceiptView;
+  /** Solo los `PURCHASE_IN` de la recepción. */
   lines: InventoryMovement[];
+  /**
+   * Ajustes de regularización enlazados a la recepción (R8, `SET_PHYSICAL`):
+   * visibles y siempre elegidos por el usuario.
+   */
+  adjustments: InventoryMovement[];
+  /** Movimientos `PURCHASE_VOID` de la anulación (R8). Vacío si no está anulada. */
+  voids?: InventoryMovement[];
+  /** Deuda activa de la recepción (R8), o null. */
+  payable?: PayableView | null;
+  /** Avisos sin bloqueo (R8). */
+  warnings?: string[];
 }
 
 export const RECEIPT_REF_TYPE = 'InventoryReceipt';
@@ -84,7 +149,10 @@ export const RECEIPT_PREVIEW_LINES = 3;
  * las primeras, por nombre de producto (DEC-94), para saber qué llegó sin
  * abrir la recepción.
  */
-export interface ReceiptSummary extends InventoryReceipt {
+export interface ReceiptSummary extends Omit<
+  ReceiptView,
+  'laterStockResolution' | 'possibleDuplicateAcknowledged' | 'purchaseInfoRecordedById'
+> {
   lineCount: number;
   preview: ReceiptLinePreview[];
 }
@@ -101,14 +169,33 @@ export interface ReceiptsMonthSummary {
   to: Date;
   timezone: string;
   receiptCount: number;
-  /** Suma de `totalCost` (Decimal como string, 2 decimales). */
+  /**
+   * Suma de `totalCost` de las recepciones en **soles** (moneda PEN o sin
+   * moneda, como las anteriores a R8). Nunca incluye dólares (DEC-100).
+   */
   totalCost: string;
   /** Recepciones del mes sin ningún monto registrado. */
   receiptsWithoutCost: number;
   /** Líneas del mes sin monto (incluye las de recepciones con monto parcial). */
   linesWithoutCost: number;
-  /** Lo comprado de cada producto en el mes (DEC-94). */
+  /** Lo comprado de cada producto en el mes, en soles (DEC-94). */
   products: ReceiptProductSummary[];
+  /** Compras en dólares del mes (R8), aparte; null si no hubo ninguna. */
+  usd: ReceiptsUsdSummary | null;
+}
+
+/** Compras en USD de un mes (R8, DEC-100): nunca se suman a los soles. */
+export interface ReceiptsUsdSummary {
+  receiptCount: number;
+  totalCost: string;
+  products: ReceiptProductSummary[];
+  /**
+   * Equivalente en soles con el tipo de cambio de cada compra, solo de las que
+   * lo tienen; informativo. null si ninguna tiene tipo de cambio.
+   */
+  penEquivalent: string | null;
+  /** Compras en USD con monto pero sin tipo de cambio: no entran en el equivalente. */
+  withoutRateCount: number;
 }
 
 /**
@@ -240,28 +327,101 @@ export class InventoryService {
     businessId: string,
     userId: string,
     input: ReceiptBatchInput,
+    now: Date = new Date(),
   ): Promise<ReceiptBatchResult> {
     const totalCost = validateReceiptBatch(input);
+    validateLaterStockChoices(
+      input.laterStockChecks,
+      input.lines.map((line) => line.productId),
+    );
 
     const receiptId = input.id ?? randomUUID();
-    const occurredAt = input.occurredAt ? new Date(input.occurredAt) : new Date();
+    const occurredAt = input.occurredAt ? new Date(input.occurredAt) : now;
+    assertReceiptNotInFuture(occurredAt, now);
+    const documentRef = normalizeDocumentRef(input.documentRef);
+    assertDocumentHasSupplier(documentRef, input.supplierId);
+    const timezone = await this.timezoneOf(businessId);
+    const today = localDateString(now, timezone);
+    assertPurchaseDate(input.purchaseDate, today);
+    const credit = validateCreditPurchase(input, totalCost, occurredAt, timezone, today);
+    const purchaseRate =
+      input.purchaseExchangeRate !== undefined
+        ? assertExchangeRate(input.purchaseExchangeRate, 'purchaseExchangeRate')
+        : null;
 
-    return forBusiness(this.prisma, businessId).$transaction(async (tx) => {
+    const created = forBusiness(this.prisma, businessId).$transaction(async (tx) => {
+      // R8 (DEC-96): con los productos bloqueados, ningún conteo ni recepción
+      // simultánea entra entre las comprobaciones y la escritura.
+      const productIds = input.lines.map((line) => line.productId);
+      await lockProducts(tx, businessId, productIds);
+
+      if (input.supplierId) await assertSupplierUsable(tx, input.supplierId);
+      if (documentRef && input.supplierId) {
+        await assertDocumentFree(tx, { supplierId: input.supplierId, documentRef });
+      }
+
+      const resolutions = resolveLaterStockChecks(
+        await findLaterStockChecks(tx, productIds, occurredAt),
+        input.laterStockChecks,
+      );
+
+      // Con comprobante, la unicidad del comprobante ya cubre el duplicado.
+      const duplicate = documentRef
+        ? null
+        : await findPossibleDuplicateReceipt(tx, {
+            receiptRefType: RECEIPT_REF_TYPE,
+            occurredAt,
+            supplierId: input.supplierId ?? null,
+            lines: input.lines,
+          });
+      if (duplicate && !input.acknowledgePossibleDuplicate) {
+        throw new ProblemException({
+          status: HttpStatus.CONFLICT,
+          code: 'POSSIBLE_DUPLICATE_RECEIPT',
+          title: 'Ya hay una recepción muy parecida',
+          detail:
+            'Hay otra recepción con los mismos productos y cantidades a pocos días de esta fecha. Revísala antes de registrar esta.',
+          data: {
+            receiptId: duplicate.id,
+            occurredAt: duplicate.occurredAt.toISOString(),
+            createdAt: duplicate.createdAt.toISOString(),
+          },
+        });
+      }
+
+      const entries: StockEntry[] = input.lines.map((line) => ({
+        productId: line.productId,
+        type: InventoryMovementType.PURCHASE_IN,
+        quantityDelta: line.quantity,
+        purchaseCost: line.purchaseCost ?? undefined,
+        requireActiveProduct: true,
+        refType: RECEIPT_REF_TYPE,
+        refId: receiptId,
+        occurredAt,
+      }));
+      // SET_PHYSICAL: después de sumar, ajuste hasta lo que el usuario contó en
+      // el estante, enlazado a la recepción. El ledger procesa en orden las
+      // entradas de un mismo producto y omite el ajuste si ya coincide.
+      for (const resolution of resolutions) {
+        if (resolution.resolution !== 'SET_PHYSICAL') continue;
+        entries.push({
+          productId: resolution.productId,
+          type: InventoryMovementType.ADJUSTMENT,
+          physicalQuantity: Number(resolution.physicalQuantity),
+          skipIfNoDifference: true,
+          reason: `Regularización de recepción atrasada ${receiptId}`,
+          refType: RECEIPT_REF_TYPE,
+          refId: receiptId,
+          occurredAt: now,
+        });
+      }
+
       const { movements } = await applyStockMovements(tx, {
         businessId,
         createdById: userId,
         policy: 'WARN',
         insufficientStockField: 'lines',
-        entries: input.lines.map((line) => ({
-          productId: line.productId,
-          type: InventoryMovementType.PURCHASE_IN,
-          quantityDelta: line.quantity,
-          purchaseCost: line.purchaseCost ?? undefined,
-          requireActiveProduct: true,
-          refType: RECEIPT_REF_TYPE,
-          refId: receiptId,
-          occurredAt,
-        })),
+        entries,
       });
 
       const receipt = await tx.inventoryReceipt.create({
@@ -272,14 +432,302 @@ export class InventoryService {
           occurredAt,
           note: input.note ?? null,
           totalCost,
+          ...(resolutions.length > 0
+            ? { laterStockResolution: resolutions as unknown as Prisma.InputJsonValue }
+            : {}),
+          possibleDuplicateAcknowledged: duplicate ? true : null,
+          supplierId: input.supplierId ?? null,
+          documentRef,
+          ...(input.purchaseDate
+            ? {
+                purchaseDate: toDbDate(input.purchaseDate),
+                purchaseDateSource: 'DOCUMENT' as const,
+              }
+            : credit
+              ? {
+                  // Al crédito sin fecha escrita: se fija la de recepción (DEC-95).
+                  purchaseDate: toDbDate(credit.purchaseDate),
+                  purchaseDateSource: 'RECEIPT_DATE' as const,
+                }
+              : {}),
+          currency: input.currency ?? null,
+          purchaseExchangeRate: purchaseRate,
+          paymentTerms: input.paymentTerms ?? null,
           createdById: userId,
         },
+        include: { supplier: RECEIPT_SUPPLIER_SELECT },
       });
 
+      // Compra al crédito: la deuda nace en la misma transacción (DEC-98).
+      const payable = credit
+        ? await createPayable(tx, {
+            businessId,
+            userId,
+            supplierId: input.supplierId!,
+            receiptId,
+            draft: credit.draft,
+          })
+        : null;
+
       // El ledger agrupa por producto: se devuelven en el orden de las líneas.
-      const byProduct = new Map(movements.map((movement) => [movement.productId, movement]));
-      return { receipt, lines: input.lines.map((line) => byProduct.get(line.productId)!) };
+      const purchases = movements.filter((m) => m.type === InventoryMovementType.PURCHASE_IN);
+      const byProduct = new Map(purchases.map((movement) => [movement.productId, movement]));
+      const payableResult = payable
+        ? payableView(
+            {
+              ...payable,
+              supplier: receipt.supplier,
+              receipt: { id: receipt.id, occurredAt, documentRef },
+            },
+            today,
+          )
+        : null;
+      const warnings = [
+        ...(payableResult?.status === 'OVERDUE' ? ['PAYABLE_ALREADY_OVERDUE'] : []),
+        ...(exchangeRateWarning(purchaseRate) ? ['EXCHANGE_RATE_OUT_OF_RANGE'] : []),
+      ];
+      return {
+        receipt: receiptView(receipt),
+        lines: input.lines.map((line) => byProduct.get(line.productId)!),
+        adjustments: movements.filter((m) => m.type === InventoryMovementType.ADJUSTMENT),
+        voids: [],
+        payable: payableResult,
+        warnings,
+      };
     });
+    try {
+      return await created;
+    } catch (error) {
+      // Dos registros simultáneos del mismo comprobante: el índice parcial decide.
+      if (isDocumentUniqueViolation(error)) throw duplicateDocument();
+      throw error;
+    }
+  }
+
+  /**
+   * Completa proveedor, comprobante o fecha de compra de una recepción ya
+   * registrada (R8, DEC-95, BR-K5). Cada campo solo pasa de vacío a valor:
+   * repetir el mismo valor no hace nada y uno distinto responde 409
+   * `PURCHASE_INFO_ALREADY_SET`. Nunca toca movimientos ni saldos. La
+   * recepción se bloquea para que dos cambios simultáneos no se pisen.
+   */
+  async setPurchaseInfo(
+    businessId: string,
+    userId: string,
+    receiptId: string,
+    input: ReceiptPurchaseInfoInput,
+    now: Date = new Date(),
+  ): Promise<ReceiptView> {
+    const documentRef = normalizeDocumentRef(input.documentRef);
+    if (
+      input.supplierId === undefined &&
+      documentRef === null &&
+      input.purchaseDate === undefined
+    ) {
+      throw new ValidationProblemException([
+        {
+          field: 'supplierId',
+          message: 'Indica el proveedor, el comprobante o la fecha de compra.',
+        },
+      ]);
+    }
+    const timezone = await this.timezoneOf(businessId);
+    assertPurchaseDate(input.purchaseDate, localDateString(now, timezone));
+
+    const updated = forBusiness(this.prisma, businessId).$transaction(async (tx) => {
+      await tx.$queryRaw(
+        Prisma.sql`SELECT "id" FROM "inventory_receipts" WHERE "businessId" = ${businessId}::text AND "id" = ${receiptId}::text FOR UPDATE`,
+      );
+      const receipt = await tx.inventoryReceipt.findFirst({ where: { id: receiptId } });
+      if (!receipt) throw receiptNotFound();
+      if (receipt.voidedAt) {
+        throw new ProblemException({
+          status: HttpStatus.CONFLICT,
+          code: 'RECEIPT_VOIDED',
+          title: 'La recepción está anulada',
+        });
+      }
+
+      const data: Prisma.InventoryReceiptUncheckedUpdateInput = {};
+      const conflicts: FieldError[] = [];
+      if (input.supplierId !== undefined) {
+        if (receipt.supplierId === null) data.supplierId = input.supplierId;
+        else if (receipt.supplierId !== input.supplierId) {
+          conflicts.push({ field: 'supplierId', message: 'La recepción ya tiene proveedor.' });
+        }
+      }
+      if (documentRef !== null) {
+        if (receipt.documentRef === null) data.documentRef = documentRef;
+        else if (receipt.documentRef !== documentRef) {
+          conflicts.push({ field: 'documentRef', message: 'La recepción ya tiene comprobante.' });
+        }
+      }
+      if (input.purchaseDate !== undefined) {
+        const current = receipt.purchaseDate
+          ? receipt.purchaseDate.toISOString().slice(0, 10)
+          : null;
+        if (current === null) {
+          data.purchaseDate = toDbDate(input.purchaseDate);
+          data.purchaseDateSource = 'DOCUMENT';
+        } else if (current !== input.purchaseDate) {
+          conflicts.push({
+            field: 'purchaseDate',
+            message: 'La recepción ya tiene fecha de compra.',
+          });
+        }
+      }
+      if (conflicts.length > 0) {
+        throw new ProblemException({
+          status: HttpStatus.CONFLICT,
+          code: 'PURCHASE_INFO_ALREADY_SET',
+          title: 'Esos datos de compra ya están registrados',
+          detail: 'Los datos de compra de una recepción se completan una sola vez y no se cambian.',
+          errors: conflicts,
+        });
+      }
+
+      const supplierId = (data.supplierId as string | undefined) ?? receipt.supplierId;
+      if (data.supplierId) await assertSupplierUsable(tx, data.supplierId as string);
+      assertDocumentHasSupplier(documentRef, supplierId);
+      if (data.documentRef && supplierId) {
+        await assertDocumentFree(tx, {
+          supplierId,
+          documentRef: data.documentRef as string,
+          exceptReceiptId: receiptId,
+        });
+      }
+
+      if (Object.keys(data).length === 0) {
+        const current = await tx.inventoryReceipt.findFirstOrThrow({
+          where: { id: receiptId },
+          include: { supplier: RECEIPT_SUPPLIER_SELECT },
+        });
+        return receiptView(current);
+      }
+      const saved = await tx.inventoryReceipt.update({
+        where: { id: receiptId },
+        data: { ...data, purchaseInfoRecordedAt: now, purchaseInfoRecordedById: userId },
+        include: { supplier: RECEIPT_SUPPLIER_SELECT },
+      });
+      return receiptView(saved);
+    });
+    try {
+      return await updated;
+    } catch (error) {
+      if (isDocumentUniqueViolation(error)) throw duplicateDocument();
+      throw error;
+    }
+  }
+
+  /**
+   * Anula una recepción (R8, DEC-97, BR-K6) en una sola transacción. Orden de
+   * bloqueo fijo: recepción → productos (→ deuda, desde F4), igual en toda
+   * operación que los toque, para no provocar deadlocks. Todo se valida antes
+   * de escribir; cualquier rechazo deja la base como estaba. Nunca edita ni
+   * borra el `PURCHASE_IN`: agrega un `PURCHASE_VOID` por línea y marca la
+   * cabecera. El sistema no cambia cantidades ni crea ajustes por su cuenta.
+   */
+  async voidReceipt(
+    businessId: string,
+    userId: string,
+    receiptId: string,
+    reason: string,
+    now: Date = new Date(),
+  ): Promise<ReceiptBatchResult> {
+    const trimmed = reason.trim();
+    if (trimmed.length < 3 || trimmed.length > 500) {
+      throw new ValidationProblemException([
+        { field: 'reason', message: 'Escribe el motivo de la anulación (de 3 a 500 caracteres).' },
+      ]);
+    }
+
+    await forBusiness(this.prisma, businessId).$transaction(async (tx) => {
+      // 1. Recepción bloqueada: dos anulaciones simultáneas se ordenan aquí.
+      await lockReceipt(tx, businessId, receiptId);
+      const receipt = await tx.inventoryReceipt.findFirst({ where: { id: receiptId } });
+      if (!receipt) throw receiptNotFound();
+      if (receipt.voidedAt) {
+        throw new ProblemException({
+          status: HttpStatus.CONFLICT,
+          code: 'RECEIPT_ALREADY_VOIDED',
+          title: 'La recepción ya está anulada',
+          data: { voidedAt: receipt.voidedAt.toISOString(), voidedById: receipt.voidedById },
+        });
+      }
+
+      // 1b. Deuda activa bloqueada (orden recepción → deuda → productos): con
+      // pagos activos no se anula; sin pagos, se anula junto con la recepción.
+      const payable = await tx.supplierPayable.findFirst({
+        where: { receiptId, voidedAt: null },
+      });
+      if (payable) {
+        await lockPayable(tx, businessId, payable.id);
+        const locked = await tx.supplierPayable.findFirstOrThrow({ where: { id: payable.id } });
+        assertNoActivePayments(locked);
+      }
+
+      // 2. Solo recepciones con ledgerSeq (posteriores a R8, D32).
+      const lines = await tx.inventoryMovement.findMany({
+        where: {
+          refType: RECEIPT_REF_TYPE,
+          refId: receiptId,
+          type: InventoryMovementType.PURCHASE_IN,
+        },
+      });
+      const lastSeq = assertReceiptHasLedgerSeq(lines);
+      const productIds = [...new Set(lines.map((line) => line.productId))];
+
+      // 3. Productos bloqueados: lo que sigue ve todo lo confirmado antes.
+      await lockProducts(tx, businessId, productIds);
+      await assertNoLaterMovements(tx, productIds, lastSeq);
+      await assertVoidKeepsStock(tx, lines);
+
+      // 4. Movimientos inversos (el ledger vuelve a impedir el saldo negativo).
+      await applyStockMovements(tx, {
+        businessId,
+        createdById: userId,
+        policy: 'WARN',
+        insufficientStockField: 'lines',
+        entries: lines.map((line) => ({
+          productId: line.productId,
+          type: InventoryMovementType.PURCHASE_VOID,
+          quantityDelta: new Prisma.Decimal(line.quantityDelta).negated().toNumber(),
+          reason: trimmed,
+          refType: RECEIPT_REF_TYPE,
+          refId: receiptId,
+          occurredAt: now,
+        })),
+      });
+
+      // 5. Cabecera: solo los campos de anulación, y solo si seguía activa.
+      const marked = await tx.inventoryReceipt.updateMany({
+        where: { id: receiptId, voidedAt: null },
+        data: { voidedAt: now, voidedById: userId, voidReason: trimmed },
+      });
+      if (marked.count !== 1) {
+        throw new ProblemException({
+          status: HttpStatus.CONFLICT,
+          code: 'RECEIPT_ALREADY_VOIDED',
+          title: 'La recepción ya está anulada',
+        });
+      }
+      if (payable) {
+        await tx.supplierPayable.update({
+          where: { id: payable.id },
+          data: { voidedAt: now, voidedById: userId, voidReason: trimmed },
+        });
+      }
+    });
+
+    return this.getReceipt(businessId, receiptId);
+  }
+
+  private async timezoneOf(businessId: string): Promise<string> {
+    const business = await this.prisma.business.findUniqueOrThrow({
+      where: { id: businessId },
+      select: { timezone: true },
+    });
+    return business.timezone;
   }
 
   /**
@@ -301,6 +749,7 @@ export class InventoryService {
 
     const rows = await scoped.inventoryReceipt.findMany({
       where: period ? { occurredAt: { gte: period.from, lt: period.to } } : {},
+      include: { supplier: RECEIPT_SUPPLIER_SELECT },
       orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
@@ -309,7 +758,11 @@ export class InventoryService {
     if (page.items.length === 0) return { items: [], nextCursor: page.nextCursor };
 
     const lines = await scoped.inventoryMovement.findMany({
-      where: { refType: RECEIPT_REF_TYPE, refId: { in: page.items.map((r) => r.id) } },
+      where: {
+        refType: RECEIPT_REF_TYPE,
+        refId: { in: page.items.map((r) => r.id) },
+        type: InventoryMovementType.PURCHASE_IN,
+      },
       include: { product: true },
     });
     const linesByReceipt = new Map<string, typeof lines>();
@@ -325,7 +778,7 @@ export class InventoryService {
           a.product.name.localeCompare(b.product.name, 'es'),
         );
         return {
-          ...receipt,
+          ...receiptHeader(receiptView(receipt)),
           lineCount: receiptLines.length,
           preview: receiptLines.slice(0, RECEIPT_PREVIEW_LINES).map((line) => ({
             productId: line.productId,
@@ -355,16 +808,17 @@ export class InventoryService {
   ): Promise<ReceiptsMonthSummary> {
     const period = await this.monthPeriod(businessId, month, now);
     const scoped = forBusiness(this.prisma, businessId);
-    const where = { occurredAt: { gte: period.from, lt: period.to } };
-    const [totals, receiptsWithoutCost, receipts] = await Promise.all([
-      scoped.inventoryReceipt.aggregate({
-        where,
-        _count: { _all: true },
-        _sum: { totalCost: true },
-      }),
-      scoped.inventoryReceipt.count({ where: { ...where, totalCost: null } }),
-      scoped.inventoryReceipt.findMany({ where, select: { id: true } }),
-    ]);
+    // Las recepciones anuladas no cuentan en lo comprado (R8, DEC-97).
+    const where = { occurredAt: { gte: period.from, lt: period.to }, voidedAt: null };
+    const receipts = await scoped.inventoryReceipt.findMany({
+      where,
+      select: { id: true, currency: true, totalCost: true, purchaseExchangeRate: true },
+    });
+    const isUsd = (r: { currency: string | null }) => r.currency === 'USD';
+    const penReceipts = receipts.filter((r) => !isUsd(r));
+    const usdReceipts = receipts.filter(isUsd);
+    const sum = (list: typeof receipts) =>
+      list.reduce((acc, r) => acc.plus(r.totalCost ?? 0), new Prisma.Decimal(0));
     const lines =
       receipts.length === 0
         ? []
@@ -372,19 +826,51 @@ export class InventoryService {
             where: {
               refType: RECEIPT_REF_TYPE,
               refId: { in: receipts.map((receipt) => receipt.id) },
+              type: InventoryMovementType.PURCHASE_IN,
             },
             include: { product: true },
           });
+    const usdIds = new Set(usdReceipts.map((r) => r.id));
+    const penLines = lines.filter((line) => !usdIds.has(line.refId!));
+    const usdLines = lines.filter((line) => usdIds.has(line.refId!));
+    const rated = usdReceipts.filter(
+      (r) => r.totalCost !== null && r.purchaseExchangeRate !== null,
+    );
     return {
       month: period.date.slice(0, 7),
       from: period.from,
       to: period.to,
       timezone: period.timezone,
-      receiptCount: totals._count._all,
-      totalCost: new Prisma.Decimal(totals._sum.totalCost ?? 0).toFixed(2),
-      receiptsWithoutCost,
+      receiptCount: receipts.length,
+      totalCost: sum(penReceipts).toFixed(2),
+      receiptsWithoutCost: receipts.filter((r) => r.totalCost === null).length,
       linesWithoutCost: lines.filter((line) => line.purchaseCost === null).length,
-      products: summarizeReceiptLinesByProduct(lines),
+      products: summarizeReceiptLinesByProduct(penLines),
+      usd:
+        usdReceipts.length === 0
+          ? null
+          : {
+              receiptCount: usdReceipts.length,
+              totalCost: sum(usdReceipts).toFixed(2),
+              products: summarizeReceiptLinesByProduct(usdLines),
+              penEquivalent:
+                rated.length === 0
+                  ? null
+                  : rated
+                      .reduce(
+                        (acc, r) =>
+                          acc.plus(
+                            new Prisma.Decimal(r.totalCost!)
+                              .times(r.purchaseExchangeRate!)
+                              .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
+                          ),
+                        new Prisma.Decimal(0),
+                      )
+                      .toFixed(2),
+              withoutRateCount: usdReceipts.filter(
+                (r) => r.totalCost !== null && r.purchaseExchangeRate === null,
+              ).length,
+            },
     };
   }
 
@@ -413,7 +899,10 @@ export class InventoryService {
    */
   async getReceipt(businessId: string, id: string): Promise<ReceiptBatchResult> {
     const scoped = forBusiness(this.prisma, businessId);
-    const receipt = await scoped.inventoryReceipt.findFirst({ where: { id } });
+    const receipt = await scoped.inventoryReceipt.findFirst({
+      where: { id },
+      include: { supplier: RECEIPT_SUPPLIER_SELECT },
+    });
     if (!receipt) {
       throw new ProblemException({
         status: HttpStatus.NOT_FOUND,
@@ -421,11 +910,25 @@ export class InventoryService {
         title: 'Recepción no encontrada',
       });
     }
-    const lines = await scoped.inventoryMovement.findMany({
-      where: { refType: RECEIPT_REF_TYPE, refId: id },
-      orderBy: [{ productId: 'asc' }],
-    });
-    return { receipt, lines };
+    const [movements, payable, timezone] = await Promise.all([
+      scoped.inventoryMovement.findMany({
+        where: { refType: RECEIPT_REF_TYPE, refId: id },
+        orderBy: [{ productId: 'asc' }, { occurredAt: 'asc' }],
+      }),
+      scoped.supplierPayable.findFirst({
+        where: { receiptId: id, voidedAt: null },
+        include: PAYABLE_INCLUDE,
+      }),
+      this.timezoneOf(businessId),
+    ]);
+    return {
+      receipt: receiptView(receipt),
+      lines: movements.filter((m) => m.type === InventoryMovementType.PURCHASE_IN),
+      adjustments: movements.filter((m) => m.type === InventoryMovementType.ADJUSTMENT),
+      voids: movements.filter((m) => m.type === InventoryMovementType.PURCHASE_VOID),
+      payable: payable ? payableView(payable, localDateString(new Date(), timezone)) : null,
+      warnings: [],
+    };
   }
 
   /**
@@ -533,6 +1036,106 @@ function validateReceiptBatch(input: ReceiptBatchInput): Prisma.Decimal | null {
     throw new ValidationProblemException([{ field: 'lines', message: MAX_MONEY_MESSAGE }]);
   }
   return total;
+}
+
+/**
+ * Compra al crédito (R8, DEC-98, BR-K7), antes de abrir la transacción:
+ * proveedor y moneda obligatorios, todas las líneas con monto y total > 0. Sin
+ * crédito no se admite vencimiento. El tipo de cambio de la compra solo en USD.
+ * Devuelve la deuda que nacerá (o null).
+ */
+function validateCreditPurchase(
+  input: ReceiptBatchInput,
+  totalCost: Prisma.Decimal | null,
+  occurredAt: Date,
+  timezone: string,
+  today: string,
+): { purchaseDate: string; draft: PayableDraft } | null {
+  if (input.purchaseExchangeRate !== undefined && input.currency !== 'USD') {
+    throw new ValidationProblemException([
+      {
+        field: 'purchaseExchangeRate',
+        message: 'El tipo de cambio de la compra solo aplica a compras en dólares.',
+      },
+    ]);
+  }
+  if (input.paymentTerms !== 'CREDIT') {
+    if (input.dueDate !== undefined || input.dueDateReason !== undefined) {
+      throw new ValidationProblemException([
+        { field: 'dueDate', message: 'El vencimiento solo aplica a compras al crédito.' },
+      ]);
+    }
+    return null;
+  }
+  const errors: FieldError[] = [];
+  if (!input.supplierId) {
+    errors.push({ field: 'supplierId', message: 'Elige el proveedor de la compra al crédito.' });
+  }
+  if (!input.currency) {
+    errors.push({ field: 'currency', message: 'Elige la moneda de la deuda.' });
+  }
+  if (errors.length > 0) throw new ValidationProblemException(errors);
+  const missing = input.lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line.purchaseCost === undefined || line.purchaseCost === null);
+  if (missing.length > 0) {
+    throw new ProblemException({
+      status: HttpStatus.BAD_REQUEST,
+      code: 'CREDIT_LINE_COST_REQUIRED',
+      title: 'En una compra al crédito todas las líneas llevan monto',
+      errors: missing.map(({ index }) => ({
+        field: `lines.${index}.purchaseCost`,
+        message: 'Escribe el monto de este producto: la deuda es la suma de las líneas.',
+      })),
+    });
+  }
+  if (!totalCost || totalCost.lessThanOrEqualTo(0)) {
+    throw new ProblemException({
+      status: HttpStatus.BAD_REQUEST,
+      code: 'CREDIT_TOTAL_MUST_BE_POSITIVE',
+      title: 'Una compra al crédito debe tener un total mayor que 0',
+      detail: 'Si no hay nada que pagar, regístrala al contado.',
+      errors: [
+        { field: 'lines', message: 'El total de una compra al crédito debe ser mayor que 0.' },
+      ],
+    });
+  }
+  const purchaseDate = input.purchaseDate ?? localDateString(occurredAt, timezone);
+  const draft = buildPayableDraft(
+    {
+      currency: input.currency!,
+      amount: totalCost,
+      amountSource: 'RECEIPT_LINES',
+      purchaseDate,
+      dueDate: input.dueDate,
+      dueDateReason: input.dueDateReason,
+      referenceExchangeRate: input.purchaseExchangeRate,
+    },
+    today,
+  );
+  return { purchaseDate, draft };
+}
+
+type ReceiptHeader = Omit<
+  ReceiptView,
+  'laterStockResolution' | 'possibleDuplicateAcknowledged' | 'purchaseInfoRecordedById'
+>;
+
+/** Cabecera para la lista: los datos de auditoría de R8 se ven en el detalle. */
+function receiptHeader(receipt: ReceiptView): ReceiptHeader {
+  const header: Partial<ReceiptView> = { ...receipt };
+  delete header.laterStockResolution;
+  delete header.possibleDuplicateAcknowledged;
+  delete header.purchaseInfoRecordedById;
+  return header as ReceiptHeader;
+}
+
+function receiptNotFound(): ProblemException {
+  return new ProblemException({
+    status: HttpStatus.NOT_FOUND,
+    code: 'RECEIPT_NOT_FOUND',
+    title: 'Recepción no encontrada',
+  });
 }
 
 /** `Prisma.Decimal` (real) o number (fake de pruebas): ambos coercen bien con Number(). */

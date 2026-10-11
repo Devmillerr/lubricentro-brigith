@@ -61,7 +61,14 @@ function receive(
   occurredAt: string,
   lines: { productId: string; quantity: number; purchaseCost?: number }[],
 ) {
-  return inventory.createReceiptBatch(tenant.businessId, tenant.userId, { occurredAt, lines });
+  // Fechas posteriores a hoy en el calendario real: reloj fijo (R8 rechaza
+  // recepciones futuras). Repite recepciones a propósito: no prueba duplicados.
+  return inventory.createReceiptBatch(
+    tenant.businessId,
+    tenant.userId,
+    { occurredAt, lines, acknowledgePossibleDuplicate: true },
+    new Date('2027-01-01T00:00:00.000Z'),
+  );
 }
 
 /** Lo que una consulta no debe cambiar: movimientos, cabeceras y saldos. */

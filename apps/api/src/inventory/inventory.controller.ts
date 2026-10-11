@@ -3,9 +3,11 @@ import {
   Controller,
   Get,
   Headers,
+  HttpCode,
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -24,12 +26,12 @@ import { ProblemException } from '../common/exceptions/problem.exception';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { CreateAdjustmentDto } from './dto/create-adjustment.dto';
 import { CreateCountDto } from './dto/create-count.dto';
-import { CreateReceiptDto } from './dto/create-receipt.dto';
+import { CreateReceiptDto, ReceiptPurchaseInfoDto, VoidReceiptDto } from './dto/create-receipt.dto';
 import { ListMovementsQueryDto } from './dto/list-movements-query.dto';
 import { ListReceiptsQueryDto } from './dto/list-receipts-query.dto';
 import { ReceiptsSummaryQueryDto } from './dto/receipts-summary-query.dto';
 import { StockQueryDto } from './dto/stock-query.dto';
-import { InventoryService } from './inventory.service';
+import { InventoryService, type ReceiptBatchResult } from './inventory.service';
 import {
   AUTH_ERRORS,
   ApiErrors,
@@ -45,6 +47,18 @@ import {
   StockAlertsResponse,
   StockViewResponse,
 } from './dto/inventory.response';
+
+/** Respuesta de recepción: cabecera, líneas, ajustes, anulación, deuda y avisos (R8). */
+function receiptResponse(result: ReceiptBatchResult) {
+  return {
+    ...result.receipt,
+    lines: result.lines,
+    adjustments: result.adjustments,
+    voids: result.voids ?? [],
+    payable: result.payable ?? null,
+    warnings: result.warnings ?? [],
+  };
+}
 
 @ApiTags('inventory')
 @ApiBearerAuth()
@@ -135,8 +149,7 @@ export class InventoryController {
     @CurrentUser() user: AccessTokenPayload,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    const { receipt, lines } = await this.inventoryService.getReceipt(user.businessId, id);
-    return { ...receipt, lines };
+    return receiptResponse(await this.inventoryService.getReceipt(user.businessId, id));
   }
 
   /**
@@ -145,9 +158,23 @@ export class InventoryController {
    */
   @ApiCreatedResponse({ type: InventoryReceiptResponse })
   @ApiErrors({
-    400: [...VALIDATION_ERRORS, 'DUPLICATE_PRODUCT_LINE', ...IDEMPOTENCY_ERRORS[400]],
-    404: ['PRODUCT_NOT_FOUND'],
-    409: ['PRODUCT_INACTIVE', ...IDEMPOTENCY_ERRORS[409]],
+    400: [
+      ...VALIDATION_ERRORS,
+      'DUPLICATE_PRODUCT_LINE',
+      'CREDIT_LINE_COST_REQUIRED',
+      'CREDIT_TOTAL_MUST_BE_POSITIVE',
+      ...IDEMPOTENCY_ERRORS[400],
+    ],
+    404: ['PRODUCT_NOT_FOUND', 'SUPPLIER_NOT_FOUND'],
+    409: [
+      'PRODUCT_INACTIVE',
+      'SUPPLIER_INACTIVE',
+      'DUPLICATE_DOCUMENT',
+      'LATER_STOCK_CHECKS_FOUND',
+      'LATER_STOCK_CHECKS_MISMATCH',
+      'POSSIBLE_DUPLICATE_RECEIPT',
+      ...IDEMPOTENCY_ERRORS[409],
+    ],
   })
   @Post('receipts')
   @ApiHeader({ name: 'Idempotency-Key', required: true })
@@ -162,12 +189,79 @@ export class InventoryController {
       endpoint: 'inventory/receipts',
       requestHash: this.idempotency.hashRequest(dto),
       handler: async () => {
-        const { receipt, lines } = await this.inventoryService.createReceiptBatch(
+        const created = await this.inventoryService.createReceiptBatch(
           user.businessId,
           user.sub,
           dto,
         );
-        return { status: HttpStatus.CREATED, body: { ...receipt, lines } };
+        return { status: HttpStatus.CREATED, body: receiptResponse(created) };
+      },
+    });
+    return result.body;
+  }
+
+  /**
+   * Completa proveedor, comprobante o fecha de compra de una recepción ya
+   * registrada (R8, DEC-95, BR-K5): de vacío a valor, sin tocar el stock.
+   * Repetir los mismos valores no cambia nada (idempotente).
+   */
+  @ApiOkResponse({ type: InventoryReceiptResponse })
+  @ApiErrors({
+    400: VALIDATION_ERRORS,
+    404: ['RECEIPT_NOT_FOUND', 'SUPPLIER_NOT_FOUND'],
+    409: ['RECEIPT_VOIDED', 'SUPPLIER_INACTIVE', 'DUPLICATE_DOCUMENT', 'PURCHASE_INFO_ALREADY_SET'],
+  })
+  @Patch('receipts/:id/purchase-info')
+  async purchaseInfo(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReceiptPurchaseInfoDto,
+  ) {
+    await this.inventoryService.setPurchaseInfo(user.businessId, user.sub, id, dto);
+    return receiptResponse(await this.inventoryService.getReceipt(user.businessId, id));
+  }
+
+  /**
+   * Anula una recepción (R8, DEC-97, BR-K6): todo o nada, con motivo. Se
+   * rechaza sin escribir si ya está anulada, es anterior a R8, hubo
+   * movimientos posteriores de sus productos, dejaría stock negativo o su
+   * deuda tiene pagos. Lleva `Idempotency-Key`.
+   */
+  @ApiOkResponse({ type: InventoryReceiptResponse })
+  @ApiErrors({
+    400: [...VALIDATION_ERRORS, ...IDEMPOTENCY_ERRORS[400]],
+    404: ['RECEIPT_NOT_FOUND'],
+    409: [
+      'RECEIPT_ALREADY_VOIDED',
+      'RECEIPT_PREDATES_AUDIT',
+      'RECEIPT_HAS_LATER_MOVEMENTS',
+      'RECEIPT_VOID_NEGATIVE_STOCK',
+      'PAYABLE_HAS_PAYMENTS',
+      ...IDEMPOTENCY_ERRORS[409],
+    ],
+  })
+  @Post('receipts/:id/void')
+  @HttpCode(HttpStatus.OK)
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  async voidReceipt(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: VoidReceiptDto,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+  ) {
+    const result = await this.idempotency.run({
+      businessId: user.businessId,
+      key: this.requireIdempotencyKey(idempotencyKey),
+      endpoint: 'inventory/receipts/void',
+      requestHash: this.idempotency.hashRequest({ id, ...dto }),
+      handler: async () => {
+        const voided = await this.inventoryService.voidReceipt(
+          user.businessId,
+          user.sub,
+          id,
+          dto.reason,
+        );
+        return { status: HttpStatus.OK, body: receiptResponse(voided) };
       },
     });
     return result.body;

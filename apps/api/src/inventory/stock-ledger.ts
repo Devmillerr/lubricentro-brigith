@@ -39,6 +39,12 @@ export interface StockEntry {
    */
   physicalQuantity?: number;
   /**
+   * Solo con `physicalQuantity` (R8, DEC-96): si la cantidad física ya es igual
+   * al saldo, no se crea el ajuste en vez de responder `NO_DIFFERENCE`. Lo usa
+   * la recepción atrasada con `SET_PHYSICAL`.
+   */
+  skipIfNoDifference?: boolean;
+  /**
    * Rechaza con 409 `PRODUCT_INACTIVE` si el producto está inactivo (DEC-51).
    * Se evalúa con la fila bloqueada. Lo usan la recepción en lote y, siempre,
    * el ajuste por cantidad física.
@@ -140,12 +146,7 @@ export async function applyStockMovements(
 
   const productIds = [...new Set(entries.map((entry) => entry.productId))].sort();
 
-  // Los ids son `text` en Postgres (String de Prisma, sin @db.Uuid): se
-  // castea explícito porque el driver infiere `uuid` para strings con forma
-  // de UUID y Postgres no compara text = uuid.
-  await tx.$queryRaw(
-    Prisma.sql`SELECT "id" FROM "products" WHERE "businessId" = ${businessId}::text AND "id" = ANY(${productIds}::text[]) ORDER BY "id" FOR UPDATE`,
-  );
+  await lockProducts(tx, businessId, productIds);
 
   const products = await tx.product.findMany({ where: { id: { in: productIds } } });
   const productById = new Map(products.map((product) => [product.id, product]));
@@ -189,6 +190,10 @@ export async function applyStockMovements(
         assertCounted(plan.isCounted);
         // Mismo cálculo que COUNT, sobre el saldo leído con la fila bloqueada.
         quantityDelta = new Prisma.Decimal(entry.physicalQuantity).minus(before);
+        if (quantityDelta.isZero() && entry.skipIfNoDifference) {
+          // R8 (DEC-96): el estante ya coincide; no hay ajuste que registrar.
+          continue;
+        }
         if (quantityDelta.isZero()) {
           throw new ProblemException({
             status: HttpStatus.BAD_REQUEST,
@@ -234,6 +239,28 @@ export async function applyStockMovements(
     }
     return plan;
   });
+
+  // R8 (DEC-97): anular una recepción nunca deja un saldo negativo, tenga o no
+  // conteo el producto y sea cual sea la política. Se evalúa antes de escribir.
+  const negativeVoids = plans.filter(
+    (plan) =>
+      plan.finalBalance.isNegative() &&
+      plan.movements.some((m) => m.entry.type === InventoryMovementType.PURCHASE_VOID),
+  );
+  if (negativeVoids.length > 0) {
+    throw new ProblemException({
+      status: HttpStatus.CONFLICT,
+      code: 'RECEIPT_VOID_NEGATIVE_STOCK',
+      title: 'La anulación dejaría stock negativo',
+      data: {
+        products: negativeVoids.map((plan) => ({
+          productId: plan.productId,
+          balance: plan.startBalance.toString(),
+          resultingBalance: plan.finalBalance.toString(),
+        })),
+      },
+    });
+  }
 
   const warnings: StockWarning[] = [];
   for (const plan of plans) {
@@ -318,6 +345,28 @@ export async function applyStockMovements(
   }
 
   return { movements, warnings };
+}
+
+/**
+ * Bloquea las filas de producto del negocio (`FOR UPDATE`, en orden de id para
+ * no provocar deadlocks). La usa el StockLedger y, antes de llamarlo, quien
+ * necesita leer movimientos de esos productos sin carreras (R8: recepción
+ * atrasada y anulación). Volver a bloquear en la misma transacción no espera.
+ *
+ * Los ids son `text` en Postgres (String de Prisma, sin @db.Uuid): se castea
+ * explícito porque el driver infiere `uuid` para strings con forma de UUID y
+ * Postgres no compara text = uuid.
+ */
+export async function lockProducts(
+  tx: ScopedTransaction,
+  businessId: string,
+  productIds: string[],
+): Promise<void> {
+  const ids = [...new Set(productIds)].sort();
+  if (ids.length === 0) return;
+  await tx.$queryRaw(
+    Prisma.sql`SELECT "id" FROM "products" WHERE "businessId" = ${businessId}::text AND "id" = ANY(${ids}::text[]) ORDER BY "id" FOR UPDATE`,
+  );
 }
 
 function isPhysicalAdjustment(

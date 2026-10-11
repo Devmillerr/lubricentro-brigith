@@ -1,8 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   InventoryMovementType,
+  Currency,
+  PaymentTerms,
+  PurchaseDateSource,
   type InventoryMovement,
-  type InventoryReceipt,
+  type Prisma,
 } from '@prisma/client';
 import { PageOf } from '../../common/openapi/page.dto';
 import type {
@@ -12,7 +15,87 @@ import type {
   StockAlerts,
   StockView,
 } from '../inventory.service';
+import { PayableResponse } from '../../payables/dto/payable.dto';
+import type { ReceiptSupplier, ReceiptView } from '../receipt-purchase';
 import type { ReceiptProductSummary } from '../receipt-summary';
+
+/** Proveedor resumido de una recepción (R8). */
+export class ReceiptSupplierResponse implements ReceiptSupplier {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  name!: string;
+
+  @ApiProperty({ type: String, nullable: true })
+  taxId!: string | null;
+}
+
+/** Datos de compra y anulación de una recepción (R8), comunes al detalle y a la lista. */
+class ReceiptPurchaseFieldsResponse {
+  @ApiProperty({ type: String, nullable: true })
+  supplierId!: string | null;
+
+  @ApiProperty({ type: ReceiptSupplierResponse, nullable: true })
+  supplier!: ReceiptSupplierResponse | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Número de comprobante normalizado (mayúsculas, sin espacios).',
+  })
+  documentRef!: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: '2026-09-15',
+    description: 'Fecha de compra YYYY-MM-DD. null = no se escribió: vale la de recepción.',
+  })
+  purchaseDate!: string | null;
+
+  @ApiProperty({
+    enum: PurchaseDateSource,
+    enumName: 'PurchaseDateSource',
+    nullable: true,
+  })
+  purchaseDateSource!: PurchaseDateSource | null;
+
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description: 'Cuándo se completaron los datos de compra después de registrarla. null si no.',
+  })
+  purchaseInfoRecordedAt!: Date | null;
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true })
+  voidedAt!: Date | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  voidedById!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  voidReason!: string | null;
+
+  @ApiProperty({
+    enum: Currency,
+    enumName: 'Currency',
+    nullable: true,
+    description: 'Moneda de los montos. null = soles (recepciones anteriores a R8).',
+  })
+  currency!: Currency | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Tipo de cambio de la compra (soles por 1 USD), 4 decimales.',
+  })
+  purchaseExchangeRate!: string | null;
+
+  @ApiProperty({ enum: PaymentTerms, enumName: 'PaymentTerms', nullable: true })
+  paymentTerms!: PaymentTerms | null;
+}
 
 export class StockViewResponse implements StockView {
   @ApiProperty()
@@ -95,12 +178,31 @@ export class InventoryMovementResponse implements Omit<InventoryMovement, Decima
 
   @ApiProperty({ type: String, format: 'date-time' })
   occurredAt!: Date;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description:
+      'Orden de registro (R8): para un mismo producto refleja el orden real. Nulo en movimientos anteriores a R8.',
+  })
+  ledgerSeq!: number | null;
+
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description: 'Hora de registro (R8). Nula en movimientos anteriores a R8.',
+  })
+  recordedAt!: Date | null;
 }
 
 export class InventoryMovementPageResponse extends PageOf(InventoryMovementResponse) {}
 
 /** Recepción en lote con sus líneas `PURCHASE_IN`, en el orden enviado (R3). */
-export class InventoryReceiptResponse implements Omit<InventoryReceipt, 'totalCost'> {
+export class InventoryReceiptResponse
+  extends ReceiptPurchaseFieldsResponse
+  implements Omit<ReceiptView, 'totalCost'>
+{
   @ApiProperty()
   id!: string;
 
@@ -127,12 +229,72 @@ export class InventoryReceiptResponse implements Omit<InventoryReceipt, 'totalCo
   @ApiProperty()
   createdAt!: Date;
 
-  @ApiProperty({ type: [InventoryMovementResponse] })
+  @ApiProperty({
+    nullable: true,
+    description:
+      'Recepción atrasada (R8): resolución elegida por producto ante conteos o ajustes posteriores. null si no hubo ninguno.',
+    type: 'array',
+    items: { type: 'object', additionalProperties: true },
+  })
+  laterStockResolution!: Prisma.JsonValue;
+
+  @ApiProperty({
+    type: Boolean,
+    nullable: true,
+    description: 'true si se guardó pese a parecerse a otra recepción reciente (R8).',
+  })
+  possibleDuplicateAcknowledged!: boolean | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  purchaseInfoRecordedById!: string | null;
+
+  @ApiProperty({ type: [InventoryMovementResponse], description: 'Solo los PURCHASE_IN.' })
   lines!: InventoryMovementResponse[];
+
+  @ApiProperty({
+    type: [InventoryMovementResponse],
+    description:
+      'Ajustes de regularización enlazados a la recepción (R8, SET_PHYSICAL). Vacío en las demás.',
+  })
+  adjustments!: InventoryMovementResponse[];
+
+  @ApiProperty({
+    type: [InventoryMovementResponse],
+    description: 'Movimientos PURCHASE_VOID de la anulación (R8). Vacío si no está anulada.',
+  })
+  voids!: InventoryMovementResponse[];
+
+  @ApiProperty({
+    type: () => PayableResponse,
+    nullable: true,
+    description: 'Deuda activa de la recepción (R8), o null.',
+  })
+  payable!: PayableResponse | null;
+
+  @ApiProperty({
+    type: [String],
+    description:
+      'Avisos sin bloqueo (R8), p. ej. PAYABLE_ALREADY_OVERDUE o EXCHANGE_RATE_OUT_OF_RANGE.',
+  })
+  warnings!: string[];
 }
 
 /** Elemento del historial de recepciones: cabecera y cantidad de líneas (R3). */
-export class InventoryReceiptSummaryResponse implements Omit<InventoryReceiptResponse, 'lines'> {
+export class InventoryReceiptSummaryResponse
+  extends ReceiptPurchaseFieldsResponse
+  implements
+    Omit<
+      InventoryReceiptResponse,
+      | 'lines'
+      | 'adjustments'
+      | 'voids'
+      | 'payable'
+      | 'warnings'
+      | 'laterStockResolution'
+      | 'possibleDuplicateAcknowledged'
+      | 'purchaseInfoRecordedById'
+    >
+{
   @ApiProperty()
   id!: string;
 
@@ -199,7 +361,36 @@ export class ReceiptLinePreviewResponse implements ReceiptLinePreview {
 export class InventoryReceiptSummaryPageResponse extends PageOf(InventoryReceiptSummaryResponse) {}
 
 /** Total comprado en un mes (DEC-90). */
+export class ReceiptsUsdSummaryResponse {
+  @ApiProperty()
+  receiptCount!: number;
+
+  @ApiProperty({ description: 'Total en dólares (2 decimales).' })
+  totalCost!: string;
+
+  @ApiProperty({ type: () => ReceiptProductSummaryResponse, isArray: true })
+  products!: ReceiptProductSummaryResponse[];
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Equivalente en soles con el tipo de cambio de cada compra (solo las que lo tienen).',
+  })
+  penEquivalent!: string | null;
+
+  @ApiProperty({ description: 'Compras en USD con monto pero sin tipo de cambio.' })
+  withoutRateCount!: number;
+}
+
 export class ReceiptsMonthSummaryResponse implements ReceiptsMonthSummary {
+  @ApiProperty({
+    type: () => ReceiptsUsdSummaryResponse,
+    nullable: true,
+    description: 'Compras en dólares del mes, aparte (R8). null si no hubo ninguna.',
+  })
+  usd!: ReceiptsUsdSummaryResponse | null;
+
   @ApiProperty({ description: 'Mes calendario, YYYY-MM.' })
   month!: string;
 

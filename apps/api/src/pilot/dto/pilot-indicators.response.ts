@@ -45,6 +45,9 @@ export class MovementsByTypeResponse implements Record<InventoryMovementType, nu
 
   @ApiProperty()
   SALE_VOID!: number;
+
+  @ApiProperty()
+  PURCHASE_VOID!: number;
 }
 
 export class PilotInventoryResponse {
