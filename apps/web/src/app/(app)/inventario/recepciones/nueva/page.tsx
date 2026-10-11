@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { ReceiptDetail } from '@/components/inventory/receipt-detail';
+import { ReceiptPayable } from '@/components/payables/receipt-payable';
 import { ReceiptForm } from '@/components/inventory/receipt-form';
 import { FormError } from '@/components/customers/form-error';
 import { buttonVariants } from '@/components/ui/button';
@@ -59,9 +60,22 @@ function NewReceipt() {
           className="flex items-start gap-2 rounded-md border border-[var(--success)]/40 bg-[var(--success-soft)] px-3 py-2.5 text-sm font-medium"
         >
           <CircleCheck className="mt-0.5 size-4 shrink-0 text-[var(--success)]" aria-hidden />
-          Se sumó al stock de todos los productos.
+          {(saved.receipt.adjustments ?? []).length > 0
+            ? 'Compra registrada. Donde la mercadería ya estaba contada, el stock quedó en lo que hay en el estante.'
+            : 'Se sumó al stock de todos los productos.'}
         </p>
+        {(saved.receipt.warnings ?? []).includes('PAYABLE_ALREADY_OVERDUE') && (
+          <FormError>La deuda de esta compra ya está vencida según su fecha de compra.</FormError>
+        )}
+        {(saved.receipt.warnings ?? []).includes('EXCHANGE_RATE_OUT_OF_RANGE') && (
+          <FormError>
+            Revisa el tipo de cambio: está fuera del rango habitual (2.5 a 5.0).
+          </FormError>
+        )}
         <ReceiptDetail receipt={saved.receipt} products={saved.products} />
+        {saved.receipt.payable && (
+          <ReceiptPayable receipt={saved.receipt} onSaved={() => undefined} />
+        )}
         <div className="flex flex-col gap-2 sm:flex-row">
           <button
             type="button"

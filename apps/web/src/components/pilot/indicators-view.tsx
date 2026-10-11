@@ -20,7 +20,9 @@ export function IndicatorsView({ indicators }: { indicators: PilotIndicators }) 
   const { adoption, maintenance, inventory } = indicators;
   const movementTypes = [
     ...MVP_MOVEMENT_TYPES,
-    ...(['SALE', 'SALE_VOID'] as const).filter((type) => inventory.movementsByType[type] > 0),
+    ...(['SALE', 'SALE_VOID', 'PURCHASE_VOID'] as const).filter(
+      (type) => inventory.movementsByType[type] > 0,
+    ),
   ];
 
   return (

@@ -7,6 +7,8 @@ export interface ApiFailure {
   code: string | null;
   /** Mensajes por campo de un 400 de validación (`errors[]`), por nombre de campo. */
   fieldErrors: Record<string, string>;
+  /** Datos del caso que trae el error (`data`, miembro de extensión), según el `code`. */
+  data?: unknown;
   classified: ClassifiedError;
 }
 
@@ -58,13 +60,20 @@ export async function callApi<T>(
         status: response.status,
         code: problem?.code ?? null,
         fieldErrors,
+        data: problem?.data,
         classified: classifyError(problem, false),
       },
     };
   } catch {
     return {
       ok: false,
-      failure: { status: null, code: null, fieldErrors: {}, classified: { kind: 'network' } },
+      failure: {
+        status: null,
+        code: null,
+        fieldErrors: {},
+        data: undefined,
+        classified: { kind: 'network' },
+      },
     };
   }
 }

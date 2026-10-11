@@ -10,13 +10,16 @@ import {
   type InventoryReceipt,
 } from '@/lib/inventory/receipts';
 import type { Product } from '@/lib/products/format';
-import { formatMoney } from '@/lib/sales/format';
+import { formatAmount } from '@/lib/payables/format';
 
 /**
  * Cabecera y líneas de una recepción (07-UI-UX.md §3.6, "Historial de
  * recepciones"): producto, cantidad recibida, monto pagado si se registró
  * (DEC-90), su costo unitario calculado (DEC-94) y saldo resultante. Solo lectura: los movimientos no se editan
  * (BR-P3). Las recepciones anteriores no tienen monto: no se inventa.
+ *
+ * R8: si se registró otro día que el de la llegada, se muestran ambas fechas;
+ * si hubo ajustes de regularización (recepción atrasada), se listan aparte.
  */
 export function ReceiptDetail({
   receipt,
@@ -28,19 +31,33 @@ export function ReceiptDetail({
 }) {
   const note = present(receipt.note);
   const missingCost = receipt.lines.filter((line) => line.purchaseCost === null).length;
+  const adjustments = receipt.adjustments ?? [];
+  const arrival = new Date(receipt.occurredAt);
+  const registered = new Date(receipt.createdAt);
+  const registeredLater =
+    registered.toLocaleDateString('es-PE', { timeZone: 'America/Lima' }) !==
+    arrival.toLocaleDateString('es-PE', { timeZone: 'America/Lima' });
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
         <p className="flex items-center gap-2">
           <CalendarClock className="size-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
-          {receiptDateFormat.format(new Date(receipt.occurredAt))}
+          {registeredLater ? 'Llegó el ' : ''}
+          {receiptDateFormat.format(arrival)}
         </p>
+        {registeredLater && (
+          <p className="text-xs text-[var(--muted-foreground)]">
+            Registrada el {receiptDateFormat.format(registered)}
+          </p>
+        )}
         <p className="text-[var(--muted-foreground)]">{productCountLabel(receipt.lines.length)}</p>
         <p className="flex items-baseline justify-between gap-3 border-t border-[var(--border)] pt-2">
           <span className="font-semibold">Total pagado</span>
           {receipt.totalCost !== null ? (
-            <span className="text-lg font-bold">{formatMoney(receipt.totalCost)}</span>
+            <span className="text-lg font-bold">
+              {formatAmount(receipt.totalCost, receipt.currency)}
+            </span>
           ) : (
             <span className="text-[var(--muted-foreground)]">Sin monto registrado</span>
           )}
@@ -89,7 +106,7 @@ export function ReceiptDetail({
                     )}
                     {line.resultingBalance !== null && (
                       <span className="text-xs text-[var(--muted-foreground)]">
-                        Saldo después: {formatQuantity(line.resultingBalance)}
+                        Saldo al registrar: {formatQuantity(line.resultingBalance)}
                       </span>
                     )}
                   </span>
@@ -103,13 +120,17 @@ export function ReceiptDetail({
                       )}
                     </span>
                     {line.purchaseCost !== null ? (
-                      <span className="text-sm">{formatMoney(line.purchaseCost)}</span>
+                      <span className="text-sm">
+                        {formatAmount(line.purchaseCost, receipt.currency)}
+                      </span>
                     ) : (
                       <span className="text-xs text-[var(--muted-foreground)]">Sin monto</span>
                     )}
                     {product && unitCost !== null && (
                       <span className="text-xs text-[var(--muted-foreground)]">
-                        {unitCostLabel(unitCost, product.unit)}
+                        {receipt.currency === 'USD'
+                          ? `${formatAmount(unitCost, 'USD')} por ${product.unit}`
+                          : unitCostLabel(unitCost, product.unit)}
                       </span>
                     )}
                   </span>
@@ -119,6 +140,45 @@ export function ReceiptDetail({
           })}
         </ul>
       </section>
+
+      {adjustments.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h3 className="text-lg font-bold">Ajustes de regularización</h3>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            Al registrar esta recepción atrasada se indicó que la mercadería ya estaba en un conteo
+            posterior: el stock se dejó en lo que había en el estante.
+          </p>
+          <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+            {adjustments.map((adjustment) => {
+              const product = products.get(adjustment.productId);
+              const delta = Number(adjustment.quantityDelta);
+              return (
+                <li key={adjustment.id} className="flex min-h-16 items-center gap-3 px-4 py-3">
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="font-medium break-words">
+                      {product?.name ?? 'Producto no disponible'}
+                    </span>
+                    {adjustment.countedQuantity !== null && (
+                      <span className="text-xs text-[var(--muted-foreground)]">
+                        En el estante: {formatQuantity(adjustment.countedQuantity)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-base font-semibold">
+                    {delta > 0 ? '+' : ''}
+                    {formatQuantity(adjustment.quantityDelta)}
+                    {product && (
+                      <span className="ml-1 text-xs font-normal text-[var(--muted-foreground)]">
+                        {product.unit}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

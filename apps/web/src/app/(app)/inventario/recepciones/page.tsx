@@ -23,6 +23,7 @@ import {
   type ReceiptProductSummary,
   type ReceiptsMonthSummary,
 } from '@/lib/inventory/receipts';
+import { formatAmount, type Currency } from '@/lib/payables/format';
 import { formatMoney } from '@/lib/sales/format';
 
 const PAGE_SIZE = 20;
@@ -144,7 +145,20 @@ function MonthView({
       </section>
 
       {summary.status === 'success' && summary.data.products.length > 0 && (
-        <ProductBreakdown summary={summary.data} />
+        <ProductBreakdown
+          products={summary.data.products}
+          total={Number(summary.data.totalCost)}
+          currency="PEN"
+          title={summary.data.usd ? 'Por producto, en soles' : 'Por producto'}
+        />
+      )}
+      {summary.status === 'success' && summary.data.usd && summary.data.usd.products.length > 0 && (
+        <ProductBreakdown
+          products={summary.data.usd.products}
+          total={Number(summary.data.usd.totalCost)}
+          currency="USD"
+          title="Por producto, en dólares"
+        />
       )}
     </>
   );
@@ -153,18 +167,22 @@ function MonthView({
 function MonthTotal({ summary }: { summary: ReceiptsMonthSummary }) {
   const partialLines =
     summary.linesWithoutCost > 0 && summary.linesWithoutCost !== summary.receiptsWithoutCost;
+  // Con compras en dólares, este bloque cuenta solo las de soles (DEC-100).
+  const penCount = summary.receiptCount - (summary.usd?.receiptCount ?? 0);
   return (
     <div className="flex flex-col items-center gap-1 text-center">
       <p className="text-xs font-medium tracking-wide text-[var(--muted-foreground)] uppercase">
-        Total pagado registrado
+        {summary.usd ? 'Total pagado registrado en soles' : 'Total pagado registrado'}
       </p>
       <p className="text-3xl font-bold">{formatMoney(summary.totalCost)}</p>
       <p className="text-sm text-[var(--muted-foreground)]">
         {summary.receiptCount === 0
           ? 'Sin recepciones este mes.'
-          : summary.receiptCount === 1
-            ? '1 recepción'
-            : `${summary.receiptCount} recepciones`}
+          : summary.usd && penCount === 0
+            ? 'Sin compras en soles este mes.'
+            : penCount === 1
+              ? '1 recepción'
+              : `${penCount} recepciones`}
       </p>
       {summary.receiptsWithoutCost > 0 && (
         <p className="rounded-md bg-[var(--accent-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">
@@ -178,6 +196,26 @@ function MonthTotal({ summary }: { summary: ReceiptsMonthSummary }) {
           Algunas recepciones tienen productos sin monto: el total solo suma lo que tiene monto.
         </p>
       )}
+      {summary.usd && (
+        <div className="mt-2 flex flex-col items-center gap-0.5 border-t border-[var(--border)] pt-2">
+          <p className="text-xs font-medium tracking-wide text-[var(--muted-foreground)] uppercase">
+            Compras en dólares (aparte)
+          </p>
+          <p className="text-xl font-bold">{formatAmount(summary.usd.totalCost, 'USD')}</p>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            {summary.usd.receiptCount === 1
+              ? '1 recepción'
+              : `${summary.usd.receiptCount} recepciones`}
+          </p>
+          {summary.usd.penEquivalent && (
+            <p className="text-xs text-[var(--muted-foreground)]">
+              ≈ {formatMoney(summary.usd.penEquivalent)} con el tipo de cambio de cada compra
+              {summary.usd.withoutRateCount > 0 &&
+                ` (sin contar ${summary.usd.withoutRateCount} sin tipo de cambio)`}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -188,13 +226,23 @@ function MonthTotal({ summary }: { summary: ReceiptsMonthSummary }) {
  * costo unitario calculado. Lo que no tiene monto aparece, pero sin barra ni
  * costo.
  */
-function ProductBreakdown({ summary }: { summary: ReceiptsMonthSummary }) {
-  const total = Number(summary.totalCost);
+function ProductBreakdown({
+  products,
+  total,
+  currency,
+  title,
+}: {
+  products: ReceiptProductSummary[];
+  total: number;
+  currency: Currency;
+  title: string;
+}) {
+  const titleId = `products-title-${currency}`;
   return (
-    <section aria-labelledby="products-title" className="flex flex-col gap-3">
+    <section aria-labelledby={titleId} className="flex flex-col gap-3">
       <div className="flex flex-col gap-0.5">
-        <h3 id="products-title" className="text-lg font-bold">
-          Por producto
+        <h3 id={titleId} className="text-lg font-bold">
+          {title}
         </h3>
         <p className="text-sm text-[var(--muted-foreground)]">
           En qué gastaste y cuánto compraste de cada uno. El costo unitario es un cálculo: monto
@@ -202,15 +250,23 @@ function ProductBreakdown({ summary }: { summary: ReceiptsMonthSummary }) {
         </p>
       </div>
       <ul className="flex flex-col divide-y divide-[var(--border)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-        {summary.products.map((product) => (
-          <ProductRow key={product.productId} product={product} total={total} />
+        {products.map((product) => (
+          <ProductRow key={product.productId} product={product} total={total} currency={currency} />
         ))}
       </ul>
     </section>
   );
 }
 
-function ProductRow({ product, total }: { product: ReceiptProductSummary; total: number }) {
+function ProductRow({
+  product,
+  total,
+  currency,
+}: {
+  product: ReceiptProductSummary;
+  total: number;
+  currency: Currency;
+}) {
   const paid = Number(product.totalCost);
   // Alguna línea con monto (las cantidades recibidas siempre son > 0).
   const hasCost = Number(product.quantityWithCost) > 0;
@@ -229,7 +285,7 @@ function ProductRow({ product, total }: { product: ReceiptProductSummary; total:
               hasCost ? 'shrink-0 font-semibold' : 'shrink-0 text-sm text-[var(--muted-foreground)]'
             }
           >
-            {hasCost ? formatMoney(product.totalCost) : 'Sin monto'}
+            {hasCost ? formatAmount(product.totalCost, currency) : 'Sin monto'}
           </span>
         </span>
         {hasCost && total > 0 && (
@@ -252,7 +308,14 @@ function ProductRow({ product, total }: { product: ReceiptProductSummary; total:
         <span className="text-sm text-[var(--muted-foreground)]">
           {formatQuantity(product.quantity)} {product.unit} ·{' '}
           {product.receiptCount === 1 ? '1 recepción' : `${product.receiptCount} recepciones`}
-          {product.unitCost !== null && <> · {unitCostLabel(product.unitCost, product.unit)}</>}
+          {product.unitCost !== null && (
+            <>
+              {' · '}
+              {currency === 'USD'
+                ? `${formatAmount(product.unitCost, 'USD')} por ${product.unit}`
+                : unitCostLabel(product.unitCost, product.unit)}
+            </>
+          )}
         </span>
         {hasCost && product.linesWithoutCost > 0 && (
           <span className="text-xs text-[var(--muted-foreground)]">
@@ -351,7 +414,17 @@ function ReceiptRow({ receipt }: { receipt: InventoryReceiptSummary }) {
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="font-medium">
             {receiptDateFormat.format(new Date(receipt.occurredAt))}
+            {receipt.voidedAt && (
+              <span className="ml-2 rounded bg-[var(--danger-soft)] px-1.5 py-0.5 text-xs font-medium text-[var(--danger)]">
+                Anulada
+              </span>
+            )}
           </span>
+          {(receipt.supplier || receipt.documentRef) && (
+            <span className="text-xs break-words text-[var(--muted-foreground)]">
+              {[receipt.supplier?.name, receipt.documentRef].filter(Boolean).join(' · ')}
+            </span>
+          )}
           {receipt.lineCount > 1 && (
             <span className="text-xs text-[var(--muted-foreground)]">
               {productCountLabel(receipt.lineCount)}
@@ -379,7 +452,9 @@ function ReceiptRow({ receipt }: { receipt: InventoryReceiptSummary }) {
               : 'shrink-0 text-sm text-[var(--muted-foreground)]'
           }
         >
-          {receipt.totalCost !== null ? formatMoney(receipt.totalCost) : 'Sin monto'}
+          {receipt.totalCost !== null
+            ? formatAmount(receipt.totalCost, receipt.currency)
+            : 'Sin monto'}
         </span>
         <ChevronRight className="size-5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
       </Link>
