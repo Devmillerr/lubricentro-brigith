@@ -138,3 +138,70 @@ export async function loadProductToReceive(id: string): Promise<ApiResult<Produc
   // Sin saldo la línea se muestra igual: no impide recibir.
   return { ok: true, data: stock.ok ? { ...withStock, stock: stock.data } : withStock };
 }
+
+// ---------------------------------------------------------------------------
+// Recepción atrasada y posible duplicado (R8, DEC-96)
+// ---------------------------------------------------------------------------
+
+/** Margen que admite la API para una fecha "adelantada" por el reloj del dispositivo. */
+export const RECEIPT_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
+
+export type LaterStockResolution = 'ADD_TO_STOCK' | 'SET_PHYSICAL';
+
+export interface LaterStockCheck {
+  movementId: string;
+  type: 'COUNT' | 'ADJUSTMENT';
+  occurredAt: string;
+  countedQuantity: string | null;
+}
+
+/** Producto con conteos o ajustes posteriores a la fecha de la recepción (`data.products` del 409). */
+export interface LaterStockProduct {
+  productId: string;
+  name: string;
+  unit: string;
+  balance: string;
+  checks: LaterStockCheck[];
+}
+
+/** Elección del usuario en el formulario: la cantidad del estante como texto. */
+export interface LaterStockChoiceDraft {
+  resolution: LaterStockResolution | null;
+  physical: string;
+}
+
+/** `data.products` de `LATER_STOCK_CHECKS_FOUND`/`_MISMATCH`, o null si no tiene esa forma. */
+export function laterStockProductsOf(data: unknown): LaterStockProduct[] | null {
+  const products = (data as { products?: unknown } | null | undefined)?.products;
+  if (!Array.isArray(products)) return null;
+  return products.filter(
+    (p): p is LaterStockProduct =>
+      typeof p === 'object' &&
+      p !== null &&
+      typeof (p as LaterStockProduct).productId === 'string' &&
+      Array.isArray((p as LaterStockProduct).checks),
+  );
+}
+
+export interface PossibleDuplicate {
+  receiptId: string;
+  occurredAt: string;
+}
+
+/** `data` de `POSSIBLE_DUPLICATE_RECEIPT`, o null si no tiene esa forma. */
+export function possibleDuplicateOf(data: unknown): PossibleDuplicate | null {
+  const value = data as Partial<PossibleDuplicate> | null | undefined;
+  if (typeof value?.receiptId !== 'string' || typeof value.occurredAt !== 'string') return null;
+  return { receiptId: value.receiptId, occurredAt: value.occurredAt };
+}
+
+/** Valor de un `<input type="datetime-local">` (hora del dispositivo), p. ej. para su `max`. */
+export function localDateTimeInputValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/** Valor de un `<input type="date">` (día del dispositivo), p. ej. para su `max`. */
+export function localDateInputValue(date: Date): string {
+  return localDateTimeInputValue(date).slice(0, 10);
+}

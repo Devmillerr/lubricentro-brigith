@@ -5,6 +5,8 @@ import {
   PackagePlus,
   Receipt,
   Settings,
+  Truck,
+  Wallet,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -29,6 +31,18 @@ const SECTIONS: { label: string; description: string; icon: LucideIcon; href: st
     description: 'Mercadería recibida, cuánto pagaste y el total invertido del mes',
     icon: PackagePlus,
     href: '/inventario/recepciones',
+  },
+  {
+    label: 'Proveedores',
+    description: 'A quién le compras: nombre, RUC y teléfono',
+    icon: Truck,
+    href: '/proveedores',
+  },
+  {
+    label: 'Cuentas por pagar',
+    description: 'Lo que debes a proveedores, vencimientos y pagos',
+    icon: Wallet,
+    href: '/cuentas-por-pagar',
   },
   {
     label: 'Configuración',

@@ -2,6 +2,9 @@
 
 import { useParams } from 'next/navigation';
 import { ReceiptDetail } from '@/components/inventory/receipt-detail';
+import { ReceiptPurchaseInfo } from '@/components/inventory/receipt-purchase-info';
+import { ReceiptVoid } from '@/components/inventory/receipt-void';
+import { ReceiptPayable } from '@/components/payables/receipt-payable';
 import { PageHeader } from '@/components/ui/page-header';
 import { QueryError } from '@/components/ui/query-error';
 import { PageSkeleton } from '@/components/ui/states';
@@ -50,6 +53,13 @@ export default function ReceiptPage() {
     <div className="flex flex-col gap-5">
       <PageHeader title="Recepción" back={back} />
       <ReceiptDetail receipt={receipt.data.receipt} products={receipt.data.products} />
+      <ReceiptPurchaseInfo receipt={receipt.data.receipt} onSaved={receipt.reload} />
+      <ReceiptPayable receipt={receipt.data.receipt} onSaved={receipt.reload} />
+      <ReceiptVoid
+        receipt={receipt.data.receipt}
+        products={receipt.data.products}
+        onVoided={receipt.reload}
+      />
     </div>
   );
 }
