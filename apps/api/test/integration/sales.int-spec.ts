@@ -87,6 +87,7 @@ async function createProduct(
     await inventory.count(tenant.businessId, tenant.userId, {
       productId: product.id,
       countedQuantity: options.counted,
+      occurredAt: '2026-01-01T00:00:00.000Z', // conteo inicial, anterior a las recepciones (R8)
     });
   }
   return product.id;
@@ -566,6 +567,8 @@ describe('Ventas contra Postgres (R4)', () => {
             ]),
           ),
           inventory.createReceiptBatch(tenantA.businessId, tenantA.userId, {
+            // Repite otra recepción igual a propósito (concurrencia, no duplicados).
+            acknowledgePossibleDuplicate: true,
             lines: [
               { productId: second, quantity: 5 },
               { productId: first, quantity: 5 },

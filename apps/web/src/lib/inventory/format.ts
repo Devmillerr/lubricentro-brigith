@@ -14,6 +14,7 @@ export const MOVEMENT_LABELS: Record<MovementType, string> = {
   ADJUSTMENT: 'Ajuste',
   SALE: 'Venta',
   SALE_VOID: 'Anulación de venta',
+  PURCHASE_VOID: 'Anulación de recepción',
 };
 
 /** Las cantidades admiten decimales (BR-P15; Decimal(12,3) en la base). */

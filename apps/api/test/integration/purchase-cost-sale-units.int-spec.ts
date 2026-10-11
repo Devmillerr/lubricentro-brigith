@@ -66,6 +66,7 @@ async function createProduct(
     await inventory.count(tenant.businessId, tenant.userId, {
       productId: product.id,
       countedQuantity: options.counted,
+      occurredAt: '2026-01-01T00:00:00.000Z', // conteo inicial, anterior a las recepciones (R8)
     });
   }
   return product.id;
@@ -169,13 +170,22 @@ describe('Recepciones con monto pagado (DEC-90)', () => {
   it('total mensual: suma solo las recepciones del mes y cuenta aparte las que no tienen monto', async () => {
     const tenant = await createTenant();
     const productId = await createProduct(tenant, { counted: 0 });
+    // Fechas posteriores a hoy en el calendario real: la prueba fija su reloj
+    // (R8 rechaza recepciones futuras) y repite recepciones a propósito.
+    const now = new Date('2027-01-01T00:00:00.000Z');
     const receive = (occurredAt: string, purchaseCost?: number) =>
-      inventory.createReceiptBatch(tenant.businessId, tenant.userId, {
-        occurredAt,
-        lines: [
-          { productId, quantity: 1, ...(purchaseCost !== undefined ? { purchaseCost } : {}) },
-        ],
-      });
+      inventory.createReceiptBatch(
+        tenant.businessId,
+        tenant.userId,
+        {
+          occurredAt,
+          acknowledgePossibleDuplicate: true,
+          lines: [
+            { productId, quantity: 1, ...(purchaseCost !== undefined ? { purchaseCost } : {}) },
+          ],
+        },
+        now,
+      );
 
     // Lima es UTC−5: el 1 de octubre a las 00:30 de Lima ya es octubre;
     // el 30 de septiembre a las 23:30 de Lima (04:30 UTC del 1) no.

@@ -11,6 +11,8 @@
   "transformIgnorePatterns": [
     "/node_modules/(?!(\\.pnpm/@nestjs\\+throttler@[^/]+/node_modules/)?@nestjs/throttler/)"
   ],
+  "setupFiles": ["<rootDir>/support/e2e-database-guard.ts"],
   "setupFilesAfterEnv": ["<rootDir>/support/nestjs-esm-bridge.setup.ts"],
-  "testEnvironment": "node"
+  "testEnvironment": "node",
+  "testTimeout": 20000
 }

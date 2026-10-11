@@ -66,6 +66,7 @@ async function createProduct(tenant: Tenant, counted?: number): Promise<string> 
     await inventory.count(tenant.businessId, tenant.userId, {
       productId: product.id,
       countedQuantity: counted,
+      occurredAt: '2026-01-01T00:00:00.000Z', // conteo inicial, anterior a las recepciones (R8)
     });
   }
   return product.id;
@@ -89,8 +90,16 @@ async function receiptCount(tenant: Tenant) {
   return prisma.inventoryReceipt.count({ where: { businessId: tenant.businessId } });
 }
 
+/**
+ * Estas pruebas no tratan de duplicados: repiten recepciones a propósito
+ * (paginación, concurrencia). Confirman el posible duplicado de R8, que se
+ * prueba aparte en receipts-backdated.int-spec.ts.
+ */
 function receive(tenant: Tenant, input: ReceiptBatchInput) {
-  return inventory.createReceiptBatch(tenant.businessId, tenant.userId, input);
+  return inventory.createReceiptBatch(tenant.businessId, tenant.userId, {
+    acknowledgePossibleDuplicate: true,
+    ...input,
+  });
 }
 
 /**

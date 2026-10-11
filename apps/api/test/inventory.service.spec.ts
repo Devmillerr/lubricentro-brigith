@@ -251,11 +251,15 @@ describe('InventoryService', () => {
  * test/integration/inventory-receipts.int-spec.ts.
  */
 function setupReceipts() {
-  const { prisma, stores } = buildFakeScopedPrisma([
+  const { prisma, stores, businesses } = buildFakeScopedPrisma([
     'inventoryMovement',
     'product',
     'inventoryReceipt',
+    'supplierPayable',
   ]);
+  // R8: la recepción lee la zona del negocio (fecha de compra no futura).
+  businesses.set('biz-a', { id: 'biz-a', timezone: 'America/Lima' });
+  businesses.set('biz-b', { id: 'biz-b', timezone: 'America/Lima' });
   const service = new InventoryService(prisma);
   const products = stores.get('product')!;
   const product = (id: string, businessId: string, extra: Record<string, unknown> = {}) =>
@@ -540,7 +544,8 @@ describe('InventoryService.listReceipts / getReceipt (R3)', () => {
     const { service, receive } = setupReceipts();
     const occurredAt = '2026-09-22T10:00:00.000Z';
     for (const n of [3, 1, 5, 2, 4]) {
-      await receive({ id: id(n), occurredAt, lines: [{ productId: 'prod-a', quantity: 1 }] });
+      // Cantidades distintas: recepciones iguales a ±3 días serían un posible duplicado (R8).
+      await receive({ id: id(n), occurredAt, lines: [{ productId: 'prod-a', quantity: n }] });
     }
 
     const seen: string[] = [];
@@ -560,9 +565,10 @@ describe('InventoryService.listReceipts / getReceipt (R3)', () => {
     for (let n = 1; n <= 5; n++) {
       await receive({
         id: id(n),
+        // Cantidades distintas: no son posibles duplicados (R8).
         lines: [
-          { productId: 'prod-a', quantity: 1 },
-          { productId: 'prod-b', quantity: 1 },
+          { productId: 'prod-a', quantity: n },
+          { productId: 'prod-b', quantity: n },
         ],
       });
     }
