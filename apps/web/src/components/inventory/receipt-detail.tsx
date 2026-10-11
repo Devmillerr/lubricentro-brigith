@@ -14,7 +14,7 @@ import { formatAmount } from '@/lib/payables/format';
 
 /**
  * Cabecera y líneas de una recepción (07-UI-UX.md §3.6, "Historial de
- * recepciones"): producto, cantidad recibida, monto pagado si se registró
+ * recepciones"): producto, cantidad recibida, monto de la compra si se registró
  * (DEC-90), su costo unitario calculado (DEC-94) y saldo resultante. Solo lectura: los movimientos no se editan
  * (BR-P3). Las recepciones anteriores no tienen monto: no se inventa.
  *
@@ -53,7 +53,10 @@ export function ReceiptDetail({
         )}
         <p className="text-[var(--muted-foreground)]">{productCountLabel(receipt.lines.length)}</p>
         <p className="flex items-baseline justify-between gap-3 border-t border-[var(--border)] pt-2">
-          <span className="font-semibold">Total pagado</span>
+          {/* Al crédito, el monto es lo comprado, no lo pagado: el saldo está en la deuda. */}
+          <span className="font-semibold">
+            {receipt.paymentTerms === 'CREDIT' ? 'Total de la compra' : 'Total pagado'}
+          </span>
           {receipt.totalCost !== null ? (
             <span className="text-lg font-bold">
               {formatAmount(receipt.totalCost, receipt.currency)}

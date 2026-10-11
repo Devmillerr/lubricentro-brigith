@@ -12,7 +12,7 @@ export type ReceiptsMonthSummary = Schemas['ReceiptsMonthSummaryResponse'];
 export type ReceiptProductSummary = Schemas['ReceiptProductSummaryResponse'];
 
 /**
- * Costo por unidad de stock de una línea, calculado (DEC-94): monto pagado ÷
+ * Costo por unidad de stock de una línea, calculado (DEC-94): monto de la compra ÷
  * cantidad recibida, a 2 decimales. Solo informa: el monto guardado no
  * cambia. Sin monto, o sin cantidad, no hay costo unitario (`null`).
  */

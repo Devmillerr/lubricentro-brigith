@@ -28,7 +28,7 @@ const SECTIONS: { label: string; description: string; icon: LucideIcon; href: st
   },
   {
     label: 'Recepciones y compras',
-    description: 'Mercadería recibida, cuánto pagaste y el total invertido del mes',
+    description: 'Mercadería recibida, cuánto compraste y el total invertido del mes',
     icon: PackagePlus,
     href: '/inventario/recepciones',
   },
