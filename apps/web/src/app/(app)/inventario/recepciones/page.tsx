@@ -30,7 +30,7 @@ const PAGE_SIZE = 20;
 
 /**
  * Recepciones y compras (07-UI-UX.md §3.6, DEC-90, DEC-94). Por defecto, un
- * mes: arriba el total pagado registrado; luego lo comprado de cada producto
+ * mes: arriba el total comprado registrado; luego lo comprado de cada producto
  * (cantidad, monto, recepciones y costo unitario calculado) con una barra de
  * su parte del gasto; y debajo las recepciones de ese mismo mes. "Todo el
  * historial" muestra todas las recepciones, sin mezclarlas con un mes. Solo
@@ -52,7 +52,7 @@ export default function ReceiptsPage() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Recepciones y compras"
-        subtitle="Lo que llegó, cuánto pagaste y en qué productos, mes a mes."
+        subtitle="Lo que llegó, cuánto compraste y en qué productos, mes a mes."
         back={{ href: '/inventario', label: 'Inventario' }}
         action={receive}
       />
@@ -63,8 +63,8 @@ export default function ReceiptsPage() {
         <section className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <h3 className="text-sm font-semibold">Todo el historial</h3>
           <p className="text-sm text-[var(--muted-foreground)]">
-            Todas las recepciones, de la más reciente a la más antigua. Para ver cuánto pagaste y en
-            qué productos, elige un mes.
+            Todas las recepciones, de la más reciente a la más antigua. Para ver cuánto compraste y
+            en qué productos, elige un mes.
           </p>
           <Button variant="outline" onClick={() => setMonth(currentMonth())}>
             Ver por mes
@@ -91,7 +91,7 @@ export default function ReceiptsPage() {
   );
 }
 
-/** Total pagado del mes y lo comprado de cada producto (`GET /inventory/receipts/summary`). */
+/** Total comprado del mes y lo comprado de cada producto (`GET /inventory/receipts/summary`). */
 function MonthView({
   month,
   onMonthChange,
@@ -172,7 +172,7 @@ function MonthTotal({ summary }: { summary: ReceiptsMonthSummary }) {
   return (
     <div className="flex flex-col items-center gap-1 text-center">
       <p className="text-xs font-medium tracking-wide text-[var(--muted-foreground)] uppercase">
-        {summary.usd ? 'Total pagado registrado en soles' : 'Total pagado registrado'}
+        {summary.usd ? 'Total comprado registrado en soles' : 'Total comprado registrado'}
       </p>
       <p className="text-3xl font-bold">{formatMoney(summary.totalCost)}</p>
       <p className="text-sm text-[var(--muted-foreground)]">
@@ -221,7 +221,7 @@ function MonthTotal({ summary }: { summary: ReceiptsMonthSummary }) {
 }
 
 /**
- * Lo comprado de cada producto en el mes: cuánto se pagó (con una barra de su
+ * Lo comprado de cada producto en el mes: su monto (con una barra de su
  * parte del total), cuánto llegó en su unidad, en cuántas recepciones y el
  * costo unitario calculado. Lo que no tiene monto aparece, pero sin barra ni
  * costo.
@@ -245,8 +245,8 @@ function ProductBreakdown({
           {title}
         </h3>
         <p className="text-sm text-[var(--muted-foreground)]">
-          En qué gastaste y cuánto compraste de cada uno. El costo unitario es un cálculo: monto
-          pagado ÷ cantidad recibida.
+          En qué compraste y cuánto de cada uno, al contado o al crédito. El costo unitario es un
+          cálculo: monto de la compra ÷ cantidad recibida.
         </p>
       </div>
       <ul className="flex flex-col divide-y divide-[var(--border)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
@@ -293,7 +293,7 @@ function ProductRow({
             <span
               className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--chart-track)]"
               role="img"
-              aria-label={`${percent}% del total pagado del mes`}
+              aria-label={`${percent}% del total comprado del mes`}
             >
               <span
                 className="block h-full rounded-full bg-[var(--primary)]"

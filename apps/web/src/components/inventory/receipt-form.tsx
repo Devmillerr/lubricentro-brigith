@@ -46,7 +46,7 @@ import { useSubmitLock } from '@/lib/use-submit-lock';
 interface Line {
   product: ProductWithStock;
   quantity: string;
-  /** Total pagado por la línea (no por unidad), opcional (DEC-90). */
+  /** Monto de la línea (no por unidad), opcional al contado (DEC-90). */
   cost: string;
 }
 
@@ -99,7 +99,7 @@ const ERROR_MESSAGES = {
  * validan antes de enviar (líneas vacías, cantidades ≤ 0, repetidos). Lleva
  * `Idempotency-Key`: si falla la red y se reintenta sin cambios, no se duplica.
  *
- * Cada línea admite, opcional, el total pagado por ella (DEC-90): con eso se
+ * Cada línea admite, opcional, su monto (DEC-90): con eso se
  * conoce cuánto se invirtió en la compra. Sin monto, se registra igual.
  *
  * Compras atrasadas (R8, DEC-96): no se acepta una fecha futura. Si después de
@@ -193,7 +193,7 @@ export function ReceiptForm({
     );
   }
 
-  // Total pagado: suma de las líneas con monto válido (vista previa; la API lo recalcula).
+  // Total de la compra: suma de las líneas con monto válido (vista previa; la API lo recalcula).
   const costCents = lines.reduce((sum, line) => {
     const cost = parsePrice(line.cost);
     return cost === null ? sum : sum + Math.round(cost * 100);
@@ -222,7 +222,7 @@ export function ReceiptForm({
       } else if (parsed > MAX_RECEIPT_QUANTITY) {
         line[product.id] = 'La cantidad es demasiado grande.';
       } else if (cost.trim() && parsePrice(cost) === null) {
-        line[product.id] = 'Monto pagado: 0 o más, con hasta 2 decimales.';
+        line[product.id] = 'Monto: 0 o más, con hasta 2 decimales.';
       }
       if (seen.has(product.id)) line[product.id] = 'Producto repetido.';
       seen.add(product.id);
@@ -465,7 +465,9 @@ export function ReceiptForm({
           {lines.length > 0 && (
             <div className="flex flex-col gap-0.5 border-t border-[var(--border)] pt-3">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="font-semibold">Total pagado</span>
+                <span className="font-semibold">
+                  {credit ? 'Total de la compra' : 'Total pagado'}
+                </span>
                 <span className="text-xl font-semibold">
                   {linesWithCost > 0 ? formatAmount(costCents / 100, currency) : '—'}
                 </span>
@@ -473,7 +475,9 @@ export function ReceiptForm({
               {linesWithCost < lines.length && (
                 <p className="text-xs text-[var(--muted-foreground)]">
                   {linesWithCost === 0
-                    ? 'Opcional: escribe cuánto pagaste por cada producto para saber cuánto invertiste.'
+                    ? credit
+                      ? 'Escribe el monto de cada producto: la deuda es la suma.'
+                      : 'Opcional: escribe cuánto pagaste por cada producto para saber cuánto invertiste.'
                     : `${lines.length - linesWithCost} sin monto: no se suman al total.`}
                 </p>
               )}
@@ -865,7 +869,7 @@ function LineRow({
       )}
       <div className="flex items-center gap-2">
         <label htmlFor={costId} className="text-sm text-[var(--muted-foreground)]">
-          {currency === 'USD' ? 'Total US$' : 'Total pagado S/'}
+          {currency === 'USD' ? 'Total US$' : 'Total S/'}
         </label>
         <Input
           id={costId}

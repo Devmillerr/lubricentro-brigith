@@ -118,6 +118,14 @@ La UI forma parte de R3 (DEC-52). **Ingreso** y **Ajuste** cambian así; **Conta
 - **Stock que requiere atención**, en Inventario: agotados y negativos (solo productos con conteo) y cuántos productos siguen sin conteo inicial, con acceso a Contar (BR-P19). Es una lista, no un gráfico, y no hay stock mínimo.
 - Los errores se validan en el formulario antes de enviar (líneas vacías, cantidades ≤ 0, productos repetidos), para no mostrar los mensajes de validación de la API, que hoy están en inglés.
 
+#### Cambios del 2026-10-11: textos de compras al crédito
+
+Con R8 una compra puede ser al crédito, así que el monto de una recepción no siempre está pagado. Solo cambian textos; montos y cálculos siguen igual.
+
+- **Recepciones y compras:** la tarjeta del mes dice "Total comprado registrado" (o "… en soles"); el subtítulo, "Lo que llegó, cuánto compraste y en qué productos, mes a mes."; "Por producto" aclara que suma compras al contado y al crédito, y el costo unitario es "monto de la compra ÷ cantidad recibida".
+- **Detalle de una recepción:** al crédito dice "Total de la compra"; al contado (o sin forma de pago registrada) sigue diciendo "Total pagado". Lo que falta pagar se ve en la deuda.
+- **Recibir:** el total del formulario dice "Total de la compra" si se eligió "Al crédito"; el monto de cada línea, "Total S/". **Más → Recepciones y compras:** "cuánto compraste".
+
 #### Cambios del 2026-10-07 (DEC-94): compras por mes
 
 - **Recepciones y compras** se lee por mes. La tarjeta de arriba dice "Total pagado registrado" del mes elegido y, si hay recepciones sin monto, "N recepciones sin monto — no incluidas en el total".
