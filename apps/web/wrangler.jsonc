@@ -1,0 +1,11 @@
+// Web de BRIGITH en Cloudflare Workers, solo archivos estáticos (sin código de Worker).
+// Se publica la carpeta out/ que genera `pnpm build:static` (con _headers y _redirects).
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "brigith-web",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./out",
+    "not_found_handling": "404-page",
+  },
+}

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { api, onSessionExpired, type Schemas } from '@/lib/api/client';
+import { api, onSessionExpired, refreshAccessToken, type Schemas } from '@/lib/api/client';
 import { classifyError, type ClassifiedError } from '@/lib/api/errors';
 import {
   clearTokens,
@@ -125,17 +125,70 @@ export async function login(username: string, password: string): Promise<LoginRe
 
 /**
  * `POST /auth/logout` invalida el token de refresco en la API. La sesión
- * local se cierra igual aunque la llamada falle (p. ej. sin red).
+ * local se cierra igual aunque la llamada falle (p. ej. sin red), y se borra
+ * lo que la app guarda en el dispositivo (tokens, borradores, cachés).
  */
 export async function logout(): Promise<void> {
   const tokens = readTokens();
-  if (tokens) {
-    try {
-      await api.POST('/auth/logout', { body: { refreshToken: tokens.refreshToken } });
-    } catch {
-      // Sin red: el token de refresco sigue válido en la API hasta que venza.
-    }
-  }
+  if (tokens) await revokeRefreshToken(tokens.accessToken);
   clearTokens();
+  clearLocalAppData();
   setState({ status: 'unauthenticated', reason: 'logout' });
+}
+
+/**
+ * El logout exige un token de acceso vigente. Si venció (lo normal tras un
+ * rato sin usar la app), se renueva, y como renovar rota el token de refresco,
+ * hay que revocar el NUEVO: revocar el viejo dejaría el nuevo válido en la API.
+ */
+async function revokeRefreshToken(accessToken: string): Promise<void> {
+  try {
+    const first = await api.POST('/auth/logout', {
+      body: { refreshToken: readTokens()?.refreshToken ?? '' },
+    });
+    if (first.response.status !== 401) return;
+
+    const renewed = await refreshAccessToken(accessToken);
+    const current = readTokens();
+    if (renewed && current) {
+      await api.POST('/auth/logout', { body: { refreshToken: current.refreshToken } });
+    }
+  } catch {
+    // Sin red: el token de refresco sigue válido en la API hasta que venza.
+  }
+}
+
+/**
+ * Borradores de formularios, claves de idempotencia pendientes y cachés de
+ * versiones anteriores del service worker. Las claves pendientes se borran para
+ * que otro usuario en la misma pestaña no reciba la respuesta guardada de una
+ * operación ajena con el mismo contenido.
+ */
+function clearLocalAppData(): void {
+  removeKeys(() => window.localStorage, 'brigith:draft:');
+  removeKeys(() => window.sessionStorage, 'brigith:idem:');
+  if ('caches' in window) {
+    void caches
+      .keys()
+      .then((names) =>
+        Promise.all(
+          names.filter((name) => name.startsWith('brigith-')).map((name) => caches.delete(name)),
+        ),
+      )
+      .catch(() => undefined);
+  }
+}
+
+function removeKeys(storage: () => Storage, prefix: string): void {
+  try {
+    const store = storage();
+    const keys: string[] = [];
+    for (let i = 0; i < store.length; i++) {
+      const key = store.key(i);
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+    keys.forEach((key) => store.removeItem(key));
+  } catch {
+    // Almacenamiento no disponible: no hay nada que borrar.
+  }
 }

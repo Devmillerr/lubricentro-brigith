@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { BrandEmblem } from '@/components/brand/brand-mark';
 import { buttonVariants } from '@/components/ui/button';
+import { DocumentTitle } from '@/components/ui/document-title';
 
 /**
  * 404 de toda la app (rutas que no existen). En español, como el resto
@@ -9,6 +10,7 @@ import { buttonVariants } from '@/components/ui/button';
 export default function NotFound() {
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-5 px-6 text-center">
+      <DocumentTitle title="Página no encontrada" />
       <BrandEmblem size={112} />
       <div className="flex flex-col gap-2">
         <p className="text-sm font-medium text-[var(--muted-foreground)]">Error 404</p>

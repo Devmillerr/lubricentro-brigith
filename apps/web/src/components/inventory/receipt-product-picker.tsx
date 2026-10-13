@@ -15,6 +15,7 @@ import { formatQuantity, parseQuantity, type ProductWithStock } from '@/lib/inve
 import { buildCategoryTree } from '@/lib/products/categories';
 import type { ProductCategory } from '@/lib/products/format';
 import { rememberProducts } from '@/lib/products/product-lookup';
+import { searchOnEnter } from '@/lib/enter-key';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
 import { cn } from '@/lib/utils';
 
@@ -150,6 +151,9 @@ export function ReceiptProductPicker({
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={searchOnEnter}
+          enterKeyHint="search"
+          autoComplete="off"
           placeholder="Nombre, marca, código o viscosidad"
           aria-label={searchLabel}
           className="pl-9"

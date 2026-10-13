@@ -13,6 +13,15 @@ import { cn } from '@/lib/utils';
 
 type StockAlert = Schemas['StockAlertProductResponse'];
 
+/**
+ * Consulta de `GET /inventory/alerts`. La pide la pantalla (no la sección) para
+ * que salga en paralelo con el catálogo y la sección aparezca ya completa: si
+ * cargara después, empujaría la lista de productos hacia abajo (CLS).
+ */
+export function useStockAlerts() {
+  return useApiQuery('inventory:alerts', () => callApi(api.GET('/inventory/alerts')));
+}
+
 /** Filas visibles por grupo antes de "Ver todos". */
 const COLLAPSED = 5;
 
@@ -22,14 +31,18 @@ const COLLAPSED = 5;
  * conteo, DEC-50) y, aparte, cuántos siguen sin conteo inicial, con acceso a
  * Contar. Es una lista, sin gráficos ni stock mínimo.
  */
-export function StockAlerts({ onShowNotCounted }: { onShowNotCounted: () => void }) {
-  const alerts = useApiQuery('inventory:alerts', () => callApi(api.GET('/inventory/alerts')));
-
+export function StockAlerts({
+  alerts,
+  onShowNotCounted,
+}: {
+  alerts: ReturnType<typeof useStockAlerts>;
+  onShowNotCounted: () => void;
+}) {
   return (
     <section aria-labelledby="stock-alerts-title" className="flex flex-col gap-3">
-      <h3 id="stock-alerts-title" className="text-lg font-bold">
+      <h2 id="stock-alerts-title" className="text-lg font-bold">
         Stock que requiere atención
-      </h3>
+      </h2>
 
       {alerts.status === 'loading' && (
         <p role="status" className="text-sm text-[var(--muted-foreground)]">
@@ -106,9 +119,9 @@ function AlertGroup({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-col gap-0.5">
-        <h4 className={cn('text-sm font-semibold', danger && 'text-[var(--danger)]')}>
+        <h3 className={cn('text-sm font-semibold', danger && 'text-[var(--danger)]')}>
           {title} <span className="font-normal opacity-70">{items.length}</span>
-        </h4>
+        </h3>
         {description && <p className="text-xs text-[var(--muted-foreground)]">{description}</p>}
       </div>
       <ul className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden">

@@ -61,7 +61,7 @@ export default function ReceiptsPage() {
         <MonthView month={month} onMonthChange={setMonth} />
       ) : (
         <section className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
-          <h3 className="text-sm font-semibold">Todo el historial</h3>
+          <h2 className="text-sm font-semibold">Todo el historial</h2>
           <p className="text-sm text-[var(--muted-foreground)]">
             Todas las recepciones, de la más reciente a la más antigua. Para ver cuánto compraste y
             en qué productos, elige un mes.
@@ -74,9 +74,9 @@ export default function ReceiptsPage() {
 
       <section aria-labelledby="receipts-list-title" className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 id="receipts-list-title" className="text-lg font-bold first-letter:uppercase">
+          <h2 id="receipts-list-title" className="text-lg font-bold first-letter:uppercase">
             {month !== null ? `Recepciones de ${monthLabel(month)}` : 'Todas las recepciones'}
-          </h3>
+          </h2>
           {month !== null && (
             <Button variant="ghost" onClick={() => setMonth(null)}>
               <History className="mr-1 size-4" aria-hidden />
@@ -119,12 +119,12 @@ function MonthView({
           >
             <ChevronLeft className="size-4" aria-hidden />
           </Button>
-          <h3
+          <h2
             id="month-summary-title"
             className="text-center text-sm font-semibold first-letter:uppercase"
           >
             {monthLabel(month)}
-          </h3>
+          </h2>
           <Button
             variant="outline"
             size="icon"
@@ -241,9 +241,9 @@ function ProductBreakdown({
   return (
     <section aria-labelledby={titleId} className="flex flex-col gap-3">
       <div className="flex flex-col gap-0.5">
-        <h3 id={titleId} className="text-lg font-bold">
+        <h2 id={titleId} className="text-lg font-bold">
           {title}
-        </h3>
+        </h2>
         <p className="text-sm text-[var(--muted-foreground)]">
           En qué compraste y cuánto de cada uno, al contado o al crédito. El costo unitario es un
           cálculo: monto de la compra ÷ cantidad recibida.

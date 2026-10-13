@@ -6,6 +6,7 @@ import { RecoveryCodeNotice } from '@/components/auth/recovery-code-notice';
 import { BrandEmblem } from '@/components/brand/brand-mark';
 import { FormError } from '@/components/customers/form-error';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { DocumentTitle } from '@/components/ui/document-title';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api/client';
@@ -78,6 +79,7 @@ export default function RecoverPasswordPage() {
   return (
     <div className="flex flex-1 flex-col justify-center gap-6">
       <div className="flex flex-col items-center gap-3 text-center">
+        <DocumentTitle title="Recuperar contraseña" />
         <BrandEmblem size={112} priority />
         <div className="flex flex-col gap-0.5">
           <h1 className="text-[1.75rem] leading-tight font-bold">Recuperar contraseña</h1>

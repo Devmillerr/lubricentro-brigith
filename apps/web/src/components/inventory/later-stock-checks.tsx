@@ -36,9 +36,9 @@ export function LaterStockChecks({
       aria-labelledby="later-stock-title"
     >
       <div className="flex flex-col gap-1">
-        <h3 id="later-stock-title" className="text-base font-semibold">
+        <h2 id="later-stock-title" className="font-sans text-base font-semibold">
           Hubo conteos después de esta fecha
-        </h3>
+        </h2>
         <p className="text-sm text-[var(--muted-foreground)]">
           Después de la fecha de esta recepción se contó o ajustó el stock de estos productos.
           Indica, para cada uno, si la mercadería ya estaba en ese conteo. Todavía no se guardó

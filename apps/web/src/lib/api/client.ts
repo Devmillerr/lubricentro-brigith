@@ -19,6 +19,13 @@ export type Schemas = components['schemas'];
 /** Rutas que no llevan Bearer ni se reintentan tras renovar. */
 const WITHOUT_SESSION = new Set(['/auth/login', '/auth/refresh', '/auth/recover']);
 
+/**
+ * Llevan Bearer pero no se reintentan solas tras renovar: el reintento reenvía
+ * el mismo cuerpo, y el de `/auth/logout` es el token de refresco que la
+ * renovación acaba de rotar (lo maneja `logout()` en lib/auth/session.ts).
+ */
+const WITHOUT_AUTO_RETRY = new Set(['/auth/logout']);
+
 const sessionExpiredListeners = new Set<() => void>();
 
 /** Se dispara cuando la API rechaza el token de refresco: hay que volver a iniciar sesión. */
@@ -86,6 +93,7 @@ const sessionMiddleware: Middleware = {
     if (WITHOUT_SESSION.has(schemaPath)) return undefined;
     const accessToken = readTokens()?.accessToken ?? null;
     if (accessToken) request.headers.set('Authorization', `Bearer ${accessToken}`);
+    if (WITHOUT_AUTO_RETRY.has(schemaPath)) return request;
     pendingRequests.set(id, { retry: request.clone(), accessToken });
     return request;
   },

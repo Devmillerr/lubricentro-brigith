@@ -14,6 +14,7 @@ import { useApiQuery } from '@/lib/api/use-api-query';
 import { customerTitle, present, vehicleModelLabel } from '@/lib/customers/format';
 import { formatDate, formatKm } from '@/lib/maintenance/format';
 import { STATUS_LABELS } from '@/lib/reminders/format';
+import { searchOnEnter } from '@/lib/enter-key';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
 
 type LookupItem = Schemas['VehicleLookupResponse'];
@@ -58,6 +59,7 @@ export function PlateSearch() {
           type="search"
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onKeyDown={searchOnEnter}
           placeholder="Buscar placa, ej. ABC-123"
           maxLength={20}
           autoCapitalize="characters"

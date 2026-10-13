@@ -214,7 +214,7 @@ Cobro de mantenimiento, anulación conjunta y mantenimiento sin vehículo (DEC-3
 | `MAINTENANCE_ALREADY_VOIDED` | 409 | Segunda anulación del mismo mantenimiento (Corte 0, DEC-77) |
 | `SALE_MANAGED_BY_MAINTENANCE` | 409 | `POST /sales/:id/void` sobre una venta con `source = MAINTENANCE` (DEC-70) |
 
-**Deuda técnica (DEC-76):** R6 usa el `IdempotencyService` actual. La atomicidad entre la reserva de la clave y el efecto (hallazgo A2) no se resuelve en R6; queda como corte separado.
+**Deuda técnica (DEC-76), resuelta (PWA, 2026-10-12):** la reserva de la clave, el efecto y la respuesta guardada van en **una sola transacción** (hallazgo A2). El servicio del dominio se une a la transacción de `IdempotencyService` (`runInAmbientTransaction`, `prisma/business-scope.ts`), así que si algo falla después de escribir (o la función se corta), se deshace todo y el reintento con la misma clave corre limpio. Una petición concurrente con la misma clave espera en el índice único y devuelve la respuesta de la primera. `IDEMPOTENCY_KEY_IN_PROGRESS` solo queda para reservas sin respuesta de la versión anterior. Pruebas: `test/integration/idempotency-atomic.int-spec.ts` (venta, recepción a crédito, pago, concurrencia).
 
 ### Recordatorios y WhatsApp
 | Método | Ruta | Descripción |
@@ -375,7 +375,7 @@ Crea una venta completa en una sola transacción. Requiere `Idempotency-Key`.
 - **Stock insuficiente: `BLOCK` fijo (DEC-26).** Si un producto **con conteo inicial** quedaría con saldo negativo, responde **422 `INSUFFICIENT_STOCK`** con el producto, su saldo y la cantidad pedida, y **no se guarda nada**: ni la venta, ni las líneas, ni los movimientos. La venta no lee `Business.insufficientStockPolicy` y no existe la opción de "confirmar igual".
 - Producto **sin conteo inicial**: se vende y se registra el `SALE`, sin evaluar el saldo, con el aviso `PRODUCT_NOT_COUNTED` (DEC-27).
 
-**Idempotencia:** la misma `Idempotency-Key` con el mismo cuerpo devuelve la respuesta original sin crear otra venta. La misma clave con otro cuerpo: 409 `IDEMPOTENCY_KEY_REUSED`. Mientras la primera petición sigue en curso: 409 `IDEMPOTENCY_KEY_IN_PROGRESS`. Sin la cabecera: 400 `IDEMPOTENCY_KEY_REQUIRED`.
+**Idempotencia:** la misma `Idempotency-Key` con el mismo cuerpo devuelve la respuesta original sin crear otra venta. La misma clave con otro cuerpo: 409 `IDEMPOTENCY_KEY_REUSED`. Si la primera petición sigue en curso, la segunda espera a que termine y devuelve su respuesta (409 `IDEMPOTENCY_KEY_IN_PROGRESS` solo para reservas antiguas sin respuesta). Sin la cabecera: 400 `IDEMPOTENCY_KEY_REQUIRED`.
 
 **Response:** 201 `CreateSaleResult` = `SaleResponse` + `warnings[]`. Cada aviso tiene la misma forma que en mantenimiento: `{ code, message, productId }`. En R4 el único aviso es `PRODUCT_NOT_COUNTED`.
 

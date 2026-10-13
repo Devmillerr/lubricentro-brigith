@@ -135,7 +135,7 @@ export function CompatibilitiesSection({ productId }: { productId: string }) {
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-10 px-3"
+                    className="h-11 px-3"
                     onClick={() => handleRemove(model.id)}
                     disabled={removingId !== null}
                     aria-label={`Quitar compatibilidad con ${vehicleModelLabel(model)}`}

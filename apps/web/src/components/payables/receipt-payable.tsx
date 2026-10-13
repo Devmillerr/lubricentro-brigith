@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import { FormError } from '@/components/customers/form-error';
+import { PayableStatusBadge } from './payable-status-badge';
 import { Button } from '@/components/ui/button';
 import { Field, Select } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -13,8 +14,6 @@ import type { InventoryReceipt } from '@/lib/inventory/receipts';
 import { parsePrice } from '@/lib/sales/format';
 import {
   DEFAULT_TERM_DAYS,
-  STATUS_CLASSES,
-  STATUS_LABELS,
   addDaysTo,
   formatAmount,
   formatDay,
@@ -49,11 +48,7 @@ export function ReceiptPayable({
       <section className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
         <h3 className="text-base font-semibold">Deuda con el proveedor</h3>
         <div className="flex items-center justify-between gap-3">
-          <span
-            className={`rounded px-1.5 py-0.5 text-xs font-medium ${STATUS_CLASSES[payable.status]}`}
-          >
-            {STATUS_LABELS[payable.status]}
-          </span>
+          <PayableStatusBadge status={payable.status} />
           <span className="text-lg font-bold">
             {formatAmount(payable.balance, payable.currency)}
           </span>

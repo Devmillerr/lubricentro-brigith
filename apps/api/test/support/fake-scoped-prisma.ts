@@ -298,7 +298,25 @@ export function buildFakeScopedPrisma(
     }) {
       const operations = config.query.$allModels.$allOperations;
       const client: Record<string, unknown> = {
-        $transaction: (callback: (tx: unknown) => Promise<unknown>) => callback(client),
+        // Como Postgres: si el callback falla, se deshace todo lo que escribió.
+        $transaction: async (callback: (tx: unknown) => Promise<unknown>) => {
+          const snapshot = new Map(
+            [...stores].map(([name, store]) => [
+              name,
+              new Map([...store].map(([id, record]) => [id, { ...record }])),
+            ]),
+          );
+          try {
+            return await callback(client);
+          } catch (error) {
+            for (const [name, saved] of snapshot) {
+              const store = stores.get(name)!;
+              store.clear();
+              saved.forEach((record, id) => store.set(id, record));
+            }
+            throw error;
+          }
+        },
         $queryRaw: () => Promise.resolve([]),
       };
 

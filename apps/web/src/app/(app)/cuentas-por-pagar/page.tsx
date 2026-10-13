@@ -3,20 +3,15 @@
 import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { PayableStatusBadge } from '@/components/payables/payable-status-badge';
+import { Chip, ChipRow } from '@/components/ui/chip';
 import { Select } from '@/components/ui/field';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/states';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
-import {
-  STATUS_CLASSES,
-  STATUS_LABELS,
-  daysUntil,
-  formatAmount,
-  formatDay,
-  type Payable,
-} from '@/lib/payables/format';
+import { daysUntil, formatAmount, formatDay, type Payable } from '@/lib/payables/format';
 
 const FILTERS = [
   { value: 'OPEN', label: 'Por pagar' },
@@ -49,7 +44,11 @@ export default function PayablesPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Cuentas por pagar" subtitle="Lo que debes a tus proveedores" />
+      <PageHeader
+        title="Cuentas por pagar"
+        subtitle="Lo que debes a tus proveedores"
+        back={{ href: '/mas', label: 'Más' }}
+      />
 
       {summary.status === 'success' && summary.data.currencies.length > 0 && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -80,25 +79,20 @@ export default function PayablesPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Estado">
+      {/* Chips con scroll horizontal arriba y proveedor debajo: sin desbordar en 360 px. */}
+      <div className="flex flex-col gap-3">
+        <ChipRow label="Estado">
           {FILTERS.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              onClick={() => setFilter(f.value)}
-              aria-pressed={filter === f.value}
-              className="min-h-11 rounded-full border border-[var(--border)] px-4 text-sm aria-pressed:border-[var(--primary)] aria-pressed:bg-[var(--primary)] aria-pressed:text-[var(--primary-foreground)]"
-            >
+            <Chip key={f.value} selected={filter === f.value} onClick={() => setFilter(f.value)}>
               {f.label}
-            </button>
+            </Chip>
           ))}
-        </div>
+        </ChipRow>
         <Select
           aria-label="Proveedor"
           value={supplierId}
           onChange={(e) => setSupplierId(e.target.value)}
-          className="sm:ml-auto sm:w-64"
+          className="sm:w-64"
         >
           <option value="">Todos los proveedores</option>
           {suppliers.status === 'success' &&
@@ -156,11 +150,7 @@ function PayableRow({ payable, today }: { payable: Payable; today: string | null
               days < 0 &&
               ` (hace ${-days} ${days === -1 ? 'día' : 'días'})`}
           </span>
-          <span
-            className={`self-start rounded px-1.5 py-0.5 text-xs font-medium ${STATUS_CLASSES[payable.status]}`}
-          >
-            {STATUS_LABELS[payable.status]}
-          </span>
+          <PayableStatusBadge status={payable.status} className="self-start" />
         </span>
         <span className="flex shrink-0 flex-col items-end">
           <span className="font-semibold">{formatAmount(payable.balance, payable.currency)}</span>

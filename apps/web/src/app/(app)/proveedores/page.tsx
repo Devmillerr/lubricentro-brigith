@@ -45,7 +45,13 @@ export default function SuppliersPage() {
     return true;
   }
 
-  const header = <PageHeader title="Proveedores" subtitle="A quién le compras la mercadería" />;
+  const header = (
+    <PageHeader
+      title="Proveedores"
+      subtitle="A quién le compras la mercadería"
+      back={{ href: '/mas', label: 'Más' }}
+    />
+  );
 
   if (query.status === 'loading') {
     return (
@@ -205,6 +211,7 @@ function SupplierRow({
           <Field id={`tax-${supplier.id}`} label="RUC" optional>
             <Input
               id={`tax-${supplier.id}`}
+              inputMode="numeric"
               value={taxId}
               onChange={(e) => setTaxId(e.target.value)}
               maxLength={20}
@@ -214,6 +221,7 @@ function SupplierRow({
           <Field id={`phone-${supplier.id}`} label="Teléfono" optional>
             <Input
               id={`phone-${supplier.id}`}
+              inputMode="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               maxLength={50}

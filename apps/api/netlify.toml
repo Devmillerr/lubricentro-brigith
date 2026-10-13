@@ -1,0 +1,48 @@
+# API de BRIGITH como Netlify Function (plan Free). En Netlify, "Base directory" = apps/api.
+# Equivale a vercel.json: una sola función con toda la API Nest y un cron diario a /health.
+# Variables de entorno: solo en el panel de Netlify, nunca en el repositorio (ver .env.example).
+
+[build]
+  # prisma generate + nest build + esbuild (dist/serverless.cjs). `publish` solo lleva robots.txt.
+  command = "pnpm build:netlify"
+  publish = "dist/static"
+  # Cada deploy de producción cuesta 15 de los 300 créditos mensuales del plan Free.
+  # Se salta el build si el commit no toca la API ni sus dependencias (salida 0 = saltar).
+  # Si es el mismo commit (primer deploy o redeploy manual), sí se construye.
+  ignore = "[ \"$CACHED_COMMIT_REF\" != \"$COMMIT_REF\" ] && git diff --quiet \"$CACHED_COMMIT_REF\" \"$COMMIT_REF\" -- . ../../pnpm-lock.yaml ../../package.json ../../pnpm-workspace.yaml"
+
+[build.environment]
+  NODE_VERSION = "22"
+  CHECKPOINT_DISABLE = "1"
+
+[functions]
+  directory = "netlify/functions"
+  # nft rastrea los require() del bundle (argon2, Prisma, pg, class-validator…).
+  node_bundler = "nft"
+  # Lo que nft no ve por ser cargas dinámicas: el cliente Prisma generado (WASM del
+  # query compiler) y los prebuilds de argon2 para Linux x64 (glibc y musl).
+  included_files = [
+    "dist/serverless.cjs",
+    "node_modules/.prisma/client/**",
+    "node_modules/argon2/prebuilds/linux-x64/**",
+  ]
+
+# Toda la API (prefijo /api/v1) y /health van a la función `api`; la ruta
+# original llega en event.path.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/health"
+  to = "/.netlify/functions/api/health"
+  status = 200
+  force = true
+
+# Cron diario (13:00 UTC = 08:00 en Lima), igual que en vercel.json.
+[functions."keepalive"]
+  schedule = "0 13 * * *"
+
+# Memoria: por defecto 1024 MB. No se sube: el cómputo se cobra en créditos por GB-hora.

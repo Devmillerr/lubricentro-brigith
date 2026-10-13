@@ -22,7 +22,12 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
 
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[15rem_minmax(0,1fr)]">
-      <aside className="sticky top-0 hidden h-dvh flex-col border-r border-[var(--border)] bg-[var(--surface)] md:flex">
+      {/*
+       * Márgenes seguros (iPhone con muesca, sobre todo en horizontal): la barra
+       * lateral toma el izquierdo y el contenido el derecho. Con env() = 0 todo
+       * queda igual que sin ellos. `--gutter-l/r` lo reutiliza StickyActionBar.
+       */}
+      <aside className="sticky top-0 hidden h-dvh flex-col overflow-y-auto border-r border-[var(--border)] bg-[var(--surface)] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] md:flex">
         <div className="h-1 shrink-0 bg-[var(--brand)]" aria-hidden />
         <div className="border-b border-[var(--border)] px-4 py-4">
           <BrandLockup subtitle={businessSubtitle(me.business.name)} emblemSize={52} />
@@ -39,7 +44,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
       </aside>
 
       <div className="flex min-h-dvh min-w-0 flex-col">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-3 border-t-4 border-b border-t-[var(--brand)] border-b-[var(--border)] bg-[var(--surface)] px-4 md:h-14 md:border-t-0 md:px-8">
+        <header className="sticky top-0 z-10 flex h-[calc(4rem+env(safe-area-inset-top))] items-center justify-between gap-3 border-t-4 border-b border-t-[var(--brand)] border-b-[var(--border)] bg-[var(--surface)] pt-[env(safe-area-inset-top)] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:h-[calc(3.5rem+env(safe-area-inset-top))] md:border-t-0 md:pr-[max(2rem,env(safe-area-inset-right))] md:pl-8">
           <BrandLockup
             subtitle={businessSubtitle(me.business.name)}
             emblemSize={44}
@@ -47,7 +52,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           />
           {/* Sección activa (escritorio). No es un encabezado: el título de cada pantalla es su h1. */}
           <p className="hidden font-display text-xl font-bold md:block">
-            {current?.label ?? 'Brigith'}
+            {current?.label ?? 'BRIGITH'}
           </p>
           <div className="flex items-center gap-1 md:hidden">
             <span className="max-w-[8rem] truncate text-sm font-medium text-[var(--muted-foreground)]">
@@ -57,13 +62,13 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 pt-5 pb-28 md:px-8 md:pt-8 md:pb-10">
+        <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col pt-5 pr-[var(--gutter-r)] pb-[max(7rem,calc(5rem+env(safe-area-inset-bottom)))] pl-[var(--gutter-l)] [--gutter-l:max(1rem,env(safe-area-inset-left))] [--gutter-r:max(1rem,env(safe-area-inset-right))] md:pt-8 md:pb-[max(2.5rem,env(safe-area-inset-bottom))] md:[--gutter-l:2rem] md:[--gutter-r:max(2rem,env(safe-area-inset-right))]">
           {children}
         </main>
 
         <nav
           aria-label="Principal"
-          className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-4 border-t border-[var(--border)] bg-[var(--surface)] pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgb(0_0_0/0.05)] md:hidden"
+          className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-4 border-t border-[var(--border)] bg-[var(--surface)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] shadow-[0_-4px_16px_rgb(0_0_0/0.05)] md:hidden"
         >
           {NAV_ITEMS.map((item) => (
             <BottomTab key={item.label} item={item} active={isActive(item, pathname)} />
