@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { FormError } from '@/components/customers/form-error';
 import { ReceiptProductPicker } from '@/components/inventory/receipt-product-picker';
 import { StockHint } from '@/components/maintenance/product-picker';
+import { StickyActionBar } from '@/components/ui/action-bar';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { BucketGauge, hasContainer } from '@/components/products/bucket-gauge';
@@ -30,6 +31,7 @@ import {
 } from '@/lib/sales/format';
 import { equivalenceLabel, fitsStockDecimals, stockFor, type SaleUnit } from '@/lib/products/units';
 import { cn } from '@/lib/utils';
+import { blockEnterSubmit } from '@/lib/enter-key';
 import { useSubmitLock } from '@/lib/use-submit-lock';
 
 export type CreateSaleResult = Schemas['CreateSaleResponse'];
@@ -281,6 +283,7 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
   return (
     <form
       onSubmit={handleSubmit}
+      onKeyDown={blockEnterSubmit}
       noValidate
       className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_24rem] md:items-start"
     >
@@ -292,7 +295,8 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
         />
       </Section>
 
-      <div className="flex flex-col gap-6">
+      {/* En el teléfono, `contents`: la barra de Cobrar acompaña a todo el formulario. */}
+      <div className="contents md:flex md:flex-col md:gap-6">
         <Section title={lines.length ? `Venta · ${countLabel(lines.length)}` : 'Venta'}>
           {lines.length === 0 ? (
             <p className="rounded-lg border border-dashed border-[var(--border)] px-4 py-6 text-center text-sm text-[var(--muted-foreground)]">
@@ -361,21 +365,25 @@ export function SaleForm({ onSaved }: { onSaved: (result: CreateSaleResult) => v
           </Field>
         </Section>
 
-        {formError && <FormError>{formError}</FormError>}
-        {failure && (
-          <FormError>
-            {/* El total lo calcula la API y no tiene campo propio en el formulario. */}
-            {failure.fieldErrors.total ?? failureMessage(failure, ERROR_MESSAGES)}
-          </FormError>
-        )}
-
-        <Button type="submit" size="lg" disabled={submitting}>
-          {submitting
-            ? 'Cobrando…'
-            : lines.length > 0 && allPriced
-              ? `Cobrar ${formatCents(totalCents)}`
-              : 'Cobrar'}
-        </Button>
+        <StickyActionBar
+          action={
+            <Button type="submit" size="lg" disabled={submitting}>
+              {submitting
+                ? 'Cobrando…'
+                : lines.length > 0 && allPriced
+                  ? `Cobrar ${formatCents(totalCents)}`
+                  : 'Cobrar'}
+            </Button>
+          }
+        >
+          {formError && <FormError>{formError}</FormError>}
+          {failure && (
+            <FormError>
+              {/* El total lo calcula la API y no tiene campo propio en el formulario. */}
+              {failure.fieldErrors.total ?? failureMessage(failure, ERROR_MESSAGES)}
+            </FormError>
+          )}
+        </StickyActionBar>
       </div>
     </form>
   );
@@ -388,7 +396,7 @@ function countLabel(count: number): string {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold">{title}</h3>
+      <h2 className="font-sans text-base font-semibold">{title}</h2>
       {children}
     </section>
   );
@@ -439,7 +447,7 @@ function LineRow({
         <Button
           type="button"
           variant="outline"
-          className="h-10 w-10 shrink-0 px-0"
+          className="h-11 w-11 shrink-0 px-0"
           onClick={onRemove}
           aria-label={`Quitar ${product.name}`}
         >
@@ -448,7 +456,7 @@ function LineRow({
       </div>
       {withUnits && (
         <div className="flex flex-col gap-1.5">
-          <span id={`${line.key}-units`} className="text-xs text-[var(--muted-foreground)]">
+          <span id={`${line.key}-units`} className="text-sm text-[var(--muted-foreground)]">
             ¿Cómo lo vendes?
           </span>
           <div role="group" aria-labelledby={`${line.key}-units`} className="flex flex-wrap gap-2">
@@ -503,7 +511,7 @@ function LineRow({
       )}
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex flex-col gap-1">
-          <label htmlFor={quantityId} className="text-xs text-[var(--muted-foreground)]">
+          <label htmlFor={quantityId} className="text-sm text-[var(--muted-foreground)]">
             {saleUnit ? `Cuántas (${quantityLabel})` : `Cantidad (${quantityLabel})`}
           </label>
           <div className="flex items-center gap-1">
@@ -540,7 +548,7 @@ function LineRow({
         </div>
         {!saleUnit && (
           <div className="flex flex-col gap-1">
-            <label htmlFor={priceId} className="text-xs text-[var(--muted-foreground)]">
+            <label htmlFor={priceId} className="text-sm text-[var(--muted-foreground)]">
               Precio (S/)
             </label>
             <Input
@@ -557,7 +565,7 @@ function LineRow({
           </div>
         )}
         <div className="ml-auto flex flex-col items-end gap-1">
-          <span className="text-xs text-[var(--muted-foreground)]">Subtotal</span>
+          <span className="text-sm text-[var(--muted-foreground)]">Subtotal</span>
           <span className="flex h-11 items-center font-semibold">
             {quantity !== null && price !== null
               ? formatCents(subtotalCents(quantity, price))

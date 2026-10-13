@@ -246,7 +246,7 @@ export function SettingsForm({ business: initial }: { business: Business }) {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-lg font-bold">{title}</h3>
+      <h2 className="text-lg font-bold">{title}</h2>
       {children}
     </section>
   );

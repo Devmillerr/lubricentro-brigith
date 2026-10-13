@@ -85,7 +85,7 @@ export function IndicatorsView({ indicators }: { indicators: PilotIndicators }) 
 function IndicatorSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-lg font-bold">{title}</h3>
+      <h2 className="text-lg font-bold">{title}</h2>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{children}</div>
     </section>
   );

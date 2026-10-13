@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { PrismaService } from './prisma.service';
 
 /**
@@ -52,11 +53,23 @@ type DataArgs = { data?: Record<string, unknown> };
  * y permitirlo sería el hueco de aislamiento exacto que esto existe para cerrar.
  * Usa `findFirst({ where: { id, ... } })` en su lugar.
  */
-export function forBusiness(prisma: PrismaService, businessId: string) {
+export function forBusiness(prisma: PrismaService, businessId: string): ScopedPrismaClient {
   if (!businessId) {
     throw new Error('forBusiness requiere un businessId no vacío');
   }
 
+  const ambient = ambientTransaction.getStore();
+  if (ambient) {
+    if (ambient.businessId !== businessId) {
+      throw new Error('forBusiness: otro negocio dentro de una transacción ambiente');
+    }
+    return joinAmbientTransaction(ambient.tx);
+  }
+
+  return scopedClient(prisma, businessId);
+}
+
+function scopedClient(prisma: PrismaService, businessId: string) {
   return prisma.$extends({
     name: 'business-scope',
     query: {
@@ -108,7 +121,45 @@ export function forBusiness(prisma: PrismaService, businessId: string) {
   });
 }
 
-export type ScopedPrismaClient = ReturnType<typeof forBusiness>;
+export type ScopedPrismaClient = ReturnType<typeof scopedClient>;
 
 /** Cliente de una transacción interactiva abierta con `forBusiness(...).$transaction`. */
 export type ScopedTransaction = Parameters<Parameters<ScopedPrismaClient['$transaction']>[0]>[0];
+
+/**
+ * Transacción "ambiente": mientras corre {@link runInAmbientTransaction},
+ * todo `forBusiness(prisma, businessId)` del mismo negocio devuelve esa
+ * transacción, y su `$transaction(cb)` corre `cb` dentro de ella en vez de
+ * abrir otra. La usa `IdempotencyService`: la reserva de la clave, el efecto
+ * (venta, recepción, pago…) y la respuesta guardada se confirman juntos o no
+ * se confirma nada, sin cambiar cada servicio.
+ */
+const ambientTransaction = new AsyncLocalStorage<{
+  businessId: string;
+  tx: ScopedTransaction;
+}>();
+
+export function runInAmbientTransaction<T>(
+  businessId: string,
+  tx: ScopedTransaction,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return ambientTransaction.run({ businessId, tx }, fn);
+}
+
+function joinAmbientTransaction(tx: ScopedTransaction): ScopedPrismaClient {
+  const joinedTransaction = (arg: unknown): Promise<unknown> =>
+    typeof arg === 'function'
+      ? (arg as (client: ScopedTransaction) => Promise<unknown>)(tx)
+      : Promise.all(arg as Promise<unknown>[]);
+
+  return new Proxy(tx, {
+    get(target, prop): unknown {
+      if (prop === '$transaction') return joinedTransaction;
+      const value: unknown = Reflect.get(target, prop);
+      if (typeof value !== 'function') return value;
+      const method = value as (...args: unknown[]) => unknown;
+      return method.bind(target);
+    },
+  }) as unknown as ScopedPrismaClient;
+}

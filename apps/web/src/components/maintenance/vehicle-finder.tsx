@@ -12,6 +12,7 @@ import { api, type Schemas } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
 import { customerTitle, present, vehicleModelLabel } from '@/lib/customers/format';
+import { searchOnEnter } from '@/lib/enter-key';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
 
 type LookupItem = Schemas['VehicleLookupResponse'];
@@ -72,9 +73,9 @@ export function VehicleFinder() {
 
   return (
     <section className="flex flex-col gap-3" aria-labelledby="vehicle-finder-title">
-      <h3 id="vehicle-finder-title" className="text-lg font-bold">
+      <h2 id="vehicle-finder-title" className="font-sans text-lg font-bold">
         ¿Qué vehículo?
-      </h3>
+      </h2>
       <label htmlFor="vehicle-finder" className="sr-only">
         Buscar por placa o por cliente
       </label>
@@ -88,6 +89,7 @@ export function VehicleFinder() {
           type="search"
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onKeyDown={searchOnEnter}
           placeholder="Placa o nombre del cliente"
           maxLength={60}
           autoComplete="off"
@@ -115,7 +117,7 @@ export function VehicleFinder() {
 
           {vehicleItems.length > 0 && (
             <div className="flex flex-col gap-2">
-              <h4 className="text-sm font-semibold text-[var(--muted-foreground)]">Vehículos</h4>
+              <h3 className="text-sm font-semibold text-[var(--muted-foreground)]">Vehículos</h3>
               <ul className="flex flex-col gap-2">
                 {vehicleItems.map((item) => (
                   <li key={item.id}>
@@ -128,7 +130,7 @@ export function VehicleFinder() {
 
           {customerItems.length > 0 && (
             <div className="flex flex-col gap-2">
-              <h4 className="text-sm font-semibold text-[var(--muted-foreground)]">Clientes</h4>
+              <h3 className="text-sm font-semibold text-[var(--muted-foreground)]">Clientes</h3>
               <ul className="flex flex-col gap-2">
                 {customerItems.map((customer) => (
                   <li key={customer.id}>

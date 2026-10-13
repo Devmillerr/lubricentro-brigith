@@ -92,9 +92,9 @@ export default function DashboardPage() {
       <section aria-labelledby="period-title" className="flex flex-col gap-3">
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-3">
-            <h3 id="period-title" className="text-lg font-bold">
+            <h2 id="period-title" className="font-sans text-lg font-bold">
               Resumen
-            </h3>
+            </h2>
             <RefreshIndicator
               refreshing={dashboard.status === 'loading' && data !== undefined}
               onRefresh={reload}
@@ -180,7 +180,7 @@ function ActionTile({
   return (
     <Link
       href={href}
-      className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-0.5 text-[var(--foreground)] transition-[background-color,transform] hover:bg-[var(--muted)] active:scale-[0.97]"
+      className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-0.5 text-[var(--foreground)] transition-[background-color,transform] hover:bg-[var(--muted)] motion-safe:active:scale-[0.97]"
     >
       <Icon className="size-6 shrink-0 text-[var(--brand)]" aria-hidden />
       <span className="w-full truncate text-center text-xs leading-tight font-semibold tracking-tight">

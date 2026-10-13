@@ -50,3 +50,7 @@ AGENTS.md
 .cursorrules
 .cursor/
 .github/copilot-instructions.md
+
+# Netlify y Cloudflare (Wrangler): carpetas locales de sus CLI
+.netlify/
+.wrangler/

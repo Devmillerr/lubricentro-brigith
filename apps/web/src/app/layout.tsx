@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Barlow, Barlow_Condensed } from 'next/font/google';
 import type { ReactNode } from 'react';
+import { preconnect } from 'react-dom';
 import { ConnectivityProvider, OfflineBanner } from '@/lib/connectivity';
 import { RegisterServiceWorker } from './register-sw';
 import './globals.css';
@@ -19,10 +20,19 @@ const barlowCondensed = Barlow_Condensed({
   display: 'swap',
 });
 
+// El manifiesto sale de app/manifest.ts (Next agrega el <link> solo).
 export const metadata: Metadata = {
-  title: 'Brigith',
-  description: 'Registro de clientes, vehículos y mantenimientos del lubricentro.',
-  manifest: '/manifest.webmanifest',
+  title: 'BRIGITH',
+  applicationName: 'BRIGITH',
+  description:
+    'Ventas, lavados, mantenimientos, inventario, compras y clientes del lubricentro BRIGITH.',
+  // iPhone/iPad: "Añadir a pantalla de inicio" abre a pantalla completa con
+  // este nombre; la barra de estado sigue el color del header.
+  appleWebApp: { capable: true, title: 'BRIGITH', statusBarStyle: 'default' },
+  // Safari no convierte placas, RUC ni montos en enlaces de llamada.
+  formatDetection: { telephone: false, email: false, address: false },
+  // Next solo emite `mobile-web-app-capable`; iOS anteriores a 16.4 leen esta.
+  other: { 'apple-mobile-web-app-capable': 'yes' },
 };
 
 export const viewport: Viewport = {
@@ -38,7 +48,21 @@ export const viewport: Viewport = {
   ],
 };
 
+/** Origen de la API (otro dominio): se abre la conexión antes de que la app la pida. */
+function apiOrigin(): string | null {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_API_URL ?? '').origin;
+  } catch {
+    return null;
+  }
+}
+
 export default function RootLayout({ children }: { children: ReactNode }) {
+  // Toda pantalla con sesión empieza con `/auth/me` contra la API: precalentar
+  // DNS + TCP + TLS ahorra un viaje de red en móvil. Sin `crossOrigin` porque
+  // el cliente usa `credentials: 'include'` (conexión con credenciales).
+  const api = apiOrigin();
+  if (api) preconnect(api);
   return (
     <html lang="es" className={`${barlow.variable} ${barlowCondensed.variable}`}>
       <body className="min-h-dvh">

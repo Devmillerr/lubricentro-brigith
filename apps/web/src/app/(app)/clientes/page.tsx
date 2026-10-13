@@ -12,6 +12,7 @@ import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
 import { customerTitle, present, type Customer } from '@/lib/customers/format';
+import { searchOnEnter } from '@/lib/enter-key';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
 
 const PAGE_SIZE = 20;
@@ -93,6 +94,8 @@ export default function CustomersPage() {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={searchOnEnter}
+          enterKeyHint="search"
           placeholder="Buscar por nombre o teléfono"
           aria-label="Buscar clientes por nombre o teléfono"
           className="pl-9"

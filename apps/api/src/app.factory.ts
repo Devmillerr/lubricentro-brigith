@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter, type NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule } from '@nestjs/swagger';
+import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { applyGlobalPrefix, createOpenApiDocument } from './common/openapi/openapi-document';
 import { validationExceptionFactory } from './common/validation-exception-factory';
@@ -27,6 +28,22 @@ export async function createApp(): Promise<NestExpressApplication> {
   const trustProxy = config.get('TRUST_PROXY', { infer: true });
   if (trustProxy > 0) app.set('trust proxy', trustProxy);
 
+  app.disable('x-powered-by');
+  const isProduction = config.get('NODE_ENV', { infer: true }) === 'production';
+  app.use((_req: Request, res: Response, next: NextFunction) => {
+    // Las respuestas llevan datos del negocio: ni el navegador ni proxies las
+    // guardan (cerrar sesión no debe dejar ventas o deudas en una caché).
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('X-Frame-Options', 'DENY');
+    // La API solo devuelve JSON. Fuera de producción se omite para Swagger UI.
+    if (isProduction) {
+      res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+    }
+    next();
+  });
+
   applyGlobalPrefix(app);
 
   app.enableCors({
@@ -37,6 +54,10 @@ export async function createApp(): Promise<NestExpressApplication> {
     credentials: true,
     // La web lee `Retry-After` del 429 (DEC-86).
     exposedHeaders: ['Retry-After'],
+    // El navegador recuerda el preflight 2 h (el tope de Chrome): sin esto, cada
+    // petición con `Authorization` genera un OPTIONS extra (una invocación más de
+    // la función). Solo se cachea el permiso CORS, nunca datos.
+    maxAge: 7200,
   });
 
   app.useGlobalPipes(

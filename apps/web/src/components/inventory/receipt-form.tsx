@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { FormError } from '@/components/customers/form-error';
 import { StockHint } from '@/components/maintenance/product-picker';
+import { StickyActionBar } from '@/components/ui/action-bar';
 import { Button } from '@/components/ui/button';
 import { Field, Select, Textarea } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -41,6 +42,7 @@ import {
   formatDay,
   type Currency,
 } from '@/lib/payables/format';
+import { blockEnterSubmit } from '@/lib/enter-key';
 import { useSubmitLock } from '@/lib/use-submit-lock';
 
 interface Line {
@@ -428,6 +430,7 @@ export function ReceiptForm({
   return (
     <form
       onSubmit={handleSubmit}
+      onKeyDown={blockEnterSubmit}
       noValidate
       className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_22rem] md:items-start"
     >
@@ -435,7 +438,8 @@ export function ReceiptForm({
         <ReceiptProductPicker quantities={quantities} onAdd={addProduct} />
       </Section>
 
-      <div className="flex flex-col gap-6">
+      {/* En el teléfono, `contents`: la barra de Guardar acompaña a todo el formulario. */}
+      <div className="contents md:flex md:flex-col md:gap-6">
         <Section
           title={lines.length ? `Recibido · ${productCountLabel(lines.length)}` : 'Recibido'}
         >
@@ -711,9 +715,9 @@ export function ReceiptForm({
             className="flex flex-col gap-2 rounded-lg border border-[var(--accent)] bg-[var(--accent-soft)] p-3"
             aria-labelledby="duplicate-title"
           >
-            <h3 id="duplicate-title" className="text-base font-semibold">
+            <h2 id="duplicate-title" className="font-sans text-base font-semibold">
               ¿Ya registraste esta compra?
-            </h3>
+            </h2>
             <p className="text-sm">
               Hay otra recepción con los mismos productos y cantidades del{' '}
               {receiptDateFormat.format(new Date(duplicate.occurredAt))}. Todavía no se guardó nada.
@@ -738,19 +742,36 @@ export function ReceiptForm({
           </section>
         )}
 
-        {failure && <FormError>{failureMessage(failure, ERROR_MESSAGES)}</FormError>}
-
-        <Button
-          type="submit"
-          size="lg"
-          disabled={submitting || (!!duplicate && !acknowledgeDuplicate)}
+        <StickyActionBar
+          summary={
+            lines.length > 0
+              ? {
+                  label: credit ? 'Total de la compra' : 'Total pagado',
+                  value: linesWithCost > 0 ? formatAmount(costCents / 100, currency) : '—',
+                }
+              : undefined
+          }
+          action={
+            <Button
+              type="submit"
+              size="lg"
+              disabled={submitting || (!!duplicate && !acknowledgeDuplicate)}
+            >
+              {submitting
+                ? 'Guardando…'
+                : laterProducts
+                  ? 'Guardar con estas indicaciones'
+                  : 'Guardar recepción'}
+            </Button>
+          }
         >
-          {submitting
-            ? 'Guardando…'
-            : laterProducts
-              ? 'Guardar con estas indicaciones'
-              : 'Guardar recepción'}
-        </Button>
+          {failure && <FormError>{failureMessage(failure, ERROR_MESSAGES)}</FormError>}
+          {duplicate && !acknowledgeDuplicate && (
+            <p className="text-sm text-[var(--muted-foreground)] md:hidden">
+              Para guardar, revisa arriba el aviso de compra repetida.
+            </p>
+          )}
+        </StickyActionBar>
       </div>
     </form>
   );
@@ -759,7 +780,7 @@ export function ReceiptForm({
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold">{title}</h3>
+      <h2 className="font-sans text-base font-semibold">{title}</h2>
       {children}
     </section>
   );
@@ -807,7 +828,7 @@ function LineRow({
         <Button
           type="button"
           variant="outline"
-          className="h-10 w-10 shrink-0 px-0"
+          className="h-11 w-11 shrink-0 px-0"
           onClick={onRemove}
           aria-label={`Quitar ${product.name}`}
         >
@@ -853,7 +874,7 @@ function LineRow({
               key={unit.id}
               type="button"
               variant="outline"
-              className="h-10 px-3 text-sm"
+              className="h-11 px-3 text-sm"
               onClick={() => {
                 const current = parsed ?? 0;
                 // Si solo está el 1 inicial, el primer balde reemplaza ese 1.

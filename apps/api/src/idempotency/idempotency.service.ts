@@ -2,7 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { ProblemException } from '../common/exceptions/problem.exception';
-import { forBusiness } from '../prisma/business-scope';
+import { forBusiness, runInAmbientTransaction } from '../prisma/business-scope';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface IdempotentResult<T> {
@@ -10,31 +10,35 @@ export interface IdempotentResult<T> {
   body: T;
 }
 
-const MAX_WAIT_ATTEMPTS = 20;
-const POLL_INTERVAL_MS = 150;
+/** Reintentos si la dueña de la clave se deshizo justo cuando la leíamos. */
+const MAX_ATTEMPTS = 5;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+/**
+ * Límites de la transacción que envuelve la operación: esperar un hueco en
+ * el pool y duración total (Prisma usa 2 s y 5 s por defecto).
+ */
+const TRANSACTION_OPTIONS = { maxWait: 5_000, timeout: 20_000 };
 
 /**
  * Mecanismo de idempotencia para escrituras críticas (04-ARCHITECTURE.md §7.3,
  * 06-API.md §1). Repetir la misma `Idempotency-Key` con el mismo cuerpo
  * devuelve la respuesta original en vez de repetir el efecto.
  *
- * La fila se **inserta antes** de correr `handler()`, con `responseStatus`/
- * `responseBody` nulos ("en curso"). El `@@unique([businessId, key,
- * endpoint])` es quien de verdad impide que dos peticiones concurrentes con
- * la misma clave ejecuten el efecto dos veces: solo una puede insertar: esa
- * es la dueña y corre el handler; la otra choca con el unique, espera a que
- * la dueña termine (sondeo corto) y replica su resultado. Antes de este
- * cambio, el flujo era leer-y-luego-escribir (TOCTOU): dos peticiones
- * casi simultáneas podían pasar la lectura antes de que ninguna hubiera
- * escrito nada, y ambas ejecutaban el handler completo (auditoría, A-1).
+ * Todo ocurre en **una sola transacción**: se inserta la reserva de la clave,
+ * corre `handler()` (el servicio se une a esta transacción, ver
+ * `runInAmbientTransaction` en prisma/business-scope.ts) y se guarda la
+ * respuesta. Se confirma todo junto o nada:
+ * - Si el handler falla, o el proceso muere (función serverless cortada,
+ *   red), la base deshace la venta/recepción/pago **y** la reserva: un
+ *   reintento con la misma clave corre limpio.
+ * - Una reserva confirmada siempre tiene su respuesta: ya no puede quedar una
+ *   fila "en curso" para siempre si se cae el paso que guardaba la respuesta.
  *
- * Si el handler falla, la fila se borra: una escritura fallida no debe
- * bloquear un reintento legítimo con la misma clave (mismo comportamiento
- * que antes, donde una falla nunca llegaba a crear el registro).
+ * Concurrencia: el `@@unique([businessId, key, endpoint])` decide. Si otra
+ * petición con la misma clave está en curso, Postgres hace esperar nuestro
+ * INSERT hasta que la otra termine; si la otra confirmó, chocamos (P2002) y
+ * devolvemos su respuesta guardada; si se deshizo, reintentamos y somos la
+ * dueña. Nunca corren dos efectos para la misma clave.
  */
 @Injectable()
 export class IdempotencyService {
@@ -55,69 +59,60 @@ export class IdempotencyService {
   }): Promise<IdempotentResult<T> & { replayed: boolean }> {
     const scoped = forBusiness(this.prisma, params.businessId);
 
-    for (let attempt = 0; attempt <= MAX_WAIT_ATTEMPTS; attempt++) {
-      let owned: { id: string } | undefined;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      let reserved = false;
       try {
-        owned = await scoped.idempotencyRecord.create({
-          data: {
-            businessId: params.businessId,
-            key: params.key,
-            endpoint: params.endpoint,
-            requestHash: params.requestHash,
-          },
-        });
-      } catch (error) {
-        if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) {
-          throw error;
-        }
-        // Alguien más ya reservó esta clave para este endpoint (o la usó
-        // antes). Puede seguir en curso o ya haber terminado.
-        const existing = await scoped.idempotencyRecord.findFirst({
-          where: { key: params.key, endpoint: params.endpoint },
-        });
-
-        if (!existing) {
-          // Se liberó entre el intento de crear y esta lectura (el dueño
-          // falló y borró su fila): reintentamos el ciclo completo.
-          continue;
-        }
-        if (existing.requestHash !== params.requestHash) {
-          throw new ProblemException({
-            status: HttpStatus.CONFLICT,
-            code: 'IDEMPOTENCY_KEY_REUSED',
-            title: 'La clave de idempotencia ya se usó con una petición distinta',
-            detail: `La clave "${params.key}" ya se usó en "${params.endpoint}" con otro cuerpo.`,
+        return await scoped.$transaction(async (tx) => {
+          const owned = await tx.idempotencyRecord.create({
+            data: {
+              businessId: params.businessId,
+              key: params.key,
+              endpoint: params.endpoint,
+              requestHash: params.requestHash,
+            },
           });
-        }
-        if (existing.responseStatus != null) {
-          return {
-            status: existing.responseStatus,
-            body: existing.responseBody as T,
-            replayed: true,
-          };
-        }
-        // Todavía en curso: esperar un poco y volver a intentar el ciclo
-        // (puede que para entonces ya haya terminado, o incluso fallado y
-        // liberado la clave).
-        await sleep(POLL_INTERVAL_MS);
-        continue;
+          reserved = true;
+
+          const result = await runInAmbientTransaction(params.businessId, tx, params.handler);
+          await tx.idempotencyRecord.update({
+            where: { id: owned.id },
+            data: {
+              responseStatus: result.status,
+              responseBody: result.body as Prisma.InputJsonValue,
+            },
+          });
+          return { ...result, replayed: false };
+        }, TRANSACTION_OPTIONS);
+      } catch (error) {
+        // Solo el choque de NUESTRA reserva es "clave ya usada"; un P2002 del
+        // handler (p. ej. un RUC repetido) es un error del dominio.
+        if (reserved || !isUniqueViolation(error)) throw error;
       }
 
-      // Somos los dueños de la clave: correr el efecto real.
-      try {
-        const result = await params.handler();
-        await scoped.idempotencyRecord.update({
-          where: { id: owned.id },
-          data: {
-            responseStatus: result.status,
-            responseBody: result.body as Prisma.InputJsonValue,
-          },
+      // Otra petición con la misma clave ya confirmó (esperamos a que
+      // terminara para chocar): devolver su respuesta.
+      const existing = await scoped.idempotencyRecord.findFirst({
+        where: { key: params.key, endpoint: params.endpoint },
+      });
+      if (!existing) continue; // se deshizo entre el choque y esta lectura
+      if (existing.requestHash !== params.requestHash) {
+        throw new ProblemException({
+          status: HttpStatus.CONFLICT,
+          code: 'IDEMPOTENCY_KEY_REUSED',
+          title: 'La clave de idempotencia ya se usó con una petición distinta',
+          detail: `La clave "${params.key}" ya se usó en "${params.endpoint}" con otro cuerpo.`,
         });
-        return { ...result, replayed: false };
-      } catch (error) {
-        await scoped.idempotencyRecord.delete({ where: { id: owned.id } }).catch(() => undefined);
-        throw error;
       }
+      if (existing.responseStatus != null) {
+        return {
+          status: existing.responseStatus,
+          body: existing.responseBody as T,
+          replayed: true,
+        };
+      }
+      // Solo una fila de la versión anterior (reserva y efecto en
+      // transacciones separadas) puede quedar sin respuesta.
+      break;
     }
 
     throw new ProblemException({
@@ -127,4 +122,8 @@ export class IdempotencyService {
       detail: 'Intenta de nuevo en un momento.',
     });
   }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }

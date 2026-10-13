@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState, type FormEvent } from 'react';
 import { BrandEmblem } from '@/components/brand/brand-mark';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { DocumentTitle } from '@/components/ui/document-title';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/states';
 import { describeError } from '@/lib/api/errors';
@@ -29,11 +30,31 @@ const FAILURE_MESSAGES: Record<LoginFailure, string> = {
  * conserva como borrador si falla el envío (04-ARCHITECTURE.md §8).
  */
 export default function LoginPage() {
+  // El emblema y el título no dependen de la sesión: van fuera del Suspense
+  // para salir en el HTML inicial (el emblema es el LCP de esta pantalla).
   return (
-    <Suspense fallback={<LoadingState />}>
-      <LoginForm />
-    </Suspense>
+    <div className="flex flex-1 flex-col justify-center gap-6">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <DocumentTitle title="Iniciar sesión" />
+        <BrandEmblem size={168} priority />
+        <div className="flex flex-col gap-0.5">
+          <h1 className="text-[2rem] leading-tight font-bold">BRIGITH</h1>
+          <p className="text-sm text-[var(--muted-foreground)]">Inicia sesión para continuar</p>
+        </div>
+      </div>
+      <Suspense fallback={<FormPlaceholder />}>
+        <LoginForm />
+      </Suspense>
+    </div>
   );
+}
+
+/**
+ * "Cargando" con el mismo alto que el formulario: al aparecer el formulario,
+ * el emblema (centrado en vertical) no salta.
+ */
+function FormPlaceholder() {
+  return <LoadingState className="min-h-[19.25rem] flex-none py-0" />;
 }
 
 function LoginForm() {
@@ -65,21 +86,13 @@ function LoginForm() {
 
   // Mientras se confirma una sesión ya guardada, no mostrar el formulario.
   if (!submitting && (session.status === 'loading' || session.status === 'authenticated')) {
-    return <LoadingState />;
+    return <FormPlaceholder />;
   }
 
   const expired = session.status === 'unauthenticated' && session.reason === 'expired';
 
   return (
-    <div className="flex flex-1 flex-col justify-center gap-6">
-      <div className="flex flex-col items-center gap-3 text-center">
-        <BrandEmblem size={168} priority />
-        <div className="flex flex-col gap-0.5">
-          <h1 className="text-[2rem] leading-tight font-bold">Brigith</h1>
-          <p className="text-sm text-[var(--muted-foreground)]">Inicia sesión para continuar</p>
-        </div>
-      </div>
-
+    <div className="flex flex-col gap-6">
       {expired && !failure && (
         <p
           role="status"

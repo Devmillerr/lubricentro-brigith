@@ -16,6 +16,7 @@ import { useApiQuery } from '@/lib/api/use-api-query';
 import { buildCategoryTree } from '@/lib/products/categories';
 import { formatPrice, type Product } from '@/lib/products/format';
 import { rememberProducts } from '@/lib/products/product-lookup';
+import { searchOnEnter } from '@/lib/enter-key';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
 
 const PAGE_SIZE = 30;
@@ -156,6 +157,8 @@ export default function ProductsPage() {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={searchOnEnter}
+          enterKeyHint="search"
           placeholder="Nombre, marca, código o vehículo"
           aria-label="Buscar productos por nombre, marca, código, viscosidad o vehículo compatible"
           className="pl-9"

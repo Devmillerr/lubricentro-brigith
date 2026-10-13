@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/api/use-api-query';
 import { present } from '@/lib/customers/format';
 import { formatQuantity, type ProductWithStock } from '@/lib/inventory/format';
 import type { Product } from '@/lib/products/format';
+import { searchOnEnter } from '@/lib/enter-key';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
 
 /** Saldo o "sin conteo inicial" (BR-P8) junto a un producto (07-UI-UX.md §3.3.3). */
@@ -79,7 +80,7 @@ export function ProductPicker({
                 key={product.id}
                 type="button"
                 onClick={() => onAdd(product)}
-                className="inline-flex min-h-10 items-center gap-1 rounded-full border border-[var(--border)] px-3 text-sm hover:bg-[var(--muted)]"
+                className="inline-flex min-h-11 items-center gap-1 rounded-full border border-[var(--border)] px-3 text-sm hover:bg-[var(--muted)]"
               >
                 <Plus className="size-4" aria-hidden />
                 {product.name}
@@ -98,6 +99,9 @@ export function ProductPicker({
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={searchOnEnter}
+          enterKeyHint="search"
+          autoComplete="off"
           placeholder="Buscar producto por código, nombre o marca"
           aria-label="Buscar producto usado"
           className="pl-9"

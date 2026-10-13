@@ -3,7 +3,7 @@
 import { ChevronRight, History, Package, PackagePlus, Search, SearchX } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
-import { StockAlerts } from '@/components/inventory/stock-alerts';
+import { StockAlerts, useStockAlerts } from '@/components/inventory/stock-alerts';
 import { buttonVariants } from '@/components/ui/button';
 import { StockBadge } from '@/components/inventory/stock-badge';
 import { BucketGauge, hasContainer } from '@/components/products/bucket-gauge';
@@ -21,6 +21,7 @@ import {
   type StockStatus,
 } from '@/lib/inventory/format';
 import { loadCatalogWithStock, MAX_PAGES } from '@/lib/inventory/load-stock';
+import { searchOnEnter } from '@/lib/enter-key';
 import { cn } from '@/lib/utils';
 
 type Filter = 'all' | 'not-counted' | 'out' | 'available';
@@ -49,8 +50,11 @@ export default function InventoryPage() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const catalog = useApiQuery('inventory:catalog', loadCatalogWithStock);
+  // En paralelo con el catálogo; se esperan ambos para que la lista no se mueva al llegar las alertas.
+  const alerts = useStockAlerts();
 
-  if (catalog.status === 'loading') return <PageSkeleton label="Cargando inventario…" />;
+  if (catalog.status === 'loading' || alerts.status === 'loading')
+    return <PageSkeleton label="Cargando inventario…" />;
 
   const header = (
     <PageHeader
@@ -108,19 +112,25 @@ export default function InventoryPage() {
 
       {catalog.data.products.length > 0 && (
         <StockAlerts
+          alerts={alerts}
           onShowNotCounted={() => {
             setSearch('');
             setFilter('not-counted');
+            // Sin animación si el sistema pide reducir el movimiento.
+            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
             document
               .getElementById('inventory-products')
-              ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              ?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
           }}
         />
       )}
 
-      <h3 id="inventory-products" className="scroll-mt-20 text-lg font-bold">
+      <h2
+        id="inventory-products"
+        className="scroll-mt-[calc(5rem+env(safe-area-inset-top))] text-lg font-bold"
+      >
         Productos
-      </h3>
+      </h2>
 
       <div className="relative">
         <Search
@@ -131,6 +141,8 @@ export default function InventoryPage() {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={searchOnEnter}
+          enterKeyHint="search"
           placeholder="Buscar por nombre, marca o código"
           aria-label="Buscar en el inventario por nombre, marca o código"
           className="pl-9"
@@ -240,7 +252,7 @@ function InventoryRow({ product, status }: { product: ProductWithStock; status: 
       {status === 'not-counted' && (
         <Link
           href={`/inventario/${product.id}`}
-          className={buttonVariants({ variant: 'outline', className: 'h-10 shrink-0 px-3' })}
+          className={buttonVariants({ variant: 'outline', className: 'h-11 shrink-0 px-3' })}
         >
           Contar
         </Link>

@@ -176,3 +176,30 @@ li > a:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
+
+/*
+ * Teléfono: la barra inferior y la barra de Cobrar/Guardar ocupan el borde de
+ * abajo. Al enfocar un campo (o con Tab), el navegador lo deja por encima de
+ * ellas en vez de debajo.
+ */
+@media (width < 48rem) {
+  html {
+    scroll-padding-bottom: calc(9rem + env(safe-area-inset-bottom));
+  }
+}
+
+/*
+ * Movimiento reducido (preferencia del sistema): transiciones y animaciones
+ * casi instantáneas. No se ponen en 0 para que transitionend/animationend
+ * sigan disparándose; los cambios de estado se ven igual, sin animarse.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

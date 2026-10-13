@@ -4,6 +4,7 @@ import { CircleAlert, Info, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import Link from 'next/link';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { FormError } from '@/components/customers/form-error';
+import { StickyActionBar } from '@/components/ui/action-bar';
 import { Button } from '@/components/ui/button';
 import { Field, Select, Textarea } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -23,10 +24,11 @@ import {
   type NextDueValues,
 } from '@/lib/maintenance/format';
 import type { Product } from '@/lib/products/format';
-import type { PaymentMethod } from '@/lib/sales/format';
+import { formatMoney, type PaymentMethod } from '@/lib/sales/format';
 import { CHARGE_AMOUNT_ERROR, ChargeFields, parseChargeAmount } from './charge-fields';
 import { NextDueFields } from './next-due-fields';
 import { ProductPicker, StockHint } from './product-picker';
+import { blockEnterSubmit } from '@/lib/enter-key';
 import { useSubmitLock } from '@/lib/use-submit-lock';
 
 /** Tipo sembrado por defecto (BR-M13): va primero en la lista (07-UI-UX.md §3.3.2). */
@@ -282,7 +284,12 @@ export function MaintenanceForm({
   const blockedItem = items.find((item) => item.product.id === blockedProductId);
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6" noValidate>
+    <form
+      onSubmit={handleSubmit}
+      onKeyDown={blockEnterSubmit}
+      className="flex flex-col gap-6"
+      noValidate
+    >
       {failure?.code === 'INSUFFICIENT_STOCK' ? (
         <BlockedByStock
           productName={blockedItem?.product.name}
@@ -468,9 +475,18 @@ export function MaintenanceForm({
 
       {hints.length > 0 && <Hints hints={hints} />}
 
-      <Button type="submit" size="lg" disabled={submitting}>
-        {submitting ? 'Guardando…' : 'Guardar mantenimiento'}
-      </Button>
+      <StickyActionBar
+        summary={
+          chargeNow && chargeTotal !== null
+            ? { label: 'Cobro', value: formatMoney(chargeTotal) }
+            : undefined
+        }
+        action={
+          <Button type="submit" size="lg" disabled={submitting}>
+            {submitting ? 'Guardando…' : 'Guardar mantenimiento'}
+          </Button>
+        }
+      />
     </form>
   );
 }
@@ -478,7 +494,7 @@ export function MaintenanceForm({
 function Section({ title, children }: { title?: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
-      {title && <h3 className="text-base font-semibold">{title}</h3>}
+      {title && <h2 className="font-sans text-base font-semibold">{title}</h2>}
       {children}
     </section>
   );
@@ -519,7 +535,7 @@ function ItemRow({
         <Button
           type="button"
           variant="outline"
-          className="h-10 w-10 shrink-0 px-0"
+          className="h-11 w-11 shrink-0 px-0"
           onClick={onRemove}
           aria-label={`Quitar ${item.product.name}`}
         >
@@ -653,6 +669,13 @@ function NewTypeForm({ onCreated }: { onCreated: (type: MaintenanceType) => void
           id="new-type-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            // Intro agrega el tipo; nunca guarda el mantenimiento entero.
+            if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+            e.preventDefault();
+            if (!saving) void save();
+          }}
+          enterKeyHint="done"
           maxLength={100}
           autoComplete="off"
         />
