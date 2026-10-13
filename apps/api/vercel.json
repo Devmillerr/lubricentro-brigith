@@ -6,6 +6,5 @@
   "outputDirectory": "dist/static",
   "regions": ["iad1"],
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
-  "crons": [{ "path": "/health", "schedule": "0 13 * * *" }],
-  "git": { "deploymentEnabled": { "claude/pwa-free": false } }
+  "crons": [{ "path": "/health", "schedule": "0 13 * * *" }]
 }
