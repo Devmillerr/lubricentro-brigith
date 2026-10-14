@@ -21,7 +21,11 @@ Barra inferior:
 | **Inicio** | Búsqueda por placa y acciones rápidas |
 | **Avisar** | Recordatorios pendientes, con contador |
 | **Productos** | Catálogo, compatibilidad e inventario (stock, contar, ingreso, ajuste) |
-| **Más** | Clientes, configuración, resumen del piloto. En la Fase 2: ventas, lavado y cierre |
+| **Más** | Clientes, historial de ventas, recepciones y compras, proveedores, cuentas por pagar, configuración y cuenta |
+
+La pestaña activa es la de la pantalla actual, por la ruta más específica: Vender, Lavado, Mantenimiento y la ficha del vehículo son de **Inicio** (se abren desde ahí); el historial de Ventas, Clientes, Proveedores, Cuentas por pagar, Configuración y la cuenta, de **Más**; Recepciones y compras, de **Productos** (2026-10-08, ajustado a la PWA el 2026-10-14).
+
+**Barra de acción (2026-10-08, PWA 2026-10-14):** en Vender, Lavado, Mantenimiento y Recibir, el botón principal queda pegado encima de la barra inferior (respeta el área segura) mientras se recorre el formulario; es un solo componente, `StickyActionBar`. Muestra el total ("Cobrar S/ 25.50") o lo que falta ("Agrega un producto", "Elige Efectivo o Yape"); en Mantenimiento el total del cobro va en el resumen junto al botón ("Guardar y cobrar"). En Vender, tocarlo con algo pendiente lleva a ese paso. En pantallas anchas vuelve a su lugar normal.
 
 ## 3. Pantallas del MVP
 
@@ -147,10 +151,10 @@ Con R8 una compra puede ser al crédito, así que el monto de una recepción no 
 - **Vender (precio por operación):** al elegir la presentación, la línea muestra **Presentación** (1/4 de galón), **Cantidad** (1 L) y **Precio de venta** (S/ ___, vacío y con el foco si la forma no tiene precio sugerido); se edita antes de cobrar y sin él no se puede cobrar. Los chips muestran la cantidad (1 L, 0.5 L) y, si existe, el precio sugerido.
 
 ### 3.7 Configuración
-Plantilla de WhatsApp con vista previa, días de anticipación, regla por defecto cuando hay km y fecha, política de stock insuficiente y código de país. Todos los valores abiertos aparecen vacíos o marcados como provisionales.
+Solo los ajustes que tienen efecto: **mensaje de aviso** de WhatsApp (los datos del aviso se agregan con botones y se ven como `[Nombre del cliente]`, `[Placa]`…; se guardan como `{cliente}`, `{placa}`… y una vista previa muestra el mensaje con datos de ejemplo), **días de anticipación** y la regla por defecto cuando hay km y fecha. Política de stock insuficiente, moneda y código de país siguen en la API pero no se muestran mientras no tengan efecto (2026-10-08).
 
 ### 3.8 Resumen del piloto
-Pantalla de solo lectura con los tres indicadores aprobados: adopción, mantenimiento e inventario (BR-I1 a BR-I3), por período.
+**Retirado de la interfaz (2026-10-08):** eran métricas internas del piloto, no información para el dueño. Los indicadores (BR-I1 a BR-I3) siguen disponibles en `GET /pilot-indicators`.
 
 **Cambio de R7 (DEC-85, sin implementar):** la adopción muestra por separado ventas de mostrador, lavados y mantenimientos del período, como cantidades reales, sin porcentajes objetivo ni metas.
 

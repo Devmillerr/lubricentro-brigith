@@ -2,42 +2,73 @@ import type { Schemas } from '@/lib/api/client';
 
 export type Business = Schemas['BusinessResponse'];
 export type SettingsUpdate = Schemas['UpdateBusinessSettingsDto'];
-export type StockPolicy = Schemas['InsufficientStockPolicy'];
 export type DefaultDueRule = NonNullable<SettingsUpdate['defaultDueRuleWhenBoth']>;
 
-/** Valores del formulario como texto; "" = sin definir (se envía `null`). */
+/**
+ * Ajustes que hoy cambian algo en la app. `insufficientStockPolicy`,
+ * `currency` y `defaultCountryCode` existen en la API pero ninguna pantalla ni
+ * cálculo los usa todavía, así que no se muestran (se agregan cuando tengan
+ * efecto). Valores como texto; "" = sin definir (se envía `null`).
+ */
 export interface SettingsValues {
   whatsappTemplate: string;
   reminderLeadDays: string;
   defaultDueRuleWhenBoth: '' | DefaultDueRule;
-  insufficientStockPolicy: StockPolicy;
-  currency: string;
-  defaultCountryCode: string;
 }
 
 export type SettingsField = keyof SettingsValues;
 
-/** Variables que reemplaza la API al armar el mensaje (`whatsapp-template.ts`). */
-export const TEMPLATE_VARIABLES = ['{cliente}', '{placa}', '{proxima_fecha}', '{proximo_km}'];
+/**
+ * Datos que se pueden insertar en el mensaje. `token` es lo que guarda y
+ * reemplaza la API (`whatsapp-template.ts`); en pantalla se escribe con
+ * `[label]`, que se lee como texto normal. `example` es lo que muestra la
+ * vista previa.
+ */
+export const TEMPLATE_FIELDS = [
+  { token: '{cliente}', label: 'Nombre del cliente', example: 'Juan Pérez' },
+  { token: '{placa}', label: 'Placa', example: 'ABC-123' },
+  { token: '{proxima_fecha}', label: 'Próxima fecha', example: '2026-11-15' },
+  { token: '{proximo_km}', label: 'Próximo km', example: '55000' },
+] as const;
 
-/** BR-P11: qué pasa al guardar un mantenimiento que dejaría stock negativo. */
-export const STOCK_POLICY_LABELS: Record<StockPolicy, string> = {
-  ALLOW_WITH_WARNING: 'Guardar y avisar',
-  BLOCK: 'No guardar',
-};
+/** Cómo se ve un dato dentro del mensaje en pantalla: "[Placa]". */
+export function templatePlaceholder(field: (typeof TEMPLATE_FIELDS)[number]): string {
+  return `[${field.label}]`;
+}
+
+/** Plantilla guardada → texto en pantalla ("{placa}" → "[Placa]"). */
+export function templateForDisplay(template: string): string {
+  return TEMPLATE_FIELDS.reduce(
+    (text, field) => text.replaceAll(field.token, templatePlaceholder(field)),
+    template,
+  );
+}
+
+/** Texto en pantalla → plantilla que guarda la API ("[Placa]" → "{placa}"). */
+export function templateForApi(text: string): string {
+  return TEMPLATE_FIELDS.reduce(
+    (result, field) => result.replaceAll(templatePlaceholder(field), field.token),
+    text,
+  );
+}
+
+/** El mensaje con datos de ejemplo, igual que lo arma la API para cada aviso. */
+export function previewTemplate(text: string): string {
+  return TEMPLATE_FIELDS.reduce(
+    (result, field) => result.replaceAll(templatePlaceholder(field), field.example),
+    text,
+  );
+}
 
 export function toValues(business: Business): SettingsValues {
   return {
-    whatsappTemplate: business.whatsappTemplate ?? '',
+    whatsappTemplate: templateForDisplay(business.whatsappTemplate ?? ''),
     reminderLeadDays: business.reminderLeadDays != null ? String(business.reminderLeadDays) : '',
     // El contrato de lectura admite cualquier DueRule; la configuración solo ANY/ALL.
     defaultDueRuleWhenBoth:
       business.defaultDueRuleWhenBoth === 'ANY' || business.defaultDueRuleWhenBoth === 'ALL'
         ? business.defaultDueRuleWhenBoth
         : '',
-    insufficientStockPolicy: business.insufficientStockPolicy,
-    currency: business.currency ?? '',
-    defaultCountryCode: business.defaultCountryCode ?? '',
   };
 }
 
@@ -63,7 +94,7 @@ export function validate(values: SettingsValues): Partial<Record<SettingsField, 
  */
 export function changedSettings(business: Business, values: SettingsValues): SettingsUpdate {
   const body: SettingsUpdate = {};
-  const template = textOrNull(values.whatsappTemplate);
+  const template = textOrNull(templateForApi(values.whatsappTemplate));
   if (template !== business.whatsappTemplate) body.whatsappTemplate = template;
 
   const days = values.reminderLeadDays.trim() ? Number(values.reminderLeadDays.trim()) : null;
@@ -71,16 +102,6 @@ export function changedSettings(business: Business, values: SettingsValues): Set
 
   const rule = values.defaultDueRuleWhenBoth || null;
   if (rule !== business.defaultDueRuleWhenBoth) body.defaultDueRuleWhenBoth = rule;
-
-  if (values.insufficientStockPolicy !== business.insufficientStockPolicy) {
-    body.insufficientStockPolicy = values.insufficientStockPolicy;
-  }
-
-  const currency = textOrNull(values.currency);
-  if (currency !== business.currency) body.currency = currency;
-
-  const countryCode = textOrNull(values.defaultCountryCode);
-  if (countryCode !== business.defaultCountryCode) body.defaultCountryCode = countryCode;
 
   return body;
 }

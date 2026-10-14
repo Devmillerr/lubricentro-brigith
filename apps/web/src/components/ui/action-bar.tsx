@@ -50,3 +50,25 @@ export function StickyActionBar({
     </div>
   );
 }
+
+/**
+ * Botón principal deshabilitado pero legible: su texto dice qué falta
+ * ("Escribe el total cobrado"), así que no se atenúa.
+ */
+export const ACTION_DISABLED_READABLE_CLASS =
+  'disabled:bg-[var(--muted)] disabled:text-[var(--muted-foreground)] disabled:opacity-100';
+
+/**
+ * Botón principal que todavía no puede enviar pero sigue activo: su texto
+ * dice qué falta ("Agrega un producto", "Elige Efectivo o Yape") y, al
+ * tocarlo, la pantalla va a ese paso (`revealStep`).
+ */
+export const ACTION_PENDING_CLASS =
+  'bg-[var(--muted)] text-[var(--muted-foreground)] hover:opacity-100';
+
+/** Lleva a la vista el paso que falta (respeta "reducir movimiento"). */
+export function revealStep(element: HTMLElement | null): void {
+  if (!element) return;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  element.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+}

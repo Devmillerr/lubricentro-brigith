@@ -4,7 +4,7 @@ import { CircleAlert, Info, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import Link from 'next/link';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { FormError } from '@/components/customers/form-error';
-import { StickyActionBar } from '@/components/ui/action-bar';
+import { ACTION_DISABLED_READABLE_CLASS, StickyActionBar } from '@/components/ui/action-bar';
 import { Button } from '@/components/ui/button';
 import { Field, Select, Textarea } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -83,8 +83,6 @@ export function MaintenanceForm({
   const business = useApiQuery('business', () => callApi(api.GET('/business')));
   const businessDefault =
     business.status === 'success' ? business.data.defaultDueRuleWhenBoth : null;
-  const blockPolicy =
-    business.status === 'success' && business.data.insufficientStockPolicy === 'BLOCK';
 
   const [typeId, setTypeId] = useState<string | null>(null);
   const [createdTypes, setCreatedTypes] = useState<MaintenanceType[]>([]);
@@ -163,6 +161,14 @@ export function MaintenanceForm({
   const nextKm = hasVehicle ? parseKm(nextDue.nextDueKm) : null;
   const nextDueDate = hasVehicle ? nextDue.nextDueDate : '';
   const chargeTotal = chargeNow ? parseChargeAmount(chargeAmount) : null;
+  // Con "Cobrar ahora", el botón dice qué falta del cobro en vez de esperar al toque.
+  const chargePending = !chargeNow
+    ? null
+    : !chargeMethod
+      ? 'Elige Efectivo o Yape'
+      : chargeTotal === null
+        ? 'Escribe el total cobrado'
+        : null;
   const hints: string[] = [];
   if (odometerKm !== null && lastKnownKm !== null && odometerKm < lastKnownKm) {
     hints.push(`El km ingresado es menor al último conocido (${formatKm(lastKnownKm)}).`);
@@ -402,7 +408,6 @@ export function MaintenanceForm({
                 key={item.product.id}
                 item={item}
                 error={errors.itemQuantity?.[item.product.id]}
-                blockPolicy={blockPolicy}
                 onQuantity={(value) => updateQuantity(item.product.id, value)}
                 onRemove={() => removeItem(item.product.id)}
               />
@@ -482,8 +487,16 @@ export function MaintenanceForm({
             : undefined
         }
         action={
-          <Button type="submit" size="lg" disabled={submitting}>
-            {submitting ? 'Guardando…' : 'Guardar mantenimiento'}
+          <Button
+            type="submit"
+            size="lg"
+            disabled={submitting || chargePending !== null}
+            className={ACTION_DISABLED_READABLE_CLASS}
+          >
+            {submitting
+              ? 'Guardando…'
+              : (chargePending ??
+                (chargeTotal !== null ? 'Guardar y cobrar' : 'Guardar mantenimiento'))}
           </Button>
         }
       />
@@ -503,13 +516,11 @@ function Section({ title, children }: { title?: string; children: ReactNode }) {
 function ItemRow({
   item,
   error,
-  blockPolicy,
   onQuantity,
   onRemove,
 }: {
   item: Item;
   error?: string;
-  blockPolicy: boolean;
   onQuantity: (value: string) => void;
   onRemove: () => void;
 }) {
@@ -560,7 +571,6 @@ function ItemRow({
         <p className="flex items-start gap-1.5 text-xs text-[var(--danger)]">
           <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
           Quedaría con saldo negativo (saldo {formatQuantity(stock.balance)}).
-          {blockPolicy ? ' El negocio no permite guardar con stock insuficiente.' : ''}
         </p>
       )}
     </li>
