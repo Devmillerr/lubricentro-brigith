@@ -70,7 +70,7 @@ export default function DashboardPage() {
     <div className="flex flex-col gap-5">
       <DocumentTitle title="Inicio" />
       {/* Orden: qué necesita atención → qué puedo hacer → qué está pasando. */}
-      <h1 className="-mb-2 text-sm font-medium text-[var(--muted-foreground)]">
+      <h1 className="-mb-1 text-[1.75rem] leading-tight font-bold break-words">
         Hola, {user.name}
       </h1>
 
@@ -82,7 +82,7 @@ export default function DashboardPage() {
         dashboard.status === 'loading' && <AlertChipsSkeleton />
       )}
 
-      <nav aria-label="Acciones principales" className="grid grid-cols-4 gap-2">
+      <nav aria-label="Acciones principales" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <ActionTile href="/ventas/nueva" icon={ShoppingCart} label="Vender" />
         <ActionTile href="/lavado" icon={Droplets} label="Lavado" />
         <ActionTile href="/mantenimientos/nuevo" icon={Wrench} label="Mantenimiento" />
@@ -167,7 +167,11 @@ function DashboardBody({ data }: { data: Dashboard }) {
   );
 }
 
-/** Acción rápida: superficie del tema con borde sutil; el rojo Brigith solo en el ícono. */
+/**
+ * Acción rápida: superficie del tema con borde sutil; el rojo Brigith solo en
+ * el ícono. En el teléfono, 2 × 2 con el ícono arriba y el nombre debajo: en 4
+ * columnas "Mantenimiento" no cabía a 320 px.
+ */
 function ActionTile({
   href,
   icon: Icon,
@@ -180,12 +184,12 @@ function ActionTile({
   return (
     <Link
       href={href}
-      className="flex h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-0.5 text-[var(--foreground)] transition-[background-color,transform] hover:bg-[var(--muted)] motion-safe:active:scale-[0.97]"
+      className="flex min-h-20 min-w-0 flex-col items-start justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 text-[var(--foreground)] transition-[background-color,transform] hover:bg-[var(--muted)] active:bg-[var(--muted)] motion-safe:active:scale-[0.97]"
     >
-      <Icon className="size-6 shrink-0 text-[var(--brand)]" aria-hidden />
-      <span className="w-full truncate text-center text-xs leading-tight font-semibold tracking-tight">
-        {label}
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[var(--brand-soft)]">
+        <Icon className="size-5 text-[var(--brand)]" aria-hidden />
       </span>
+      <span className="w-full truncate text-[0.9375rem] leading-tight font-semibold">{label}</span>
     </Link>
   );
 }

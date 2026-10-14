@@ -52,7 +52,7 @@ export function RowActions({
         disabled={disabled}
         aria-label={`Opciones de ${title}`}
         aria-haspopup="dialog"
-        className="flex size-11 shrink-0 items-center justify-center rounded-md border border-[var(--border-strong)] bg-[var(--surface)] hover:bg-[var(--muted)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none disabled:opacity-50"
+        className="flex size-11 shrink-0 items-center justify-center rounded-full text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)] active:bg-[var(--muted)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:outline-none disabled:opacity-50"
       >
         <MoreHorizontal className="size-5" aria-hidden />
       </button>

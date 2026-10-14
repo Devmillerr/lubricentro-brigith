@@ -114,7 +114,7 @@ function ReminderView({
         <Detail label="Vehículo">
           <Link
             href={`/vehiculos/${reminder.vehicleId}`}
-            className="font-medium underline underline-offset-4"
+            className="-my-3 inline-flex min-h-11 items-center font-medium underline underline-offset-4"
           >
             Ver ficha
           </Link>
