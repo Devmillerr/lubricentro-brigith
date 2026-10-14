@@ -27,6 +27,8 @@ La pestaña activa es la de la pantalla actual, por la ruta más específica: Ve
 
 **Barra de acción (2026-10-08, PWA 2026-10-14):** en Vender, Lavado, Mantenimiento y Recibir, el botón principal queda pegado encima de la barra inferior (respeta el área segura) mientras se recorre el formulario; es un solo componente, `StickyActionBar`. Muestra el total ("Cobrar S/ 25.50") o lo que falta ("Agrega un producto", "Elige Efectivo o Yape"); en Mantenimiento el total del cobro va en el resumen junto al botón ("Guardar y cobrar"). En Vender, tocarlo con algo pendiente lleva a ese paso. En pantallas anchas vuelve a su lugar normal.
 
+**Importes (2026-10-14):** todo monto visible usa un solo formato, `S/ 25,474.50` (coma de miles, punto decimal), también los precios de Productos; en compras y deudas en dólares, `US$ 1,250.00`. El signo va delante del símbolo (`-S/ 1,500.00`). Los campos de precio se escriben sin miles (`25474.50`). Solo cambia la presentación (`apps/web/src/lib/money.ts`).
+
 ## 3. Pantallas del MVP
 
 ### 3.1 Inicio

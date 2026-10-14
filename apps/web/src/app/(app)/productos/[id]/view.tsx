@@ -19,8 +19,9 @@ import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
 import { present } from '@/lib/customers/format';
+import { formatMoney } from '@/lib/money';
 import { categoryPath } from '@/lib/products/categories';
-import { formatPrice, type Product } from '@/lib/products/format';
+import type { Product } from '@/lib/products/format';
 import { findProduct, rememberProducts } from '@/lib/products/product-lookup';
 
 /**
@@ -81,7 +82,9 @@ export default function ProductDetailPage() {
         <Detail label="Presentación">{present(product.presentation)}</Detail>
         <Detail label="Unidad">{product.unit}</Detail>
         <Detail label="Categoría">{categoryText}</Detail>
-        <Detail label="Precio de venta">{formatPrice(product.salePrice) ?? 'Pendiente'}</Detail>
+        <Detail label="Precio de venta">
+          {product.salePrice !== null ? formatMoney(product.salePrice) : 'Pendiente'}
+        </Detail>
         <Detail label="Stock">
           {product.tracksStock ? 'Controla stock' : 'No controla stock'}
         </Detail>

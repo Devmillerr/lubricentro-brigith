@@ -1,18 +1,17 @@
 import type { Schemas } from '@/lib/api/client';
+import { formatMoney } from '@/lib/money';
 
 export type Payable = Schemas['PayableResponse'];
 export type PayableDetail = Schemas['PayableDetailResponse'];
 export type Currency = Schemas['Currency'];
 export type PayableStatus = Payable['status'];
 
-/** Monto en su moneda (R8): nunca se mezclan soles y dólares. */
+/** Monto en su moneda (R8), con el formato único de `lib/money`: nunca se mezclan soles y dólares. */
 export function formatAmount(
   amount: string | number,
   currency: Currency | null | undefined,
 ): string {
-  const value = typeof amount === 'string' ? Number(amount) : amount;
-  const prefix = currency === 'USD' ? 'US$' : 'S/';
-  return Number.isFinite(value) ? `${prefix} ${value.toFixed(2)}` : `${prefix} ${amount}`;
+  return formatMoney(amount, currency === 'USD' ? 'USD' : 'PEN');
 }
 
 export const CURRENCY_LABELS: Record<Currency, string> = {
