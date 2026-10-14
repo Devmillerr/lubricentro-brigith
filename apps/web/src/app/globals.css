@@ -186,6 +186,40 @@ li > a:focus-visible {
   html {
     scroll-padding-bottom: calc(9rem + env(safe-area-inset-bottom));
   }
+
+  /*
+   * Teclado abierto (un campo de texto con el foco): la barra inferior se
+   * oculta para dejarle esos 64 px al formulario, y la barra de Cobrar/Guardar
+   * baja al borde. Solo campos que abren teclado: checkbox, radio, fecha y
+   * <select> no. Con :has(), sin JS ni parpadeo al pasar de un campo a otro.
+   */
+  body:has(
+    :is(
+      input:not(
+        [type='checkbox'],
+        [type='radio'],
+        [type='button'],
+        [type='submit'],
+        [type='reset'],
+        [type='file'],
+        [type='range'],
+        [type='color'],
+        [type='date'],
+        [type='datetime-local'],
+        [type='time'],
+        [type='month']
+      ),
+      textarea
+    ):focus
+  ) {
+    [data-bottom-nav] {
+      display: none;
+    }
+
+    [data-action-bar] {
+      bottom: 0;
+    }
+  }
 }
 
 /*

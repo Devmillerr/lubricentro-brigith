@@ -6,7 +6,7 @@ import { RecoveryCodeNotice } from '@/components/auth/recovery-code-notice';
 import { FormError } from '@/components/customers/form-error';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { PageHeader } from '@/components/ui/page-header';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
@@ -109,9 +109,8 @@ export default function ChangePasswordPage() {
       {formError && <FormError>{formError}</FormError>}
       <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
         <Field id="current-password" label="Contraseña actual" error={errors.currentPassword}>
-          <Input
+          <PasswordInput
             id="current-password"
-            type="password"
             autoComplete="current-password"
             value={current}
             onChange={(e) => setCurrent(e.target.value)}
@@ -124,9 +123,8 @@ export default function ChangePasswordPage() {
           hint={`Al menos ${MIN_LENGTH} caracteres.`}
           error={errors.newPassword}
         >
-          <Input
+          <PasswordInput
             id="new-password"
-            type="password"
             autoComplete="new-password"
             value={next}
             onChange={(e) => setNext(e.target.value)}
@@ -134,9 +132,8 @@ export default function ChangePasswordPage() {
           />
         </Field>
         <Field id="confirm-password" label="Repite la contraseña nueva" error={errors.confirm}>
-          <Input
+          <PasswordInput
             id="confirm-password"
-            type="password"
             autoComplete="new-password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}

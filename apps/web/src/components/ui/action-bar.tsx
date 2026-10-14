@@ -10,7 +10,8 @@ import { cn } from '@/lib/utils';
  * ocupa su propio espacio.
  *
  * Para acompañar todo el recorrido debe ser hija directa del <form> (o de un
- * contenedor tan alto como él).
+ * contenedor tan alto como él). Con el teclado abierto baja al borde
+ * (`data-action-bar`, ver globals.css).
  */
 export function StickyActionBar({
   action,
@@ -29,6 +30,7 @@ export function StickyActionBar({
 }) {
   return (
     <div
+      data-action-bar
       className={cn(
         'sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[5] -mr-[var(--gutter-r,1rem)] -ml-[var(--gutter-l,1rem)] flex flex-col gap-2 border-t border-[var(--border)] bg-[var(--surface)] py-3 pr-[var(--gutter-r,1rem)] pl-[var(--gutter-l,1rem)] shadow-[0_-4px_16px_rgb(0_0_0/0.05)]',
         'md:static md:m-0 md:border-0 md:bg-transparent md:p-0 md:shadow-none',

@@ -21,13 +21,15 @@ Barra inferior:
 | **Inicio** | Búsqueda por placa y acciones rápidas |
 | **Avisar** | Recordatorios pendientes, con contador |
 | **Productos** | Catálogo, compatibilidad e inventario (stock, contar, ingreso, ajuste) |
-| **Más** | Clientes, historial de ventas, recepciones y compras, proveedores, cuentas por pagar, configuración y cuenta |
+| **Más** | Clientes, historial de ventas, recepciones y compras, proveedores, cuentas por pagar y configuración (una fila por sección, sin descripciones); al final, **Cuenta**: usuario, cambiar contraseña y **Cerrar sesión** |
 
 La pestaña activa es la de la pantalla actual, por la ruta más específica: Vender, Lavado, Mantenimiento y la ficha del vehículo son de **Inicio** (se abren desde ahí); el historial de Ventas, Clientes, Proveedores, Cuentas por pagar, Configuración y la cuenta, de **Más**; Recepciones y compras, de **Productos** (2026-10-08, ajustado a la PWA el 2026-10-14).
 
 **Barra de acción (2026-10-08, PWA 2026-10-14):** en Vender, Lavado, Mantenimiento y Recibir, el botón principal queda pegado encima de la barra inferior (respeta el área segura) mientras se recorre el formulario; es un solo componente, `StickyActionBar`. Muestra el total ("Cobrar S/ 25.50") o lo que falta ("Agrega un producto", "Elige Efectivo o Yape"); en Mantenimiento el total del cobro va en el resumen junto al botón ("Guardar y cobrar"). En Vender, tocarlo con algo pendiente lleva a ese paso. En pantallas anchas vuelve a su lugar normal.
 
 **Importes (2026-10-14):** todo monto visible usa un solo formato, `S/ 25,474.50` (coma de miles, punto decimal), también los precios de Productos; en compras y deudas en dólares, `US$ 1,250.00`. El signo va delante del símbolo (`-S/ 1,500.00`). Los campos de precio se escriben sin miles (`25474.50`). Solo cambia la presentación (`apps/web/src/lib/money.ts`).
+
+**Cabecera, teclado y acceso (2026-10-14):** en el teléfono la cabecera muestra solo la marca; el usuario y **Cerrar sesión** están en **Más → Cuenta** (en escritorio siguen también en la barra lateral). Con un campo de texto enfocado (teclado abierto) la barra inferior se oculta y la barra de acción baja al borde; checkbox, fecha y listas desplegables no la ocultan. En Android, `interactive-widget=resizes-content` deja la barra de acción encima del teclado (Safari iOS lo ignora). El login muestra solo el emblema (sin repetir "BRIGITH" en texto) y las contraseñas (login, recuperar y cambiar) tienen un botón para verlas.
 
 ## 3. Pantallas del MVP
 

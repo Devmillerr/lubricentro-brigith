@@ -9,6 +9,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { DocumentTitle } from '@/components/ui/document-title';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useSubmitLock } from '@/lib/use-submit-lock';
@@ -143,9 +144,8 @@ export default function RecoverPasswordPage() {
               hint={`Al menos ${MIN_LENGTH} caracteres.`}
               error={errors.newPassword}
             >
-              <Input
+              <PasswordInput
                 id="recover-new-password"
-                type="password"
                 autoComplete="new-password"
                 value={next}
                 onChange={(e) => setNext(e.target.value)}
@@ -153,9 +153,8 @@ export default function RecoverPasswordPage() {
               />
             </Field>
             <Field id="recover-confirm" label="Repite la contraseña nueva" error={errors.confirm}>
-              <Input
+              <PasswordInput
                 id="recover-confirm"
-                type="password"
                 autoComplete="new-password"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}

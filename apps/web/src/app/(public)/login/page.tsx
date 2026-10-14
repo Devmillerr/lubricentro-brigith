@@ -8,6 +8,7 @@ import { BrandEmblem } from '@/components/brand/brand-mark';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { DocumentTitle } from '@/components/ui/document-title';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { LoadingState } from '@/components/ui/states';
 import { describeError } from '@/lib/api/errors';
 import { safeNextPath } from '@/lib/auth/redirect';
@@ -36,11 +37,9 @@ export default function LoginPage() {
     <div className="flex flex-1 flex-col justify-center gap-6">
       <div className="flex flex-col items-center gap-3 text-center">
         <DocumentTitle title="Iniciar sesión" />
-        <BrandEmblem size={168} priority />
-        <div className="flex flex-col gap-0.5">
-          <h1 className="text-[2rem] leading-tight font-bold">BRIGITH</h1>
-          <p className="text-sm text-[var(--muted-foreground)]">Inicia sesión para continuar</p>
-        </div>
+        {/* El emblema ya dice BRIGITH: el título queda solo para lectores de pantalla. */}
+        <BrandEmblem size={136} priority />
+        <h1 className="sr-only">BRIGITH · Iniciar sesión</h1>
       </div>
       <Suspense fallback={<FormPlaceholder />}>
         <LoginForm />
@@ -136,10 +135,9 @@ function LoginForm() {
           <label htmlFor="password" className="text-sm font-semibold">
             Contraseña
           </label>
-          <Input
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

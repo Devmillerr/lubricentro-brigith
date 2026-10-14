@@ -41,6 +41,9 @@ export const viewport: Viewport = {
   // Sin maximumScale: bloquear el zoom impide ampliar a quien lo necesita (WCAG 1.4.4).
   // Los inputs miden 16 px, así que iOS no hace zoom automático al enfocarlos.
   viewportFit: 'cover',
+  // Android (Chrome): al abrir el teclado el contenido se encoge, así la barra de
+  // Cobrar/Guardar queda encima del teclado y no detrás. Safari iOS lo ignora.
+  interactiveWidget: 'resizes-content',
   // Igual que el header de la app en cada tema.
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#ffffff' },
