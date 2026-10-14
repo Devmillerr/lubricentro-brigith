@@ -10,7 +10,7 @@ import { ProductImage } from '@/components/products/product-image';
 import { SaleUnitsSection } from '@/components/products/sale-units-section';
 import { BucketGauge, hasContainer } from '@/components/products/bucket-gauge';
 import { formatQuantity } from '@/lib/inventory/format';
-import { shortUnit } from '@/lib/products/container';
+import { formatStock, shortUnit } from '@/lib/products/container';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge, PageHeader } from '@/components/ui/page-header';
 import { QueryError } from '@/components/ui/query-error';
@@ -86,7 +86,11 @@ export default function ProductDetailPage() {
           {product.salePrice !== null ? formatMoney(product.salePrice) : 'Pendiente'}
         </Detail>
         <Detail label="Stock">
-          {product.tracksStock ? 'Controla stock' : 'No controla stock'}
+          {!product.tracksStock
+            ? 'No controla stock'
+            : product.isCounted
+              ? formatStock(product.stockQuantity, product.unit)
+              : 'Sin conteo inicial'}
         </Detail>
         {hasContainer(product) && (
           <Detail label="Envase">
@@ -106,7 +110,9 @@ export default function ProductDetailPage() {
 
       <Link href={`/inventario/${product.id}`} className={buttonVariants({ variant: 'outline' })}>
         <Boxes className="mr-2 size-4" aria-hidden />
-        Inventario: saldo, conteo, ingreso y ajuste
+        {product.tracksStock && !product.isCounted
+          ? 'Contar stock'
+          : 'Stock: conteo, ingreso y ajuste'}
       </Link>
 
       <SaleUnitsSection product={product} onSaved={query.reload} />
