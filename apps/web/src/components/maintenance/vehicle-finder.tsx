@@ -14,24 +14,12 @@ import { useApiQuery } from '@/lib/api/use-api-query';
 import { customerTitle, present, vehicleModelLabel } from '@/lib/customers/format';
 import { searchOnEnter } from '@/lib/enter-key';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
+import { looksLikePlate, normalizePlate } from '@/lib/vehicles/plate';
 
 type LookupItem = Schemas['VehicleLookupResponse'];
 type Customer = Schemas['CustomerResponse'];
 
 const DEBOUNCE_MS = 400;
-
-/** Misma normalización que la API (BR-C6): mayúsculas, sin espacios ni guiones. */
-function normalizePlate(value: string): string {
-  return value.toUpperCase().replace(/[\s-]+/g, '');
-}
-
-/**
- * Solo se ofrece registrar una placa nueva si lo escrito parece placa (letras
- * y números, con al menos un número, de 4 a 10): un nombre no es una placa.
- */
-function looksLikePlate(plate: string): boolean {
-  return /^[A-Z0-9]{4,10}$/.test(plate) && /\d/.test(plate);
-}
 
 /** Ruta del formulario de mantenimiento con el vehículo elegido. */
 export function maintenanceHref(vehicleId: string): string {
@@ -99,11 +87,6 @@ export function VehicleFinder() {
           className="pl-11 text-lg"
         />
       </div>
-      {!term && (
-        <p className="text-sm text-[var(--muted-foreground)]">
-          Escribe la placa (ej. ABC-123) o el nombre o teléfono del cliente.
-        </p>
-      )}
 
       {term && !typing && (
         <div aria-live="polite" className="flex flex-col gap-4">

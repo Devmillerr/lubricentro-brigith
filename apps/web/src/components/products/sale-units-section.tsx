@@ -223,8 +223,7 @@ function SaleUnitsEditor({
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3">
       <p className="text-sm text-[var(--muted-foreground)]">
         El stock se cuenta en <strong className="font-semibold">{product.unit}</strong>. Para cada
-        forma, indica cuánto descuenta. El precio se escribe en cada venta; si pones uno aquí, solo
-        se propone y se puede cambiar.
+        forma, indica cuánto descuenta. El precio sugerido se puede cambiar al vender.
       </p>
 
       {rows.length === 0 && (

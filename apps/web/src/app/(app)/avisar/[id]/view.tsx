@@ -114,7 +114,7 @@ function ReminderView({
         <Detail label="Vehículo">
           <Link
             href={`/vehiculos/${reminder.vehicleId}`}
-            className="font-medium underline underline-offset-4"
+            className="-my-3 inline-flex min-h-11 items-center font-medium underline underline-offset-4"
           >
             Ver ficha
           </Link>
@@ -143,10 +143,7 @@ function ReminderView({
             <PhoneOff className="size-4" aria-hidden />
             No se puede avisar por WhatsApp
           </p>
-          <p>
-            El vehículo no tiene cliente con teléfono registrado. Agrega el teléfono en la ficha del
-            cliente y vuelve aquí.
-          </p>
+          <p>El cliente no tiene teléfono. Agrégalo en su ficha.</p>
           <Link
             href={`/vehiculos/${reminder.vehicleId}`}
             className="inline-flex min-h-11 w-fit items-center font-medium underline underline-offset-4"
@@ -179,7 +176,7 @@ function ReminderView({
           </ul>
         )}
         <p className="text-xs text-[var(--muted-foreground)]">
-          Se registra que el aviso se abrió en WhatsApp, no que se envió.
+          Se registra que se abrió WhatsApp, no que se envió.
         </p>
       </section>
     </>
@@ -197,13 +194,11 @@ function MessagePreview({ message }: { message: string }) {
         </p>
       ) : (
         <p className="rounded-lg border border-dashed border-[var(--border)] p-3 text-sm text-[var(--muted-foreground)]">
-          El negocio todavía no tiene plantilla de mensaje: WhatsApp se abrirá sin texto y podrás
-          escribirlo ahí.
+          No hay plantilla de mensaje: WhatsApp se abrirá sin texto.
         </p>
       )}
       <p className="text-xs text-[var(--muted-foreground)]">
-        Se usa el teléfono tal como está guardado. Si no incluye el código de país, WhatsApp podría
-        no encontrar el número.
+        Si el teléfono no tiene código de país, WhatsApp podría no encontrarlo.
       </p>
     </section>
   );

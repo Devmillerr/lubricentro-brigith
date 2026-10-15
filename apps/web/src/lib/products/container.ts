@@ -1,4 +1,5 @@
-import { isLiterUnit } from '@/lib/products/units';
+import { formatQuantity } from '@/lib/inventory/format';
+import { isGallonUnit, isLiterUnit } from '@/lib/products/units';
 
 /**
  * Contenido de un producto que se vende de un envase abierto (DEC-93), p. ej.
@@ -34,9 +35,17 @@ export function containerState(balance: number, capacity: number): ContainerStat
   return { capacity, open, sealed, fraction: Math.min(open / capacity, 1), empty: false };
 }
 
-/** "L" para litros; la unidad tal cual para las demás. */
+/** "L" para litros, "gal" para galones, "und" para unidades; las demás, tal cual. */
 export function shortUnit(unit: string): string {
-  return isLiterUnit(unit) ? 'L' : unit;
+  if (isLiterUnit(unit)) return 'L';
+  if (isGallonUnit(unit)) return 'gal';
+  if (/^unidad(es)?$/i.test(unit.trim())) return 'und';
+  return unit;
+}
+
+/** Cantidad con su unidad corta, como se lee en el estante: "15 L", "3 und". */
+export function formatStock(quantity: number | string, unit: string): string {
+  return `${formatQuantity(quantity)} ${shortUnit(unit)}`;
 }
 
 /** Equivalente en galones de una cantidad en litros (1 galón = 4 litros); null si no es litro. */

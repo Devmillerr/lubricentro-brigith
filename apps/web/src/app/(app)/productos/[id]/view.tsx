@@ -10,7 +10,7 @@ import { ProductImage } from '@/components/products/product-image';
 import { SaleUnitsSection } from '@/components/products/sale-units-section';
 import { BucketGauge, hasContainer } from '@/components/products/bucket-gauge';
 import { formatQuantity } from '@/lib/inventory/format';
-import { shortUnit } from '@/lib/products/container';
+import { formatStock, shortUnit } from '@/lib/products/container';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge, PageHeader } from '@/components/ui/page-header';
 import { QueryError } from '@/components/ui/query-error';
@@ -19,8 +19,9 @@ import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
 import { present } from '@/lib/customers/format';
+import { formatMoney } from '@/lib/money';
 import { categoryPath } from '@/lib/products/categories';
-import { formatPrice, type Product } from '@/lib/products/format';
+import type { Product } from '@/lib/products/format';
 import { findProduct, rememberProducts } from '@/lib/products/product-lookup';
 
 /**
@@ -81,9 +82,15 @@ export default function ProductDetailPage() {
         <Detail label="Presentación">{present(product.presentation)}</Detail>
         <Detail label="Unidad">{product.unit}</Detail>
         <Detail label="Categoría">{categoryText}</Detail>
-        <Detail label="Precio de venta">{formatPrice(product.salePrice) ?? 'Pendiente'}</Detail>
+        <Detail label="Precio de venta">
+          {product.salePrice !== null ? formatMoney(product.salePrice) : 'Pendiente'}
+        </Detail>
         <Detail label="Stock">
-          {product.tracksStock ? 'Controla stock' : 'No controla stock'}
+          {!product.tracksStock
+            ? 'No controla stock'
+            : product.isCounted
+              ? formatStock(product.stockQuantity, product.unit)
+              : 'Sin conteo inicial'}
         </Detail>
         {hasContainer(product) && (
           <Detail label="Envase">
@@ -103,7 +110,9 @@ export default function ProductDetailPage() {
 
       <Link href={`/inventario/${product.id}`} className={buttonVariants({ variant: 'outline' })}>
         <Boxes className="mr-2 size-4" aria-hidden />
-        Inventario: saldo, conteo, ingreso y ajuste
+        {product.tracksStock && !product.isCounted
+          ? 'Contar stock'
+          : 'Stock: conteo, ingreso y ajuste'}
       </Link>
 
       <SaleUnitsSection product={product} onSaved={query.reload} />

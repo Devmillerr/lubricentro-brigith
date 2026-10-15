@@ -1,10 +1,9 @@
 'use client';
 
-import { Boxes, Package, Plus, Search } from 'lucide-react';
+import { Boxes, ChevronRight, Package, Plus, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { FormError } from '@/components/customers/form-error';
-import { ProductImage } from '@/components/products/product-image';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Chip, ChipRow } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
@@ -13,11 +12,14 @@ import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/states';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
+import { formatMoney } from '@/lib/money';
 import { buildCategoryTree } from '@/lib/products/categories';
-import { formatPrice, type Product } from '@/lib/products/format';
+import { formatStock } from '@/lib/products/container';
+import type { Product } from '@/lib/products/format';
 import { rememberProducts } from '@/lib/products/product-lookup';
 import { searchOnEnter } from '@/lib/enter-key';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
+import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 30;
 
@@ -36,7 +38,7 @@ const ATTRIBUTES: {
  * Catálogo visual (R2): búsqueda siempre visible (nombre, marca, código,
  * viscosidad, presentación o vehículo compatible), categorías y subcategorías
  * como chips, filtros por atributo con los valores que de verdad existen, y
- * tarjetas con imagen (placeholder hasta DEC-34), precio o "Sin precio".
+ * una lista con precio (o "Sin precio") y stock (o "Sin conteo") por producto.
  */
 export default function ProductsPage() {
   const [search, setSearch] = useState('');
@@ -236,9 +238,7 @@ export default function ProductsPage() {
         </Chip>
       </ChipRow>
 
-      {firstPage.status === 'loading' && (
-        <ListSkeleton label="Buscando productos…" variant="grid" rows={6} />
-      )}
+      {firstPage.status === 'loading' && <ListSkeleton label="Buscando productos…" rows={6} />}
 
       {firstPage.status === 'error' && (
         <ErrorState message={failureMessage(firstPage.failure)} onRetry={firstPage.reload} />
@@ -250,7 +250,7 @@ export default function ProductsPage() {
           title={filtered ? 'Sin resultados' : 'Todavía no hay productos'}
           description={
             filtered
-              ? 'Prueba con otra búsqueda o quita algún filtro.'
+              ? 'Prueba otra búsqueda o quita un filtro.'
               : 'Registra el primer producto del catálogo.'
           }
           action={
@@ -262,10 +262,10 @@ export default function ProductsPage() {
       )}
 
       {items.length > 0 && (
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <ul className="flex flex-col divide-y divide-[var(--border)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
           {items.map((product) => (
             <li key={product.id}>
-              <ProductCard product={product} />
+              <ProductRow product={product} />
             </li>
           ))}
         </ul>
@@ -282,29 +282,62 @@ export default function ProductsPage() {
   );
 }
 
-function ProductCard({ product }: { product: Product }) {
-  const price = formatPrice(product.salePrice);
-  const details = [product.brand, product.viscosity, product.presentation].filter(Boolean);
+/**
+ * Fila del catálogo: a la izquierda qué es (nombre, código y atributos); a la
+ * derecha lo que se mira al vender (precio) y lo que hay (stock en la unidad
+ * del estante). Una lista dentro de una sola tarjeta, sin imagen de relleno:
+ * caben el doble de productos por pantalla que con tarjetas.
+ */
+function ProductRow({ product }: { product: Product }) {
+  const price = product.salePrice !== null ? formatMoney(product.salePrice) : null;
+  const details = [product.code, product.brand, product.viscosity, product.presentation].filter(
+    Boolean,
+  );
   return (
     <Link
       href={`/productos/${product.id}`}
-      className="flex h-full flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 hover:bg-[var(--muted)]"
+      className="flex min-h-16 items-center gap-3 px-4 py-3 hover:bg-[var(--muted)]"
     >
-      <ProductImage product={product} />
-      <span className="line-clamp-2 text-sm font-medium break-words">{product.name}</span>
-      {details.length > 0 && (
-        <span className="truncate text-xs text-[var(--muted-foreground)]">
-          {details.join(' · ')}
-        </span>
-      )}
-      <span className="mt-auto flex flex-wrap items-center gap-1">
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="line-clamp-2 font-medium break-words">{product.name}</span>
+        {details.length > 0 && (
+          <span className="truncate text-sm text-[var(--muted-foreground)]">
+            {details.join(' · ')}
+          </span>
+        )}
+        {!product.isActive && (
+          <span>
+            <Badge>Inactivo</Badge>
+          </span>
+        )}
+      </span>
+      <span className="flex shrink-0 flex-col items-end gap-1 text-right">
         {price ? (
-          <span className="text-sm font-semibold">{price}</span>
+          <span className="font-semibold">{price}</span>
         ) : (
           <Badge tone="warning">Sin precio</Badge>
         )}
-        {!product.isActive && <Badge>Inactivo</Badge>}
+        <StockLabel product={product} />
       </span>
+      <ChevronRight className="size-5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
     </Link>
+  );
+}
+
+/** Stock de la fila: la cantidad si ya se contó; si no, que falta el conteo inicial. */
+function StockLabel({ product }: { product: Product }) {
+  if (!product.tracksStock) return null;
+  if (!product.isCounted) return <Badge tone="warning">Sin conteo</Badge>;
+  const quantity = Number(product.stockQuantity);
+  return (
+    <span
+      className={cn(
+        'text-sm',
+        quantity > 0 ? 'text-[var(--muted-foreground)]' : 'font-medium text-[var(--danger)]',
+      )}
+    >
+      {quantity > 0 ? '' : 'Sin stock · '}
+      {formatStock(product.stockQuantity, product.unit)}
+    </span>
   );
 }

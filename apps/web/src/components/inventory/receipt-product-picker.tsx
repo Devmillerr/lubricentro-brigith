@@ -7,19 +7,22 @@ import { StockHint } from '@/components/maintenance/product-picker';
 import { Button } from '@/components/ui/button';
 import { Chip, ChipRow } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
+import { ListSkeleton } from '@/components/ui/states';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
 import { present } from '@/lib/customers/format';
 import { formatQuantity, parseQuantity, type ProductWithStock } from '@/lib/inventory/format';
 import { buildCategoryTree } from '@/lib/products/categories';
+import { formatStock } from '@/lib/products/container';
 import type { ProductCategory } from '@/lib/products/format';
 import { rememberProducts } from '@/lib/products/product-lookup';
 import { searchOnEnter } from '@/lib/enter-key';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
 import { cn } from '@/lib/utils';
 
-const PAGE_SIZE = 20;
+/** Lo que cabe en una pantalla de teléfono; el resto, con "Cargar más" o buscando. */
+const PAGE_SIZE = 10;
 
 /**
  * Filtro rápido "Aceites auto/moto" (07-UI-UX.md §3.6, 10-OPERACION-REAL.md
@@ -41,22 +44,30 @@ function quickCategories(categories: ProductCategory[]): ProductCategory[] {
 }
 
 /**
- * Buscador del catálogo para Recibir: texto (nombre, marca, código,
- * viscosidad o vehículo), chips de categoría y filtro rápido de aceites.
- * Solo ofrece productos activos (BR-P21). La lista aparece al buscar o
- * elegir un chip, para que la pantalla no arranque con todo el catálogo.
- * Tocar un producto ya agregado le suma 1. También lo usa Vender (B-134).
+ * Buscador del catálogo para Recibir y Vender (B-134): texto (nombre, marca,
+ * código, viscosidad o vehículo), chips de categoría y filtro rápido de
+ * aceites. Solo ofrece productos activos (BR-P21). Con "Todas" se ve el
+ * catálogo desde el inicio, por páginas de 10, sin tener que buscar antes.
+ * Tocar un producto ya agregado le suma 1.
  */
 export function ReceiptProductPicker({
   quantities,
   onAdd,
   searchLabel = 'Buscar producto recibido por nombre, marca, código o viscosidad',
+  stockDisplay = 'status',
 }: {
   /** Cantidad escrita por producto ya agregado, para marcarlo en la lista. */
   quantities: Map<string, string>;
   onAdd: (product: ProductWithStock) => void;
   /** Etiqueta accesible del buscador. */
   searchLabel?: string;
+  /**
+   * `status`: saldo o estado del stock ("Sin conteo inicial", "No controla
+   * stock"), útil al recibir. `balance`: solo el saldo de los productos
+   * contados, lo que cambia algo al vender (no se puede vender más de lo que
+   * hay); sin conteo se vende igual (DEC-27), así que no se marca.
+   */
+  stockDisplay?: 'status' | 'balance';
 }) {
   const [search, setSearch] = useState('');
   const [topId, setTopId] = useState('');
@@ -72,7 +83,6 @@ export function ReceiptProductPicker({
   const quick = quickCategories(flat);
   const top = tree.find((node) => node.id === topId);
 
-  const active = Boolean(term || categoryId);
   const filterKey = JSON.stringify([term, categoryId]);
   const query = (cursor?: string) => ({
     limit: PAGE_SIZE,
@@ -83,7 +93,7 @@ export function ReceiptProductPicker({
     ...(cursor ? { cursor } : {}),
   });
 
-  const firstPage = useApiQuery(active ? `receipt-products:${filterKey}` : null, async () => {
+  const firstPage = useApiQuery(`receipt-products:${filterKey}`, async () => {
     const result = await callApi(api.GET('/products', { params: { query: query() } }));
     if (result.ok) rememberProducts(result.data.items);
     return result;
@@ -99,11 +109,9 @@ export function ReceiptProductPicker({
 
   const extra = more.key === filterKey ? more : null;
   const items =
-    active && firstPage.status === 'success'
-      ? [...firstPage.data.items, ...(extra?.items ?? [])]
-      : [];
+    firstPage.status === 'success' ? [...firstPage.data.items, ...(extra?.items ?? [])] : [];
   const nextCursor =
-    active && firstPage.status === 'success'
+    firstPage.status === 'success'
       ? extra && extra.items.length > 0
         ? extra.cursor
         : firstPage.data.nextCursor
@@ -171,6 +179,9 @@ export function ReceiptProductPicker({
 
       {tree.length > 0 && (
         <ChipRow label="Categorías">
+          <Chip selected={!categoryId} onClick={() => chooseCategory('')}>
+            Todas
+          </Chip>
           {quick.map((category) => (
             <Chip
               key={`quick-${category.id}`}
@@ -182,9 +193,6 @@ export function ReceiptProductPicker({
               {category.name}
             </Chip>
           ))}
-          <Chip selected={!categoryId} onClick={() => chooseCategory('')}>
-            Todas
-          </Chip>
           {tree.map((node) => (
             <Chip
               key={node.id}
@@ -210,17 +218,8 @@ export function ReceiptProductPicker({
         </ChipRow>
       )}
 
-      {!active && (
-        <p className="text-sm text-[var(--muted-foreground)]">
-          Busca un producto o elige una categoría para ver la lista.
-        </p>
-      )}
-      {active && firstPage.status === 'loading' && (
-        <p role="status" className="text-sm text-[var(--muted-foreground)]">
-          Buscando…
-        </p>
-      )}
-      {active && firstPage.status === 'error' && (
+      {firstPage.status === 'loading' && <ListSkeleton label="Buscando productos…" rows={4} />}
+      {firstPage.status === 'error' && (
         <FormError>
           {failureMessage(firstPage.failure)}{' '}
           <button type="button" onClick={firstPage.reload} className="underline">
@@ -228,10 +227,8 @@ export function ReceiptProductPicker({
           </button>
         </FormError>
       )}
-      {active && firstPage.status === 'success' && items.length === 0 && (
-        <p className="text-sm text-[var(--muted-foreground)]">
-          Sin productos activos con ese filtro.
-        </p>
+      {firstPage.status === 'success' && items.length === 0 && (
+        <p className="text-sm text-[var(--muted-foreground)]">No hay productos con ese filtro.</p>
       )}
 
       {items.length > 0 && (
@@ -241,6 +238,7 @@ export function ReceiptProductPicker({
               key={product.id}
               product={product}
               added={quantities.get(product.id)}
+              stockDisplay={stockDisplay}
               onAdd={() => onAdd(product)}
             />
           ))}
@@ -260,10 +258,12 @@ export function ReceiptProductPicker({
 function PickerRow({
   product,
   added,
+  stockDisplay,
   onAdd,
 }: {
   product: ProductWithStock;
   added: string | undefined;
+  stockDisplay: 'status' | 'balance';
   onAdd: () => void;
 }) {
   const details = [present(product.brand), present(product.viscosity), present(product.code)]
@@ -287,7 +287,16 @@ function PickerRow({
           <span className="truncate text-xs text-[var(--muted-foreground)]">
             {details || product.unit}
           </span>
-          <StockHint product={product} />
+          {stockDisplay === 'status' ? (
+            <StockHint product={product} />
+          ) : (
+            product.tracksStock &&
+            product.stock?.isCounted && (
+              <span className="text-xs text-[var(--muted-foreground)]">
+                Saldo {formatStock(product.stock.balance, product.unit)}
+              </span>
+            )
+          )}
         </span>
         {added !== undefined && (
           <span className="flex shrink-0 items-center gap-1 text-sm font-semibold">

@@ -21,7 +21,21 @@ Barra inferior:
 | **Inicio** | Búsqueda por placa y acciones rápidas |
 | **Avisar** | Recordatorios pendientes, con contador |
 | **Productos** | Catálogo, compatibilidad e inventario (stock, contar, ingreso, ajuste) |
-| **Más** | Clientes, configuración, resumen del piloto. En la Fase 2: ventas, lavado y cierre |
+| **Más** | Clientes, historial de ventas, recepciones y compras, proveedores, cuentas por pagar y configuración (una fila por sección, sin descripciones); al final, **Cuenta**: usuario, cambiar contraseña y **Cerrar sesión** |
+
+La pestaña activa es la de la pantalla actual, por la ruta más específica: Vender, Lavado, Mantenimiento y la ficha del vehículo son de **Inicio** (se abren desde ahí); el historial de Ventas, Clientes, Proveedores, Cuentas por pagar, Configuración y la cuenta, de **Más**; Recepciones y compras, de **Productos** (2026-10-08, ajustado a la PWA el 2026-10-14).
+
+**Barra de acción (2026-10-08, PWA 2026-10-14):** en Vender, Lavado, Mantenimiento y Recibir, el botón principal queda pegado encima de la barra inferior (respeta el área segura) mientras se recorre el formulario; es un solo componente, `StickyActionBar`. Muestra el total ("Cobrar S/ 25.50") o lo que falta ("Agrega un producto", "Elige Efectivo o Yape"); en Mantenimiento el total del cobro va en el resumen junto al botón ("Guardar y cobrar"). En Vender, tocarlo con algo pendiente lleva a ese paso. En pantallas anchas vuelve a su lugar normal.
+
+**Importes (2026-10-14):** todo monto visible usa un solo formato, `S/ 25,474.50` (coma de miles, punto decimal), también los precios de Productos; en compras y deudas en dólares, `US$ 1,250.00`. El signo va delante del símbolo (`-S/ 1,500.00`). Los campos de precio se escriben sin miles (`25474.50`). Solo cambia la presentación (`apps/web/src/lib/money.ts`).
+
+**Cabecera, teclado y acceso (2026-10-14):** en el teléfono la cabecera muestra solo la marca; el usuario y **Cerrar sesión** están en **Más → Cuenta** (en escritorio siguen también en la barra lateral). Con un campo de texto enfocado (teclado abierto) la barra inferior se oculta y la barra de acción baja al borde; checkbox, fecha y listas desplegables no la ocultan. En Android, `interactive-widget=resizes-content` deja la barra de acción encima del teclado (Safari iOS lo ignora). El login muestra solo el emblema (sin repetir "BRIGITH" en texto) y las contraseñas (login, recuperar y cambiar) tienen un botón para verlas.
+
+**Productos (2026-10-14):** el catálogo es una lista dentro de una sola tarjeta, sin imagen de relleno: a la izquierda nombre, código y atributos; a la derecha el precio (o "Sin precio") y el stock en la unidad del estante ("9 L"; "Sin conteo" si falta el conteo inicial; en rojo "Sin stock" si no queda). La ficha muestra el stock real en lugar de "Controla stock".
+
+**Sistema visual (2026-10-15):** texto chico de 13 px (no 12); cabecera, barra inferior y barra de acción translúcidas con desenfoque, como en iOS; filas que se marcan al tocarlas y un fundido corto al cambiar de pantalla (sin animación con "reducir movimiento"); la interfaz no selecciona texto con un toque largo. Inicio muestra el saludo como título y los accesos en 2 × 2. En Proveedores, Categorías y Tipos de lavado, las acciones de cada fila van en la hoja inferior del botón ⋯, sin borde. Los estados vacíos no llevan borde punteado.
+
+**Textos e íconos (2026-10-15):** sin subtítulos que repiten el título ni explicaciones obvias; las ayudas de campo quedan solo donde evitan un error y en pocas palabras. El buscador del Inicio dice "Buscar nombre o placa". En Lavado y en Tipos de lavado, cada tipo lleva el ícono de su vehículo (por nombre; si no coincide, un auto). Los clientes muestran un avatar genérico con sus iniciales (o el ícono de una persona), nunca una foto. El historial del vehículo usa el mismo ícono de mantenimiento que Ventas.
 
 ## 3. Pantallas del MVP
 
@@ -122,7 +136,7 @@ La UI forma parte de R3 (DEC-52). **Ingreso** y **Ajuste** cambian así; **Conta
 
 Con R8 una compra puede ser al crédito, así que el monto de una recepción no siempre está pagado. Solo cambian textos; montos y cálculos siguen igual.
 
-- **Recepciones y compras:** la tarjeta del mes dice "Total comprado registrado" (o "… en soles"); el subtítulo, "Lo que llegó, cuánto compraste y en qué productos, mes a mes."; "Por producto" aclara que suma compras al contado y al crédito, y el costo unitario es "monto de la compra ÷ cantidad recibida".
+- **Recepciones y compras:** la tarjeta del mes dice "Total comprado registrado" (o "… en soles"); sin subtítulo (2026-10-15); "Por producto" aclara que suma compras al contado y al crédito, y el costo unitario es "monto de la compra ÷ cantidad recibida".
 - **Detalle de una recepción:** al crédito dice "Total de la compra"; al contado (o sin forma de pago registrada) sigue diciendo "Total pagado". Lo que falta pagar se ve en la deuda.
 - **Recibir:** el total del formulario dice "Total de la compra" si se eligió "Al crédito"; el monto de cada línea, "Total S/". **Más → Recepciones y compras:** "cuánto compraste".
 
@@ -147,10 +161,10 @@ Con R8 una compra puede ser al crédito, así que el monto de una recepción no 
 - **Vender (precio por operación):** al elegir la presentación, la línea muestra **Presentación** (1/4 de galón), **Cantidad** (1 L) y **Precio de venta** (S/ ___, vacío y con el foco si la forma no tiene precio sugerido); se edita antes de cobrar y sin él no se puede cobrar. Los chips muestran la cantidad (1 L, 0.5 L) y, si existe, el precio sugerido.
 
 ### 3.7 Configuración
-Plantilla de WhatsApp con vista previa, días de anticipación, regla por defecto cuando hay km y fecha, política de stock insuficiente y código de país. Todos los valores abiertos aparecen vacíos o marcados como provisionales.
+Solo los ajustes que tienen efecto: **mensaje de aviso** de WhatsApp (los datos del aviso se agregan con botones y se ven como `[Nombre del cliente]`, `[Placa]`…; se guardan como `{cliente}`, `{placa}`… y una vista previa muestra el mensaje con datos de ejemplo), **días de anticipación** y la regla por defecto cuando hay km y fecha. Política de stock insuficiente, moneda y código de país siguen en la API pero no se muestran mientras no tengan efecto (2026-10-08).
 
 ### 3.8 Resumen del piloto
-Pantalla de solo lectura con los tres indicadores aprobados: adopción, mantenimiento e inventario (BR-I1 a BR-I3), por período.
+**Retirado de la interfaz (2026-10-08):** eran métricas internas del piloto, no información para el dueño. Los indicadores (BR-I1 a BR-I3) siguen disponibles en `GET /pilot-indicators`.
 
 **Cambio de R7 (DEC-85, sin implementar):** la adopción muestra por separado ventas de mostrador, lavados y mantenimientos del período, como cantidades reales, sin porcentajes objetivo ni metas.
 
@@ -164,7 +178,7 @@ La UI forma parte de R5 (DEC-60). Sigue el patrón actual del frontend: sin TanS
 | **Lavados** (historial) | El historial genérico de ventas (`/ventas`, B-135) filtrado por `source=WASH` (`/ventas?source=WASH`, `GET /sales?source=WASH`), con monto, fuente, método de pago, fecha, nota y estado. Chips Todas / Mostrador / Lavado. No es una pantalla aparte (DEC-68). El nombre del tipo no sale en la lista porque `SaleSummaryResponse` no trae las líneas: se ve en el detalle |
 | **Detalle** | El detalle genérico de venta (`/ventas/:id`, `GET /sales/:id`, B-135) y acción **Anular**. En un lavado, el título es el nombre del tipo (`descriptionSnapshot`) |
 | **Anular** | Pide el motivo, siempre obligatorio (BR-V7, DEC-59), y usa `POST /sales/:id/void`. No se usa "Deshacer" para una venta: el término es **Anular**. **Desde R6 (DEC-70):** en una venta con `source = MAINTENANCE` (cobro de mantenimiento) **no** se ofrece esta acción: se oculta o se deshabilita, o conduce a la anulación de su mantenimiento. La API la rechaza igual con 409 `SALE_MANAGED_BY_MAINTENANCE`. Las ventas de mostrador (R4) y los lavados (R5) no cambian |
-| **Configuración → Tipos de lavado** | `/configuracion/lavados`. Crear, renombrar, ordenar (subir/bajar) y desactivar/reactivar tipos; agregar, editar (monto y etiqueta; etiqueta vacía = sin etiqueta) y desactivar/reactivar precios (DEC-56, DEC-63). Lista con `GET /wash-types?includeInactive=true`: muestra todos, también los inactivos y los que no tienen precio (marcados "Sin precio: no se cobra"), para agregarles precio. La pantalla **Lavado** solo pide los activos (DEC-64) |
+| **Configuración → Tipos de lavado** | `/configuracion/lavados`. Crear, renombrar, ordenar (subir/bajar) y desactivar/reactivar tipos; agregar, editar (monto y etiqueta; etiqueta vacía = sin etiqueta) y desactivar/reactivar precios (DEC-56, DEC-63). Lista con `GET /wash-types?includeInactive=true`: muestra todos, también los inactivos y los que no tienen precio (marcados "Sin precio: no se cobra"), para agregarles precio. La pantalla **Lavado** solo pide los activos (DEC-64). Cada tipo y cada precio tiene un botón **⋯** que abre una hoja inferior con sus acciones (renombrar o editar, subir, bajar y, al final y en rojo, desactivar o reactivar), igual que en **Categorías** (2026-10-14) |
 
 - Sin estados de lavado, cola ni Kanban (BR-L1).
 - El momento real del cobro y quién cobra (BR-L7, P-11) quedan **fuera de R5**: la pantalla registra el lavado cuando se confirma y no asume otro momento.

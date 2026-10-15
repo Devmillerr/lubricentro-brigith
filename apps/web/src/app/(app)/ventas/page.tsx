@@ -29,15 +29,15 @@ import { cn } from '@/lib/utils';
 const PAGE_SIZE = 20;
 
 const EMPTY: Record<SaleSource | 'ALL', { title: string; description: string }> = {
-  ALL: { title: 'Todavía no hay ventas', description: 'Los cobros aparecerán aquí.' },
+  ALL: { title: 'Todavía no hay ventas', description: '' },
   COUNTER: {
     title: 'Todavía no hay ventas de mostrador',
-    description: 'Las ventas cobradas desde Vender aparecerán aquí.',
+    description: '',
   },
-  WASH: { title: 'Todavía no hay lavados', description: 'Los lavados cobrados aparecerán aquí.' },
+  WASH: { title: 'Todavía no hay lavados', description: '' },
   MAINTENANCE: {
     title: 'Todavía no hay cobros de mantenimiento',
-    description: 'Se cobran desde cada mantenimiento y aparecerán aquí.',
+    description: 'Se cobran desde cada mantenimiento.',
   },
 };
 
@@ -71,7 +71,6 @@ function SalesHistory() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title={isWash ? 'Lavados' : 'Ventas'}
-        subtitle="Historial de cobros; toca uno para ver el detalle o anularlo"
         back={isWash ? { href: '/lavado', label: 'Lavado' } : { href: '/mas', label: 'Más' }}
         action={
           isWash ? (
@@ -151,7 +150,7 @@ function SalesList({ source }: { source: SaleSource | null }) {
       <EmptyState
         icon={ShoppingCart}
         title={EMPTY[source ?? 'ALL'].title}
-        description={EMPTY[source ?? 'ALL'].description}
+        description={EMPTY[source ?? 'ALL'].description || undefined}
       />
     );
   }

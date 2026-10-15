@@ -1,7 +1,5 @@
 import {
   ChevronRight,
-  ChartColumn,
-  KeyRound,
   PackagePlus,
   Receipt,
   Settings,
@@ -11,60 +9,46 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
+import { AccountSection } from '@/components/layout/account-section';
 import { Badge, PageHeader } from '@/components/ui/page-header';
 
-const SECTIONS: { label: string; description: string; icon: LucideIcon; href: string | null }[] = [
+const SECTIONS: { label: string; icon: LucideIcon; href: string | null }[] = [
   {
     label: 'Clientes',
-    description: 'Clientes y sus vehículos',
     icon: Users,
     href: '/clientes',
   },
   {
     label: 'Ventas',
-    description: 'Historial de cobros y lavados; detalle y anulación',
     icon: Receipt,
     href: '/ventas',
   },
   {
     label: 'Recepciones y compras',
-    description: 'Mercadería recibida, cuánto compraste y el total invertido del mes',
     icon: PackagePlus,
     href: '/inventario/recepciones',
   },
   {
     label: 'Proveedores',
-    description: 'A quién le compras: nombre, RUC y teléfono',
     icon: Truck,
     href: '/proveedores',
   },
   {
     label: 'Cuentas por pagar',
-    description: 'Lo que debes a proveedores, vencimientos y pagos',
     icon: Wallet,
     href: '/cuentas-por-pagar',
   },
   {
     label: 'Configuración',
-    description: 'Plantilla de WhatsApp, anticipación y políticas',
     icon: Settings,
     href: '/configuracion',
   },
-  {
-    label: 'Resumen del piloto',
-    description: 'Indicadores de adopción, mantenimiento e inventario',
-    icon: ChartColumn,
-    href: '/resumen',
-  },
-  {
-    label: 'Cambiar contraseña',
-    description: 'Tu cuenta y sus datos siguen igual; te da un código de recuperación',
-    icon: KeyRound,
-    href: '/cuenta/contrasena',
-  },
 ];
 
-/** Pestaña "Más" (07-UI-UX.md §2). */
+/**
+ * Pestaña "Más" (07-UI-UX.md §2): una fila por sección, sin descripciones (el
+ * nombre y el ícono bastan), y al final la cuenta con Cerrar sesión.
+ */
 export default function MorePage() {
   return (
     <div className="flex flex-col gap-6">
@@ -77,12 +61,7 @@ export default function MorePage() {
               <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-[var(--muted)]">
                 <Icon className="size-5" aria-hidden />
               </span>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="font-semibold">{section.label}</span>
-                <span className="text-sm text-[var(--muted-foreground)]">
-                  {section.description}
-                </span>
-              </span>
+              <span className="min-w-0 flex-1 font-semibold">{section.label}</span>
               {section.href ? (
                 <ChevronRight className="size-5 text-[var(--muted-foreground)]" aria-hidden />
               ) : (
@@ -95,14 +74,14 @@ export default function MorePage() {
               {section.href ? (
                 <Link
                   href={section.href}
-                  className="flex min-h-16 items-center gap-3 px-4 py-3 hover:bg-[var(--muted)]"
+                  className="flex min-h-14 items-center gap-3 px-4 py-3 hover:bg-[var(--muted)]"
                 >
                   {body}
                 </Link>
               ) : (
                 <div
                   aria-disabled
-                  className="flex min-h-16 items-center gap-3 px-4 py-3 opacity-60"
+                  className="flex min-h-14 items-center gap-3 px-4 py-3 opacity-60"
                 >
                   {body}
                 </div>
@@ -111,6 +90,7 @@ export default function MorePage() {
           );
         })}
       </ul>
+      <AccountSection />
     </div>
   );
 }

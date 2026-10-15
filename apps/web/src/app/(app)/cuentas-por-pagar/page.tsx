@@ -44,11 +44,7 @@ export default function PayablesPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader
-        title="Cuentas por pagar"
-        subtitle="Lo que debes a tus proveedores"
-        back={{ href: '/mas', label: 'Más' }}
-      />
+      <PageHeader title="Cuentas por pagar" back={{ href: '/mas', label: 'Más' }} />
 
       {summary.status === 'success' && summary.data.currencies.length > 0 && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -112,7 +108,7 @@ export default function PayablesPage() {
         (list.data.length === 0 ? (
           <EmptyState
             title="No hay deudas aquí"
-            description="Las compras al crédito aparecen en esta lista con su vencimiento."
+            description="Aquí aparecen las compras al crédito."
           />
         ) : (
           <ul className="flex flex-col divide-y divide-[var(--border)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">

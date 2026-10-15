@@ -1,8 +1,9 @@
 'use client';
 
-import { Pencil } from 'lucide-react';
+import { Ban, Pencil, RotateCcw } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { FormError } from '@/components/customers/form-error';
+import { RowActions } from '@/components/ui/action-sheet';
 import { Button } from '@/components/ui/button';
 import { Field, Textarea } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -45,13 +46,7 @@ export default function SuppliersPage() {
     return true;
   }
 
-  const header = (
-    <PageHeader
-      title="Proveedores"
-      subtitle="A quién le compras la mercadería"
-      back={{ href: '/mas', label: 'Más' }}
-    />
-  );
+  const header = <PageHeader title="Proveedores" back={{ href: '/mas', label: 'Más' }} />;
 
   if (query.status === 'loading') {
     return (
@@ -250,8 +245,8 @@ function SupplierRow({
   }
 
   return (
-    <div className="flex flex-col gap-2 px-3 py-3">
-      <span className="flex min-w-0 flex-col">
+    <div className="flex min-h-16 items-center gap-3 px-3 py-3">
+      <span className="flex min-w-0 flex-1 flex-col">
         <span className="flex items-center gap-2 font-medium break-words">
           {supplier.name}
           {!supplier.isActive && <Badge>Desactivado</Badge>}
@@ -264,25 +259,25 @@ function SupplierRow({
           </span>
         )}
       </span>
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          className="w-11 shrink-0 px-0"
-          aria-label={`Editar ${supplier.name}`}
-          onClick={() => setEditing(true)}
-          disabled={busy}
-        >
-          <Pencil className="size-4" aria-hidden />
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => onPatch(supplier.id, { isActive: !supplier.isActive })}
-          disabled={busy}
-          className="flex-1"
-        >
-          {supplier.isActive ? 'Desactivar' : 'Reactivar'}
-        </Button>
-      </div>
+      <RowActions
+        title={supplier.name}
+        disabled={busy}
+        actions={[
+          { label: 'Editar datos', icon: Pencil, onSelect: () => setEditing(true) },
+          supplier.isActive
+            ? {
+                label: 'Desactivar',
+                icon: Ban,
+                danger: true,
+                onSelect: () => onPatch(supplier.id, { isActive: false }),
+              }
+            : {
+                label: 'Reactivar',
+                icon: RotateCcw,
+                onSelect: () => onPatch(supplier.id, { isActive: true }),
+              },
+        ]}
+      />
     </div>
   );
 }

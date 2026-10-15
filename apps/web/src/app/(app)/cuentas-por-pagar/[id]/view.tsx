@@ -88,7 +88,7 @@ export default function PayablePage() {
           <dd>
             <Link
               href={`/inventario/recepciones/${payable.receiptId}`}
-              className="underline underline-offset-2"
+              className="-my-3 inline-flex min-h-11 items-center underline underline-offset-2"
             >
               {payable.receipt
                 ? `${receiptDateFormat.format(new Date(payable.receipt.occurredAt))}${

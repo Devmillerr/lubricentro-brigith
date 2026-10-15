@@ -3,6 +3,7 @@
 import { ChevronRight, Plus, Search, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { CustomerAvatar } from '@/components/customers/customer-avatar';
 import { FormError } from '@/components/customers/form-error';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -112,11 +113,7 @@ export default function CustomersPage() {
         <EmptyState
           icon={Users}
           title={term ? `Sin resultados para «${term}»` : 'Todavía no hay clientes'}
-          description={
-            term
-              ? 'Revisa lo escrito o registra un cliente nuevo.'
-              : 'Registra el primero; ningún dato es obligatorio.'
-          }
+          description={term ? 'Revisa lo escrito.' : 'Registra el primero.'}
           action={
             <Link href="/clientes/nuevo" className={buttonVariants()}>
               Crear cliente
@@ -133,6 +130,7 @@ export default function CustomersPage() {
                 href={`/clientes/${customer.id}`}
                 className="flex min-h-16 items-center gap-3 px-4 py-3 hover:bg-[var(--muted)]"
               >
+                <CustomerAvatar name={customer.name} />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-medium">{customerTitle(customer)}</span>
                   <span className="truncate text-sm text-[var(--muted-foreground)]">

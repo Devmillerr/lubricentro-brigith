@@ -69,6 +69,9 @@ jobs:
       - name: Pruebas (API)
         run: pnpm --filter @brigith/api test
 
+      - name: Pruebas (web, funciones de lib)
+        run: pnpm --filter @brigith/web test
+
       - name: Pruebas de integración (API, Postgres real)
         run: pnpm --filter @brigith/api test:integration
 

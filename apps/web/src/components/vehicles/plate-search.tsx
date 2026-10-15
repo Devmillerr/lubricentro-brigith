@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronRight, Plus, Search } from 'lucide-react';
+import { ChevronRight, Plus, Search, User } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { buttonVariants } from '@/components/ui/button';
@@ -16,38 +16,48 @@ import { formatDate, formatKm } from '@/lib/maintenance/format';
 import { STATUS_LABELS } from '@/lib/reminders/format';
 import { searchOnEnter } from '@/lib/enter-key';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
+import { looksLikePlate, normalizePlate } from '@/lib/vehicles/plate';
 
 type LookupItem = Schemas['VehicleLookupResponse'];
+type Customer = Schemas['CustomerResponse'];
 
 const DEBOUNCE_MS = 400;
 
-/** Misma normalización que la API (BR-C6): mayúsculas, sin espacios ni guiones. */
-function normalizePlate(value: string): string {
-  return value.toUpperCase().replace(/[\s-]+/g, '');
-}
-
 /**
- * Búsqueda por placa del Inicio (07-UI-UX.md §3.1) con `GET /vehicles/lookup`
- * mientras se escribe. Si ninguna placa coincide completa, ofrece crear el
- * vehículo con la placa escrita.
+ * Búsqueda del Inicio (07-UI-UX.md §3.1) mientras se escribe, igual que en
+ * Mantenimiento: por placa (`GET /vehicles/lookup`) y por nombre o teléfono
+ * del cliente (`GET /customers`). Si lo escrito parece placa y ninguna
+ * coincide completa, ofrece crear el vehículo con esa placa.
  */
 export function PlateSearch() {
   const [text, setText] = useState('');
   // Una sola petición cuando se deja de escribir, no una por tecla.
-  const plate = useDebouncedValue(normalizePlate(text), DEBOUNCE_MS);
+  const term = useDebouncedValue(text.trim(), DEBOUNCE_MS);
+  const plate = normalizePlate(term);
+  const typing = text.trim() !== term;
 
   const lookup = useApiQuery(plate ? `plate-search:${plate}` : null, () =>
     callApi(api.GET('/vehicles/lookup', { params: { query: { plate } } })),
   );
-  const typing = normalizePlate(text) !== plate;
-  const exactMatch =
-    lookup.status === 'success' && lookup.data.some((item) => item.plateNormalized === plate);
+  const customers = useApiQuery(term.length >= 2 ? `home-customer:${term}` : null, () =>
+    callApi(api.GET('/customers', { params: { query: { search: term, limit: 5 } } })),
+  );
+  const loading = lookup.status === 'loading' || customers.status === 'loading';
+  const vehicleItems = lookup.status === 'success' ? lookup.data : [];
+  const customerItems = customers.status === 'success' ? customers.data.items : [];
+  const exactMatch = vehicleItems.some((item) => item.plateNormalized === plate);
+  const nothing =
+    !loading &&
+    lookup.status !== 'error' &&
+    customers.status !== 'error' &&
+    vehicleItems.length === 0 &&
+    customerItems.length === 0;
 
   return (
     <section className="flex flex-col gap-3">
       {/* Compacto en Inicio: la lupa y el ejemplo bastan; la etiqueta queda para lectores de pantalla. */}
       <label htmlFor="plate-search" className="sr-only">
-        Buscar por placa
+        Buscar por nombre o placa
       </label>
       <div className="relative">
         <Search
@@ -60,9 +70,8 @@ export function PlateSearch() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={searchOnEnter}
-          placeholder="Buscar placa, ej. ABC-123"
-          maxLength={20}
-          autoCapitalize="characters"
+          placeholder="Buscar nombre o placa"
+          maxLength={60}
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
@@ -71,9 +80,9 @@ export function PlateSearch() {
         />
       </div>
 
-      {plate && !typing && (
+      {term && !typing && (
         <div aria-live="polite" className="flex flex-col gap-3">
-          {lookup.status === 'loading' && <LoadingState label="Buscando…" className="py-6" />}
+          {loading && <LoadingState label="Buscando…" className="py-6" />}
           {lookup.status === 'error' && (
             <ErrorState
               message={failureMessage(lookup.failure)}
@@ -81,32 +90,47 @@ export function PlateSearch() {
               className="py-6"
             />
           )}
-          {lookup.status === 'success' && (
-            <>
-              {lookup.data.length === 0 && (
-                <p className="text-sm text-[var(--muted-foreground)]">
-                  No hay vehículos con esa placa.
-                </p>
-              )}
-              {lookup.data.length > 0 && (
-                <ul className="flex flex-col gap-2">
-                  {lookup.data.map((item) => (
-                    <li key={item.id}>
-                      <LookupResult item={item} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {!exactMatch && (
-                <Link
-                  href={`/vehiculos/nuevo?placa=${encodeURIComponent(text.trim())}`}
-                  className={buttonVariants({ variant: 'outline' })}
-                >
-                  <Plus className="mr-2 size-4" aria-hidden />
-                  Crear vehículo con esta placa
-                </Link>
-              )}
-            </>
+          {customers.status === 'error' && (
+            <ErrorState
+              message={failureMessage(customers.failure)}
+              onRetry={customers.reload}
+              className="py-6"
+            />
+          )}
+          {vehicleItems.length > 0 && (
+            <ul className="flex flex-col gap-2">
+              {vehicleItems.map((item) => (
+                <li key={item.id}>
+                  <LookupResult item={item} />
+                </li>
+              ))}
+            </ul>
+          )}
+          {customerItems.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <h3 className="text-sm font-semibold text-[var(--muted-foreground)]">Clientes</h3>
+              <ul className="flex flex-col gap-2">
+                {customerItems.map((customer) => (
+                  <li key={customer.id}>
+                    <CustomerResult customer={customer} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {nothing && (
+            <p className="text-sm text-[var(--muted-foreground)]">
+              No hay vehículos ni clientes que coincidan.
+            </p>
+          )}
+          {!loading && lookup.status !== 'error' && looksLikePlate(plate) && !exactMatch && (
+            <Link
+              href={`/vehiculos/nuevo?placa=${encodeURIComponent(term)}`}
+              className={buttonVariants({ variant: 'outline' })}
+            >
+              <Plus className="mr-2 size-4" aria-hidden />
+              Crear vehículo con esta placa
+            </Link>
           )}
         </div>
       )}
@@ -155,5 +179,23 @@ function LookupResult({ item }: { item: LookupItem }) {
         Nuevo mantenimiento
       </Link>
     </div>
+  );
+}
+
+/** Cliente encontrado por nombre o teléfono: lleva a su ficha, con sus vehículos. */
+function CustomerResult({ customer }: { customer: Customer }) {
+  const phone = present(customer.phone);
+  return (
+    <Link
+      href={`/clientes/${customer.id}`}
+      className="flex min-h-14 items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 hover:bg-[var(--muted)]"
+    >
+      <User className="size-5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+      <span className="flex min-w-0 flex-1 flex-col text-sm">
+        <span className="font-semibold break-words">{customerTitle(customer)}</span>
+        {phone && <span className="text-[var(--muted-foreground)]">{phone}</span>}
+      </span>
+      <ChevronRight className="size-5 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+    </Link>
   );
 }

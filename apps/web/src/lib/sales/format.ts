@@ -1,4 +1,5 @@
 import type { Schemas } from '@/lib/api/client';
+import { formatCentsMoney, formatMoney } from '@/lib/money';
 import { dateTimeFormat } from '@/lib/utils';
 
 export type Sale = Schemas['SaleResponse'];
@@ -50,11 +51,11 @@ export function parsePrice(raw: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-/** Precio del catálogo para precargar la línea ("12.5"); vacío si el producto no tiene precio. */
+/** Precio del catálogo para precargar la línea ("12.50"); vacío si el producto no tiene precio. */
 export function priceInput(salePrice: string | null): string {
   if (salePrice === null) return '';
   const value = Number(salePrice);
-  return Number.isFinite(value) ? String(value) : '';
+  return Number.isFinite(value) ? value.toFixed(2) : '';
 }
 
 /**
@@ -68,18 +69,13 @@ export function subtotalCents(quantity: number, unitPrice: number): number {
   return Math.floor((units + 500) / 1000);
 }
 
+/** Céntimos a "S/ 1,234.50" (formato único de `lib/money`). */
 export function formatCents(cents: number): string {
-  return formatMoney(cents / 100);
+  return formatCentsMoney(cents);
 }
 
-/**
- * Monto de una venta o lavado. Viaja como string (Decimal) y se muestra en
- * soles con 2 decimales, como los montos confirmados de lavado (S/8, S/15…).
- */
-export function formatMoney(amount: string | number): string {
-  const value = typeof amount === 'string' ? Number(amount) : amount;
-  return Number.isFinite(value) ? `S/ ${value.toFixed(2)}` : `S/ ${amount}`;
-}
+/** Monto de una venta o lavado: viaja como string (Decimal); formato único de `lib/money`. */
+export { formatMoney };
 
 export const saleDateFormat = dateTimeFormat();
 

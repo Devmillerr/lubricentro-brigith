@@ -10,6 +10,7 @@ export function BrandEmblem({
   size,
   priority = false,
   decorative = false,
+  eager = false,
   className,
 }: {
   /** Ancho en px CSS; el alto sale de la proporción del logo. */
@@ -18,6 +19,8 @@ export function BrandEmblem({
   priority?: boolean;
   /** Junto al texto "BRIGITH": el lector de pantalla no lo repite. */
   decorative?: boolean;
+  /** Cargar ya, sin esperar a que entre en pantalla (lo que siempre está a la vista). */
+  eager?: boolean;
   className?: string;
 }) {
   return (
@@ -30,6 +33,7 @@ export function BrandEmblem({
       // hace que el navegador lo pida antes que el resto de imágenes y scripts.
       preload={priority}
       fetchPriority={priority ? 'high' : undefined}
+      loading={eager && !priority ? 'eager' : undefined}
       className={cn('shrink-0 select-none', className)}
     />
   );
@@ -39,17 +43,21 @@ export function BrandEmblem({
 export function BrandLockup({
   subtitle,
   emblemSize = 40,
+  eager = false,
   className,
 }: {
   subtitle?: string;
   emblemSize?: number;
+  /** La cabecera del teléfono: siempre visible, se carga sin diferir. */
+  eager?: boolean;
   className?: string;
 }) {
   return (
     <div className={cn('flex min-w-0 items-center gap-2.5', className)}>
       {/* Sin precarga: hay dos lockups (barra lateral y header móvil) y uno siempre está
-          oculto; con carga diferida el navegador solo descarga el que se ve. */}
-      <BrandEmblem size={emblemSize} decorative />
+          oculto. La barra lateral difiere la carga; la cabecera del teléfono no (con carga
+          diferida, a veces el emblema de la cabecera fija no llegaba a pedirse). */}
+      <BrandEmblem size={emblemSize} decorative eager={eager} />
       <div className="flex min-w-0 flex-col">
         <span className="font-display text-lg leading-none font-bold">BRIGITH</span>
         {subtitle && (

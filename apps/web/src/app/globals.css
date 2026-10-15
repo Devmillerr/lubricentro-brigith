@@ -109,11 +109,34 @@
   --radius-md: 0.625rem;
   --radius-lg: 0.875rem;
   --radius-xl: 1rem;
+  /*
+   * Texto chico = 13 px (la "nota al pie" de iOS), no 12: ayudas, fechas y
+   * datos secundarios se leen con luz de taller. Cambia todos los text-xs.
+   */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.125rem;
+}
+
+/*
+ * Barras del sistema (cabecera, barra inferior, barra de acción): superficie
+ * translúcida con desenfoque, como las barras de iOS. Sin soporte de
+ * backdrop-filter queda casi opaca y se lee igual.
+ */
+@utility bar-surface {
+  background-color: color-mix(in srgb, var(--surface) 90%, transparent);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
 }
 
 html,
 body {
   height: 100%;
+}
+
+html {
+  /* El texto no se agranda solo al girar el teléfono; el zoom del usuario sigue disponible. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -172,6 +195,38 @@ select option {
   }
 }
 
+/*
+ * Controles de la interfaz (barras, botones, pestañas, chips): un toque largo
+ * no selecciona su texto ni abre el menú de iOS. Los campos, los enlaces y el
+ * contenido siguen seleccionables.
+ */
+header,
+nav,
+button,
+[role='tab'],
+[role='button'] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Filas de lista: al tocarlas se marcan, como las celdas de iOS (sin esperar al hover). */
+main li > a:active {
+  background-color: var(--muted);
+}
+
+/* Contenido de cada pantalla: entra con un fundido corto (se anula con "reducir movimiento"). */
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.screen-in {
+  animation: screen-in 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+
 li > a:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
@@ -185,6 +240,40 @@ li > a:focus-visible {
 @media (width < 48rem) {
   html {
     scroll-padding-bottom: calc(9rem + env(safe-area-inset-bottom));
+  }
+
+  /*
+   * Teclado abierto (un campo de texto con el foco): la barra inferior se
+   * oculta para dejarle esos 64 px al formulario, y la barra de Cobrar/Guardar
+   * baja al borde. Solo campos que abren teclado: checkbox, radio, fecha y
+   * <select> no. Con :has(), sin JS ni parpadeo al pasar de un campo a otro.
+   */
+  body:has(
+    :is(
+      input:not(
+        [type='checkbox'],
+        [type='radio'],
+        [type='button'],
+        [type='submit'],
+        [type='reset'],
+        [type='file'],
+        [type='range'],
+        [type='color'],
+        [type='date'],
+        [type='datetime-local'],
+        [type='time'],
+        [type='month']
+      ),
+      textarea
+    ):focus
+  ) {
+    [data-bottom-nav] {
+      display: none;
+    }
+
+    [data-action-bar] {
+      bottom: 0;
+    }
   }
 }
 

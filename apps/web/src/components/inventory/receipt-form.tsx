@@ -494,7 +494,7 @@ export function ReceiptForm({
             id="receipt-date"
             label="Fecha"
             optional
-            hint="Si la dejas vacía, se registra con la fecha y hora actuales."
+            hint="Vacía: la fecha y hora actuales."
             error={errors.occurredAt}
           >
             <Input
@@ -550,7 +550,7 @@ export function ReceiptForm({
               id="receipt-rate"
               label="Tipo de cambio de la compra"
               optional
-              hint="Soles por 1 dólar el día de la compra. Sirve para comparar con lo que pagues después."
+              hint="Soles por 1 dólar el día de la compra."
               error={errors.purchaseExchangeRate}
             >
               <Input
@@ -603,7 +603,7 @@ export function ReceiptForm({
               id="receipt-document"
               label="N.º de comprobante"
               optional
-              hint="Factura, boleta o guía. Evita registrar la misma compra dos veces."
+              hint="Factura, boleta o guía."
               error={errors.documentRef}
             >
               <Input
@@ -624,7 +624,7 @@ export function ReceiptForm({
             id="receipt-purchase-date"
             label="Fecha de compra"
             optional
-            hint="La del comprobante. Si la dejas vacía, vale la fecha de recepción."
+            hint="La del comprobante. Vacía: la de recepción."
             error={errors.purchaseDate}
           >
             <Input

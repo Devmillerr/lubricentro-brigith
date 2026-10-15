@@ -1,9 +1,10 @@
 'use client';
 
-import { ArrowDown, ArrowUp, Pencil } from 'lucide-react';
+import { ArrowDown, ArrowUp, Ban, Pencil, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
 import { FormError } from '@/components/customers/form-error';
 import { NewCategoryForm } from '@/components/products/new-category-form';
+import { RowActions } from '@/components/ui/action-sheet';
 import { Button } from '@/components/ui/button';
 import { Field, Select } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -78,7 +79,7 @@ export default function CategoriesSettingsPage() {
   const header = (
     <PageHeader
       title="Categorías"
-      subtitle="Máximo 2 niveles: categoría y subcategoría"
+      subtitle="Hasta 2 niveles: categoría y subcategoría"
       back={{ href: '/configuracion', label: 'Configuración' }}
     />
   );
@@ -221,51 +222,35 @@ function CategoryRow({
   }
 
   return (
-    <div className="flex flex-col gap-2 px-3 py-3">
-      <span className="flex min-w-0 flex-col">
+    <div className="flex min-h-16 items-center gap-3 px-3 py-3">
+      <span className="flex min-w-0 flex-1 flex-col">
         <span className="font-medium break-words">{category.name}</span>
-        <span className="flex items-center gap-1 text-xs text-[var(--muted-foreground)]">
+        <span className="flex items-center gap-1 text-sm text-[var(--muted-foreground)]">
           {category.productCount} {category.productCount === 1 ? 'producto' : 'productos'}
           {!category.isActive && <Badge>Inactiva</Badge>}
         </span>
       </span>
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          className="w-11 shrink-0 px-0"
-          aria-label={`Subir ${category.name}`}
-          onClick={() => onMove(-1)}
-          disabled={busy || first}
-        >
-          <ArrowUp className="size-4" aria-hidden />
-        </Button>
-        <Button
-          variant="outline"
-          className="w-11 shrink-0 px-0"
-          aria-label={`Bajar ${category.name}`}
-          onClick={() => onMove(1)}
-          disabled={busy || last}
-        >
-          <ArrowDown className="size-4" aria-hidden />
-        </Button>
-        <Button
-          variant="outline"
-          className="w-11 shrink-0 px-0"
-          aria-label={`Editar ${category.name}`}
-          onClick={() => setEditing(true)}
-          disabled={busy}
-        >
-          <Pencil className="size-4" aria-hidden />
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => onPatch(category.id, { isActive: !category.isActive })}
-          disabled={busy}
-          className="flex-1"
-        >
-          {category.isActive ? 'Desactivar' : 'Reactivar'}
-        </Button>
-      </div>
+      <RowActions
+        title={category.name}
+        disabled={busy}
+        actions={[
+          { label: 'Editar nombre o ubicación', icon: Pencil, onSelect: () => setEditing(true) },
+          { label: 'Subir', icon: ArrowUp, onSelect: () => onMove(-1), disabled: first },
+          { label: 'Bajar', icon: ArrowDown, onSelect: () => onMove(1), disabled: last },
+          category.isActive
+            ? {
+                label: 'Desactivar',
+                icon: Ban,
+                danger: true,
+                onSelect: () => onPatch(category.id, { isActive: false }),
+              }
+            : {
+                label: 'Reactivar',
+                icon: RotateCcw,
+                onSelect: () => onPatch(category.id, { isActive: true }),
+              },
+        ]}
+      />
     </div>
   );
 }

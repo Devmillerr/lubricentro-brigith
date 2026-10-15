@@ -96,7 +96,7 @@ export function CustomerForm({ customer }: { customer?: Customer }) {
         id="phone"
         label="Teléfono"
         optional
-        hint="Se usa para avisar por WhatsApp."
+        hint="Para avisar por WhatsApp."
         error={fieldError('phone')}
       >
         <Input
