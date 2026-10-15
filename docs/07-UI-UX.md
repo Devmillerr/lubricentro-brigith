@@ -33,6 +33,8 @@ La pestaña activa es la de la pantalla actual, por la ruta más específica: Ve
 
 **Productos (2026-10-14):** el catálogo es una lista dentro de una sola tarjeta, sin imagen de relleno: a la izquierda nombre, código y atributos; a la derecha el precio (o "Sin precio") y el stock en la unidad del estante ("9 L"; "Sin conteo" si falta el conteo inicial; en rojo "Sin stock" si no queda). La ficha muestra el stock real en lugar de "Controla stock".
 
+**Sistema visual (2026-10-15):** texto chico de 13 px (no 12); cabecera, barra inferior y barra de acción translúcidas con desenfoque, como en iOS; filas que se marcan al tocarlas y un fundido corto al cambiar de pantalla (sin animación con "reducir movimiento"); la interfaz no selecciona texto con un toque largo. Inicio muestra el saludo como título y los accesos en 2 × 2. En Proveedores, Categorías y Tipos de lavado, las acciones de cada fila van en la hoja inferior del botón ⋯, sin borde. Los estados vacíos no llevan borde punteado.
+
 ## 3. Pantallas del MVP
 
 ### 3.1 Inicio
