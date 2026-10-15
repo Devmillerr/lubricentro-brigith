@@ -98,13 +98,7 @@ function NewReceipt() {
     );
   }
 
-  const header = (
-    <PageHeader
-      title="Recibir mercadería"
-      subtitle="Agrega todo lo que llegó y guárdalo junto."
-      back={back}
-    />
-  );
+  const header = <PageHeader title="Recibir mercadería" back={back} />;
 
   if (productId && initial.status === 'loading') {
     return (

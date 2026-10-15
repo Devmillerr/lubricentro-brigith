@@ -168,12 +168,7 @@ export function VehicleForm(
         </FormError>
       )}
 
-      <Field
-        id="plate"
-        label="Placa"
-        hint="Como aparece en el vehículo; se compara sin espacios ni guiones."
-        error={errors.plate}
-      >
+      <Field id="plate" label="Placa" hint="Como aparece en el vehículo." error={errors.plate}>
         <Input
           id="plate"
           value={values.plate}

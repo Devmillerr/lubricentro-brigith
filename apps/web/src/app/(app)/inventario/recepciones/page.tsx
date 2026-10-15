@@ -52,7 +52,6 @@ export default function ReceiptsPage() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Recepciones y compras"
-        subtitle="Lo que llegó, cuánto compraste y en qué productos, mes a mes."
         back={{ href: '/inventario', label: 'Inventario' }}
         action={receive}
       />
@@ -62,10 +61,6 @@ export default function ReceiptsPage() {
       ) : (
         <section className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <h2 className="text-sm font-semibold">Todo el historial</h2>
-          <p className="text-sm text-[var(--muted-foreground)]">
-            Todas las recepciones, de la más reciente a la más antigua. Para ver cuánto compraste y
-            en qué productos, elige un mes.
-          </p>
           <Button variant="outline" onClick={() => setMonth(currentMonth())}>
             Ver por mes
           </Button>
@@ -245,8 +240,7 @@ function ProductBreakdown({
           {title}
         </h2>
         <p className="text-sm text-[var(--muted-foreground)]">
-          En qué compraste y cuánto de cada uno, al contado o al crédito. El costo unitario es un
-          cálculo: monto de la compra ÷ cantidad recibida.
+          Al contado y al crédito. Costo unitario = monto de la compra ÷ cantidad recibida.
         </p>
       </div>
       <ul className="flex flex-col divide-y divide-[var(--border)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">

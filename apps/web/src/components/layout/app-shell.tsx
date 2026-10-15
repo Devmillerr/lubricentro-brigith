@@ -1,14 +1,13 @@
 'use client';
 
-import { LoaderCircle, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { BrandLockup } from '@/components/brand/brand-mark';
-import { Button } from '@/components/ui/button';
-import { logout, type Me } from '@/lib/auth/session';
+import type { Me } from '@/lib/auth/session';
 import { cn } from '@/lib/utils';
-import { isActive, NAV_ITEMS, type NavItem } from './nav-items';
+import { LogoutButton } from './logout-button';
+import { activeNavItem, NAV_ITEMS, type NavItem } from './nav-items';
 
 /**
  * Carcasa de las pantallas con sesión. Mobile-first (07-UI-UX.md, D-01):
@@ -18,7 +17,7 @@ import { isActive, NAV_ITEMS, type NavItem } from './nav-items';
  */
 export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
   const pathname = usePathname();
-  const current = NAV_ITEMS.find((item) => isActive(item, pathname));
+  const current = activeNavItem(pathname);
 
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[15rem_minmax(0,1fr)]">
@@ -34,7 +33,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
         </div>
         <nav aria-label="Principal" className="flex flex-1 flex-col gap-1 p-3">
           {NAV_ITEMS.map((item) => (
-            <SidebarLink key={item.label} item={item} active={isActive(item, pathname)} />
+            <SidebarLink key={item.label} item={item} active={item === current} />
           ))}
         </nav>
         <div className="flex flex-col gap-3 border-t border-[var(--border)] p-4">
@@ -44,34 +43,33 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
       </aside>
 
       <div className="flex min-h-dvh min-w-0 flex-col">
-        <header className="sticky top-0 z-10 flex h-[calc(4rem+env(safe-area-inset-top))] items-center justify-between gap-3 border-t-4 border-b border-t-[var(--brand)] border-b-[var(--border)] bg-[var(--surface)] pt-[env(safe-area-inset-top)] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:h-[calc(3.5rem+env(safe-area-inset-top))] md:border-t-0 md:pr-[max(2rem,env(safe-area-inset-right))] md:pl-8">
+        <header className="bar-surface sticky top-0 z-10 flex h-[calc(4rem+env(safe-area-inset-top))] items-center justify-between gap-3 border-t-4 border-b border-t-[var(--brand)] border-b-[var(--border)] pt-[env(safe-area-inset-top)] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:h-[calc(3.5rem+env(safe-area-inset-top))] md:border-t-0 md:pr-[max(2rem,env(safe-area-inset-right))] md:pl-8">
           <BrandLockup
             subtitle={businessSubtitle(me.business.name)}
             emblemSize={44}
+            eager
             className="md:hidden"
           />
           {/* Sección activa (escritorio). No es un encabezado: el título de cada pantalla es su h1. */}
           <p className="hidden font-display text-xl font-bold md:block">
             {current?.label ?? 'BRIGITH'}
           </p>
-          <div className="flex items-center gap-1 md:hidden">
-            <span className="max-w-[8rem] truncate text-sm font-medium text-[var(--muted-foreground)]">
-              {me.user.name}
-            </span>
-            <LogoutButton compact />
-          </div>
         </header>
 
         <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col pt-5 pr-[var(--gutter-r)] pb-[max(7rem,calc(5rem+env(safe-area-inset-bottom)))] pl-[var(--gutter-l)] [--gutter-l:max(1rem,env(safe-area-inset-left))] [--gutter-r:max(1rem,env(safe-area-inset-right))] md:pt-8 md:pb-[max(2.5rem,env(safe-area-inset-bottom))] md:[--gutter-l:2rem] md:[--gutter-r:max(2rem,env(safe-area-inset-right))]">
-          {children}
+          {/* La clave por ruta reinicia el fundido de entrada en cada pantalla. */}
+          <div key={pathname} className="screen-in flex flex-1 flex-col">
+            {children}
+          </div>
         </main>
 
         <nav
           aria-label="Principal"
-          className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-4 border-t border-[var(--border)] bg-[var(--surface)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] shadow-[0_-4px_16px_rgb(0_0_0/0.05)] md:hidden"
+          data-bottom-nav
+          className="bar-surface fixed inset-x-0 bottom-0 z-10 grid grid-cols-4 border-t border-[var(--border)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] md:hidden"
         >
           {NAV_ITEMS.map((item) => (
-            <BottomTab key={item.label} item={item} active={isActive(item, pathname)} />
+            <BottomTab key={item.label} item={item} active={item === current} />
           ))}
         </nav>
       </div>
@@ -175,31 +173,6 @@ function UserSummary({ me }: { me: Me }) {
       <span className="truncate text-sm font-semibold">{me.user.name}</span>
       <span className="truncate text-xs text-[var(--muted-foreground)]">@{me.user.username}</span>
     </div>
-  );
-}
-
-function LogoutButton({ compact = false, className }: { compact?: boolean; className?: string }) {
-  const [pending, setPending] = useState(false);
-
-  async function handleLogout() {
-    setPending(true);
-    await logout();
-    // El layout protegido redirige al login al quedar sin sesión.
-  }
-
-  const Icon = pending ? LoaderCircle : LogOut;
-  return (
-    <Button
-      variant={compact ? 'ghost' : 'outline'}
-      size={compact ? 'icon' : 'default'}
-      onClick={handleLogout}
-      disabled={pending}
-      aria-label="Cerrar sesión"
-      className={className}
-    >
-      <Icon className={cn('size-4', pending && 'animate-spin', !compact && 'mr-2')} aria-hidden />
-      {!compact && (pending ? 'Cerrando sesión…' : 'Cerrar sesión')}
-    </Button>
   );
 }
 

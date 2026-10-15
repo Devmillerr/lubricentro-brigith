@@ -315,7 +315,7 @@ export function StockOperationForm({
               id="stock-date"
               label="Fecha"
               optional
-              hint="Si la dejas vacía, se registra con la fecha y hora actuales."
+              hint="Vacía: la fecha y hora actuales."
               error={errors.occurredAt}
             >
               <Input
@@ -393,8 +393,7 @@ function AdjustmentUnavailable({
     <div className="flex flex-col gap-3 rounded-md bg-[var(--muted)] p-3 text-sm">
       <p className="flex items-start gap-2">
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-        Este producto todavía no tiene conteo inicial, así que su saldo no es confiable. Cuenta lo
-        que hay en el estante: ese conteo deja el saldo correcto.
+        Sin conteo inicial, el saldo no es confiable. Cuenta lo que hay en el estante.
       </p>
       <Button type="button" onClick={onCount}>
         Contar

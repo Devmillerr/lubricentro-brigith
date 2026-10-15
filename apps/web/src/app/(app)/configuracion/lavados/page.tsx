@@ -1,8 +1,9 @@
 'use client';
 
-import { ArrowDown, ArrowUp, Droplets, Pencil, Plus } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { ArrowDown, ArrowUp, Ban, Droplets, Pencil, Plus, RotateCcw } from 'lucide-react';
+import { createElement, useState, type FormEvent } from 'react';
 import { FormError } from '@/components/customers/form-error';
+import { RowActions } from '@/components/ui/action-sheet';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -21,6 +22,7 @@ import {
   type WashPriceOption,
   type WashType,
 } from '@/lib/washes/format';
+import { vehicleIconFor } from '@/lib/washes/vehicle-icon';
 
 const MAX_TEXT = 100;
 const AMOUNT_HINT = 'Mayor que 0, hasta 2 decimales (por ejemplo 15 o 12,50).';
@@ -83,11 +85,7 @@ export default function WashTypesSettingsPage() {
   }
 
   const header = (
-    <PageHeader
-      title="Tipos de lavado"
-      subtitle="Vehículos y sus precios. Sin precio activo, un tipo no aparece al cobrar."
-      back={{ href: '/configuracion', label: 'Configuración' }}
-    />
+    <PageHeader title="Tipos de lavado" back={{ href: '/configuracion', label: 'Configuración' }} />
   );
 
   if (query.status === 'loading') {
@@ -233,7 +231,7 @@ function WashTypeCard({
 
   return (
     <div className="flex flex-col">
-      <div className="flex flex-col gap-2 px-3 py-3">
+      <div className="px-3 py-3">
         {editing ? (
           <div className="flex flex-col gap-2">
             <Field id={`wash-type-name-${type.id}`} label="Nombre">
@@ -262,51 +260,36 @@ function WashTypeCard({
             </div>
           </div>
         ) : (
-          <span className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="font-semibold break-words">{type.name}</span>
-            {!type.isActive && <Badge>Inactivo</Badge>}
-            {type.isActive && activePrices === 0 && (
-              <Badge tone="warning">Sin precio: no se cobra</Badge>
-            )}
-          </span>
-        )}
-        {!editing && (
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              className="w-11 shrink-0 px-0"
-              aria-label={`Subir ${type.name}`}
-              onClick={() => onMove(-1)}
-              disabled={busy || first}
-            >
-              <ArrowUp className="size-4" aria-hidden />
-            </Button>
-            <Button
-              variant="outline"
-              className="w-11 shrink-0 px-0"
-              aria-label={`Bajar ${type.name}`}
-              onClick={() => onMove(1)}
-              disabled={busy || last}
-            >
-              <ArrowDown className="size-4" aria-hidden />
-            </Button>
-            <Button
-              variant="outline"
-              className="w-11 shrink-0 px-0"
-              aria-label={`Renombrar ${type.name}`}
-              onClick={() => setEditing(true)}
+          <div className="flex items-center gap-3">
+            <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+              <TypeIcon name={type.name} />
+              <span className="font-semibold break-words">{type.name}</span>
+              {!type.isActive && <Badge>Inactivo</Badge>}
+              {type.isActive && activePrices === 0 && (
+                <Badge tone="warning">Sin precio: no se cobra</Badge>
+              )}
+            </span>
+            <RowActions
+              title={type.name}
               disabled={busy}
-            >
-              <Pencil className="size-4" aria-hidden />
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => patchType({ isActive: !type.isActive })}
-              disabled={busy}
-              className="flex-1"
-            >
-              {type.isActive ? 'Desactivar' : 'Reactivar'}
-            </Button>
+              actions={[
+                { label: 'Renombrar', icon: Pencil, onSelect: () => setEditing(true) },
+                { label: 'Subir', icon: ArrowUp, onSelect: () => onMove(-1), disabled: first },
+                { label: 'Bajar', icon: ArrowDown, onSelect: () => onMove(1), disabled: last },
+                type.isActive
+                  ? {
+                      label: 'Desactivar tipo',
+                      icon: Ban,
+                      danger: true,
+                      onSelect: () => patchType({ isActive: false }),
+                    }
+                  : {
+                      label: 'Reactivar tipo',
+                      icon: RotateCcw,
+                      onSelect: () => patchType({ isActive: true }),
+                    },
+              ]}
+            />
           </div>
         )}
       </div>
@@ -407,7 +390,7 @@ function PriceRow({
   }
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2">
+    <div className="flex min-h-14 items-center gap-3 px-3 py-2">
       <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
         <span className={price.isActive ? 'font-medium' : 'font-medium line-through'}>
           {formatMoney(price.amount)}
@@ -415,23 +398,25 @@ function PriceRow({
         {price.label && <span className="text-sm">{price.label}</span>}
         {!price.isActive && <Badge>Inactivo</Badge>}
       </span>
-      <Button
-        variant="outline"
-        className="w-11 shrink-0 px-0"
-        aria-label={`Editar precio ${formatMoney(price.amount)}`}
-        onClick={() => setEditing(true)}
+      <RowActions
+        title={`Precio ${formatMoney(price.amount)}${price.label ? ` · ${price.label}` : ''}`}
         disabled={busy}
-      >
-        <Pencil className="size-4" aria-hidden />
-      </Button>
-      <Button
-        variant="outline"
-        onClick={() => patchPrice({ isActive: !price.isActive })}
-        disabled={busy}
-        className="shrink-0"
-      >
-        {price.isActive ? 'Desactivar' : 'Reactivar'}
-      </Button>
+        actions={[
+          { label: 'Editar precio', icon: Pencil, onSelect: () => setEditing(true) },
+          price.isActive
+            ? {
+                label: 'Desactivar precio',
+                icon: Ban,
+                danger: true,
+                onSelect: () => patchPrice({ isActive: false }),
+              }
+            : {
+                label: 'Reactivar precio',
+                icon: RotateCcw,
+                onSelect: () => patchPrice({ isActive: true }),
+              },
+        ]}
+      />
     </div>
   );
 }
@@ -503,5 +488,17 @@ function PriceForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+function TypeIcon({ name }: { name: string }) {
+  return (
+    <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[var(--muted)]">
+      {createElement(vehicleIconFor(name), {
+        className: 'size-5 text-[var(--muted-foreground)]',
+        strokeWidth: 1.75,
+        'aria-hidden': true,
+      })}
+    </span>
   );
 }

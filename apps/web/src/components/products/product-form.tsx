@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { api, type Schemas } from '@/lib/api/client';
 import { callApi, failureMessage, type ApiFailure } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
-import { formatPrice, type Product, type ProductCategory } from '@/lib/products/format';
+import type { Product, ProductCategory } from '@/lib/products/format';
+import { priceInput } from '@/lib/sales/format';
 import { rememberProducts } from '@/lib/products/product-lookup';
 import { AttributePicker } from './attribute-picker';
 import { CategoryPicker } from './category-picker';
@@ -64,7 +65,7 @@ export function ProductForm({ product }: { product?: Product }) {
     presentation: product?.presentation ?? '',
     unit: product?.unit ?? '',
     categoryId: product?.categoryId ?? '',
-    salePrice: formatPrice(product?.salePrice ?? null) ?? '',
+    salePrice: priceInput(product?.salePrice ?? null),
     tracksStock: product?.tracksStock ?? true,
     hasContainer: Boolean(product?.containerCapacity),
     containerLabel: product?.containerLabel ?? '',
@@ -370,7 +371,7 @@ export function ProductForm({ product }: { product?: Product }) {
         id="salePrice"
         label="Precio de venta"
         optional
-        hint="Déjalo vacío si todavía no lo defines: queda como pendiente."
+        hint="Vacío: queda como pendiente."
         error={errors.salePrice}
       >
         <Input
@@ -442,7 +443,7 @@ export function ProductForm({ product }: { product?: Product }) {
         <span className="flex flex-col gap-0.5">
           <span className="text-sm font-medium">Controlar stock</span>
           <span className="text-xs text-[var(--muted-foreground)]">
-            Si está marcado, cada uso en un mantenimiento descuenta del inventario.
+            Cada uso en un mantenimiento descuenta del inventario.
           </span>
         </span>
       </label>

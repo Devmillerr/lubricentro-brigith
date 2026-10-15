@@ -127,7 +127,7 @@ export default function MaintenanceDetailPage() {
         </dl>
       ) : (
         <p className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--muted-foreground)]">
-          Sin vehículo: no tiene km, próximo mantenimiento ni recordatorio.
+          Sin vehículo: sin km ni recordatorio.
         </p>
       )}
 

@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Wrench } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/page-header';
 import {
@@ -42,6 +42,10 @@ export function MaintenanceList({
               href={`/mantenimientos/${maintenance.id}`}
               className="flex min-h-16 items-center gap-3 px-4 py-3 hover:bg-[var(--muted)]"
             >
+              {/* Mismo ícono que el mantenimiento en el historial de Ventas. */}
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--muted)]">
+                <Wrench className="size-5 text-[var(--muted-foreground)]" aria-hidden />
+              </span>
               <span className={`flex min-w-0 flex-1 flex-col ${voided ? 'opacity-60' : ''}`}>
                 <span className="truncate font-medium">
                   {typeName(maintenance.maintenanceTypeId)}

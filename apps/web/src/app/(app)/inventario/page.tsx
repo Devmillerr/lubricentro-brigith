@@ -22,6 +22,7 @@ import {
 } from '@/lib/inventory/format';
 import { loadCatalogWithStock, MAX_PAGES } from '@/lib/inventory/load-stock';
 import { searchOnEnter } from '@/lib/enter-key';
+import { shortUnit } from '@/lib/products/container';
 import { cn } from '@/lib/utils';
 
 type Filter = 'all' | 'not-counted' | 'out' | 'available';
@@ -243,7 +244,7 @@ function InventoryRow({ product, status }: { product: ProductWithStock; status: 
           >
             {formatQuantity(product.stock.balance)}
             <span className="ml-1 text-xs font-normal text-[var(--muted-foreground)]">
-              {product.unit}
+              {shortUnit(product.unit)}
             </span>
           </span>
         )}

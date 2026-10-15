@@ -3,6 +3,7 @@
 import { Car, Pencil, Phone, Plus, Wrench } from 'lucide-react';
 import Link from 'next/link';
 import { useRouteId } from '@/lib/static-route';
+import { CustomerAvatar } from '@/components/customers/customer-avatar';
 import { buttonVariants } from '@/components/ui/button';
 import { Badge, PageHeader } from '@/components/ui/page-header';
 import { QueryError } from '@/components/ui/query-error';
@@ -53,6 +54,7 @@ export default function CustomerDetailPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title={customerTitle(customer)}
+        leading={<CustomerAvatar name={customer.name} size="lg" />}
         subtitle={!customer.isActive ? <Badge>Inactivo</Badge> : undefined}
         back={{ href: '/clientes', label: 'Clientes' }}
         action={
@@ -100,7 +102,7 @@ export default function CustomerDetailPage() {
           <EmptyState
             icon={Car}
             title="Sin vehículos registrados"
-            description="Para registrar un mantenimiento, primero registra su vehículo con la placa; el resto de datos es opcional."
+            description="Registra su vehículo para anotarle mantenimientos."
             action={
               <Link
                 href={`/clientes/${customer.id}/vehiculos/nuevo?siguiente=mantenimiento`}
