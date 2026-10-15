@@ -60,7 +60,7 @@ export function PlateSearch() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={searchOnEnter}
-          placeholder="Buscar placa, ej. ABC-123"
+          placeholder="Buscar nombre o placa"
           maxLength={20}
           autoCapitalize="characters"
           autoComplete="off"

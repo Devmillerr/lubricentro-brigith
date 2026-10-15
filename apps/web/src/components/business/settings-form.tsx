@@ -97,7 +97,7 @@ export function SettingsForm({ business: initial }: { business: Business }) {
         <Field
           id="whatsappTemplate"
           label="Mensaje de aviso"
-          hint="Se abre ya escrito en WhatsApp; puedes cambiarlo antes de enviarlo."
+          hint="Puedes cambiarlo en WhatsApp antes de enviarlo."
           error={errors.whatsappTemplate}
         >
           <Textarea
@@ -144,7 +144,7 @@ export function SettingsForm({ business: initial }: { business: Business }) {
         <Field
           id="reminderLeadDays"
           label="Días de anticipación"
-          hint="Cuántos días antes de la fecha aparece en Avisar. Vacío: el mismo día."
+          hint="Días antes de la fecha. Vacío: el mismo día."
           error={errors.reminderLeadDays}
         >
           <Input

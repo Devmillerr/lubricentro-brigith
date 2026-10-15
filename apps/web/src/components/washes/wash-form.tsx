@@ -2,7 +2,7 @@
 
 import { Banknote, Smartphone } from 'lucide-react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
-import { useState } from 'react';
+import { createElement, useState } from 'react';
 import { FormError } from '@/components/customers/form-error';
 import { Button } from '@/components/ui/button';
 import { ACTION_DISABLED_READABLE_CLASS, StickyActionBar } from '@/components/ui/action-bar';
@@ -18,6 +18,7 @@ import {
   type Sale,
 } from '@/lib/sales/format';
 import { WASH_ERRORS, type WashType } from '@/lib/washes/format';
+import { vehicleIconFor } from '@/lib/washes/vehicle-icon';
 import { cn } from '@/lib/utils';
 import { useSubmitLock } from '@/lib/use-submit-lock';
 
@@ -112,6 +113,7 @@ export function WashForm({
               onClick={() => chooseType(candidate)}
               className="min-h-20"
             >
+              <VehicleIcon name={candidate.name} />
               <span className="text-base font-semibold break-words">{candidate.name}</span>
               <span className="text-sm opacity-80">
                 {candidate.prices.map((option) => formatMoney(option.amount)).join(' · ')}
@@ -223,4 +225,13 @@ function OptionButton({
       {children}
     </button>
   );
+}
+
+/** Ícono del tipo de vehículo encima del nombre: se reconoce sin leer. */
+function VehicleIcon({ name }: { name: string }) {
+  return createElement(vehicleIconFor(name), {
+    className: 'mb-1 size-7 opacity-80',
+    strokeWidth: 1.75,
+    'aria-hidden': true,
+  });
 }

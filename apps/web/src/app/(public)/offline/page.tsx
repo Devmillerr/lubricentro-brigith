@@ -12,7 +12,7 @@ export default function OfflinePage() {
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold">Sin conexión</h1>
         <p className="text-sm text-[var(--muted-foreground)]">
-          BRIGITH necesita internet para trabajar. Revisa tu conexión e inténtalo de nuevo.
+          Revisa tu conexión e inténtalo de nuevo.
         </p>
       </div>
     </div>

@@ -34,11 +34,7 @@ function NewMaintenance() {
 function ChooseVehicle() {
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader
-        title="Nuevo mantenimiento"
-        subtitle="Elige el vehículo: el mantenimiento queda en su historial y en el de su cliente."
-        back={{ href: '/dashboard', label: 'Inicio' }}
-      />
+      <PageHeader title="Nuevo mantenimiento" back={{ href: '/dashboard', label: 'Inicio' }} />
       <VehicleFinder />
       <div className="flex flex-col gap-1 border-t border-[var(--border)] pt-4">
         <Link
@@ -48,10 +44,7 @@ function ChooseVehicle() {
           <CarFront className="size-4" aria-hidden />
           Registrar sin vehículo
         </Link>
-        <p className="text-xs text-[var(--muted-foreground)]">
-          Solo si el vehículo no se va a registrar: queda sin km, sin próximo mantenimiento y sin
-          recordatorio.
-        </p>
+        <p className="text-xs text-[var(--muted-foreground)]">Queda sin km ni recordatorio.</p>
       </div>
     </div>
   );

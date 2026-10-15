@@ -135,9 +135,6 @@ function DashboardBody({ data }: { data: Dashboard }) {
         <Panel>
           <div className="flex flex-col items-center gap-1 py-4 text-center">
             <p className="font-medium">Sin ventas en este período</p>
-            <p className="max-w-xs text-sm text-[var(--muted-foreground)]">
-              Cuando cobres con Vender, Lavado o un mantenimiento, aparecerá aquí.
-            </p>
           </div>
         </Panel>
       ) : (

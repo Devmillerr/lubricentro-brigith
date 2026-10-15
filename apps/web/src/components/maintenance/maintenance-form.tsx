@@ -358,19 +358,13 @@ export function MaintenanceForm({
       {!hasVehicle && (
         <p className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--muted)] p-4 text-sm">
           <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-          Mantenimiento sin vehículo: se registra sin km ni próximo mantenimiento, y no genera
-          recordatorio.
+          Sin vehículo: queda sin km ni recordatorio.
         </p>
       )}
 
       <Section title={hasVehicle ? 'Fecha y km' : 'Fecha'}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field
-            id="performed-at"
-            label="Fecha del mantenimiento"
-            hint="Puede ser anterior a hoy."
-            error={errors.performedAt}
-          >
+          <Field id="performed-at" label="Fecha del mantenimiento" error={errors.performedAt}>
             <Input
               id="performed-at"
               type="datetime-local"
@@ -462,7 +456,7 @@ export function MaintenanceForm({
           </>
         ) : (
           <p className="text-xs text-[var(--muted-foreground)]">
-            Puede guardarse sin cobro y cobrarse después desde el mantenimiento.
+            Puedes cobrarlo después desde el mantenimiento.
           </p>
         )}
       </Section>

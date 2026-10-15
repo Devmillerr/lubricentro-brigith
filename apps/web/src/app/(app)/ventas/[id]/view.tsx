@@ -121,9 +121,7 @@ export default function SaleDetailPage() {
         </section>
       ) : isMaintenance ? (
         <section className="flex flex-col gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
-          <p>
-            Este cobro se administra desde su mantenimiento: se anula al anular el mantenimiento.
-          </p>
+          <p>Se anula desde su mantenimiento.</p>
           {sale.maintenanceId && (
             <Link
               href={`/mantenimientos/${sale.maintenanceId}`}

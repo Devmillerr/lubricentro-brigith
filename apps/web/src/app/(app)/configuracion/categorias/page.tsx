@@ -79,7 +79,7 @@ export default function CategoriesSettingsPage() {
   const header = (
     <PageHeader
       title="Categorías"
-      subtitle="Máximo 2 niveles: categoría y subcategoría"
+      subtitle="Hasta 2 niveles: categoría y subcategoría"
       back={{ href: '/configuracion', label: 'Configuración' }}
     />
   );

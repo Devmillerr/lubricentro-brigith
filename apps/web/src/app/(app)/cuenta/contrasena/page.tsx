@@ -101,11 +101,7 @@ export default function ChangePasswordPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader
-        title="Cambiar contraseña"
-        subtitle="Tu cuenta y todos sus datos siguen igual; solo cambia la contraseña."
-        back={{ href: '/mas', label: 'Más' }}
-      />
+      <PageHeader title="Cambiar contraseña" back={{ href: '/mas', label: 'Más' }} />
       {formError && <FormError>{formError}</FormError>}
       <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
         <Field id="current-password" label="Contraseña actual" error={errors.currentPassword}>

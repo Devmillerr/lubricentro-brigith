@@ -70,7 +70,7 @@ export function StockAlerts({
             <>
               <AlertGroup
                 title="Negativos"
-                description="El sistema registra más salidas que lo que había. Cuenta o ajusta."
+                description="Hay más salidas que stock. Cuenta o ajusta."
                 items={alerts.data.negative}
                 danger
               />
@@ -87,7 +87,7 @@ export function StockAlerts({
                     : `${alerts.data.notCountedCount} productos sin conteo inicial`}
                 </span>
                 <span className="block text-[var(--muted-foreground)]">
-                  Su saldo no es confiable, por eso no aparecen arriba.
+                  Su saldo no es confiable todavía.
                 </span>
               </p>
               <Button variant="outline" className="shrink-0" onClick={onShowNotCounted}>

@@ -35,6 +35,8 @@ La pestaña activa es la de la pantalla actual, por la ruta más específica: Ve
 
 **Sistema visual (2026-10-15):** texto chico de 13 px (no 12); cabecera, barra inferior y barra de acción translúcidas con desenfoque, como en iOS; filas que se marcan al tocarlas y un fundido corto al cambiar de pantalla (sin animación con "reducir movimiento"); la interfaz no selecciona texto con un toque largo. Inicio muestra el saludo como título y los accesos en 2 × 2. En Proveedores, Categorías y Tipos de lavado, las acciones de cada fila van en la hoja inferior del botón ⋯, sin borde. Los estados vacíos no llevan borde punteado.
 
+**Textos e íconos (2026-10-15):** sin subtítulos que repiten el título ni explicaciones obvias; las ayudas de campo quedan solo donde evitan un error y en pocas palabras. El buscador del Inicio dice "Buscar nombre o placa". En Lavado y en Tipos de lavado, cada tipo lleva el ícono de su vehículo (por nombre; si no coincide, un auto). Los clientes muestran un avatar genérico con sus iniciales (o el ícono de una persona), nunca una foto. El historial del vehículo usa el mismo ícono de mantenimiento que Ventas.
+
 ## 3. Pantallas del MVP
 
 ### 3.1 Inicio
@@ -134,7 +136,7 @@ La UI forma parte de R3 (DEC-52). **Ingreso** y **Ajuste** cambian así; **Conta
 
 Con R8 una compra puede ser al crédito, así que el monto de una recepción no siempre está pagado. Solo cambian textos; montos y cálculos siguen igual.
 
-- **Recepciones y compras:** la tarjeta del mes dice "Total comprado registrado" (o "… en soles"); el subtítulo, "Lo que llegó, cuánto compraste y en qué productos, mes a mes."; "Por producto" aclara que suma compras al contado y al crédito, y el costo unitario es "monto de la compra ÷ cantidad recibida".
+- **Recepciones y compras:** la tarjeta del mes dice "Total comprado registrado" (o "… en soles"); sin subtítulo (2026-10-15); "Por producto" aclara que suma compras al contado y al crédito, y el costo unitario es "monto de la compra ÷ cantidad recibida".
 - **Detalle de una recepción:** al crédito dice "Total de la compra"; al contado (o sin forma de pago registrada) sigue diciendo "Total pagado". Lo que falta pagar se ve en la deuda.
 - **Recibir:** el total del formulario dice "Total de la compra" si se eligió "Al crédito"; el monto de cada línea, "Total S/". **Más → Recepciones y compras:** "cuánto compraste".
 

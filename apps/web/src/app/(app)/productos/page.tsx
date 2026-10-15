@@ -250,7 +250,7 @@ export default function ProductsPage() {
           title={filtered ? 'Sin resultados' : 'Todavía no hay productos'}
           description={
             filtered
-              ? 'Prueba con otra búsqueda o quita algún filtro.'
+              ? 'Prueba otra búsqueda o quita un filtro.'
               : 'Registra el primer producto del catálogo.'
           }
           action={

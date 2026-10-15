@@ -14,9 +14,12 @@ export function PageHeader({
   subtitle,
   back,
   action,
+  leading,
   asPlate = false,
 }: {
   title: string;
+  /** Avatar o ícono pequeño antes del título (p. ej. el del cliente). */
+  leading?: ReactNode;
   asPlate?: boolean;
   subtitle?: ReactNode;
   back?: { href: string; label: string };
@@ -35,7 +38,8 @@ export function PageHeader({
         </Link>
       )}
       <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-0.5">
+        {leading}
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <h1 className="text-[1.75rem] leading-tight font-bold break-words">
             {asPlate ? <Plate plate={title} size="lg" /> : title}
           </h1>

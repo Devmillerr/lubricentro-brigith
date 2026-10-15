@@ -99,11 +99,6 @@ export function VehicleFinder() {
           className="pl-11 text-lg"
         />
       </div>
-      {!term && (
-        <p className="text-sm text-[var(--muted-foreground)]">
-          Escribe la placa (ej. ABC-123) o el nombre o teléfono del cliente.
-        </p>
-      )}
 
       {term && !typing && (
         <div aria-live="polite" className="flex flex-col gap-4">

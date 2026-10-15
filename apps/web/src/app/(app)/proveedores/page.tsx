@@ -46,13 +46,7 @@ export default function SuppliersPage() {
     return true;
   }
 
-  const header = (
-    <PageHeader
-      title="Proveedores"
-      subtitle="A quién le compras la mercadería"
-      back={{ href: '/mas', label: 'Más' }}
-    />
-  );
+  const header = <PageHeader title="Proveedores" back={{ href: '/mas', label: 'Más' }} />;
 
   if (query.status === 'loading') {
     return (

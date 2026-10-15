@@ -371,7 +371,7 @@ export function ProductForm({ product }: { product?: Product }) {
         id="salePrice"
         label="Precio de venta"
         optional
-        hint="Déjalo vacío si todavía no lo defines: queda como pendiente."
+        hint="Vacío: queda como pendiente."
         error={errors.salePrice}
       >
         <Input
@@ -443,7 +443,7 @@ export function ProductForm({ product }: { product?: Product }) {
         <span className="flex flex-col gap-0.5">
           <span className="text-sm font-medium">Controlar stock</span>
           <span className="text-xs text-[var(--muted-foreground)]">
-            Si está marcado, cada uso en un mantenimiento descuenta del inventario.
+            Cada uso en un mantenimiento descuenta del inventario.
           </span>
         </span>
       </label>

@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowDown, ArrowUp, Ban, Droplets, Pencil, Plus, RotateCcw } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { createElement, useState, type FormEvent } from 'react';
 import { FormError } from '@/components/customers/form-error';
 import { RowActions } from '@/components/ui/action-sheet';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ import {
   type WashPriceOption,
   type WashType,
 } from '@/lib/washes/format';
+import { vehicleIconFor } from '@/lib/washes/vehicle-icon';
 
 const MAX_TEXT = 100;
 const AMOUNT_HINT = 'Mayor que 0, hasta 2 decimales (por ejemplo 15 o 12,50).';
@@ -84,11 +85,7 @@ export default function WashTypesSettingsPage() {
   }
 
   const header = (
-    <PageHeader
-      title="Tipos de lavado"
-      subtitle="Vehículos y sus precios. Sin precio activo, un tipo no aparece al cobrar."
-      back={{ href: '/configuracion', label: 'Configuración' }}
-    />
+    <PageHeader title="Tipos de lavado" back={{ href: '/configuracion', label: 'Configuración' }} />
   );
 
   if (query.status === 'loading') {
@@ -265,6 +262,7 @@ function WashTypeCard({
         ) : (
           <div className="flex items-center gap-3">
             <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+              <TypeIcon name={type.name} />
               <span className="font-semibold break-words">{type.name}</span>
               {!type.isActive && <Badge>Inactivo</Badge>}
               {type.isActive && activePrices === 0 && (
@@ -490,5 +488,17 @@ function PriceForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+function TypeIcon({ name }: { name: string }) {
+  return (
+    <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[var(--muted)]">
+      {createElement(vehicleIconFor(name), {
+        className: 'size-5 text-[var(--muted-foreground)]',
+        strokeWidth: 1.75,
+        'aria-hidden': true,
+      })}
+    </span>
   );
 }

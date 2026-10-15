@@ -136,8 +136,8 @@ export default function RemindersPage() {
           title={due === 'now' ? 'No hay a quién avisar ahora' : 'Sin recordatorios'}
           description={
             due === 'now'
-              ? 'Un recordatorio solo por km aparece cuando el vehículo vuelve y se registra su km. Revisa «Próximos».'
-              : 'Los recordatorios se crean al registrar un mantenimiento con próximo km o fecha.'
+              ? 'Revisa «Próximos».'
+              : 'Se crean al registrar un mantenimiento con próximo km o fecha.'
           }
         />
       )}
