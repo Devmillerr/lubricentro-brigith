@@ -1,4 +1,4 @@
-import { toCents } from '@/lib/money';
+import { formatCentsMoney, toCents } from '@/lib/money';
 
 /**
  * Lo que la diferencia del mes necesita de `GET /dashboard?period=month`
@@ -84,4 +84,35 @@ export function monthDifference({ incomeTotal, purchases }: MonthDifferenceInput
     hasPartialLines,
     isIncomplete: usdExcludedCount > 0 || receiptsWithoutCost > 0 || hasPartialLines,
   };
+}
+
+/**
+ * Diferencia del mes con el signo menos tipográfico («−S/ 44.50»), solo para
+ * el Resumen del mes; el formato global (`lib/money`) sigue con «-».
+ */
+export function formatDifference(cents: number): string {
+  return cents < 0 ? `−${formatCentsMoney(-cents)}` : formatCentsMoney(cents);
+}
+
+/**
+ * Una sola línea con lo que quedó fuera de la resta, o `null` si no falta nada:
+ * «No incluye: 1 compra en dólares sin tipo de cambio, 1 recepción sin monto.»
+ */
+export function exclusionsNote(
+  result: Pick<MonthDifference, 'usdExcludedCount' | 'receiptsWithoutCost' | 'hasPartialLines'>,
+): string | null {
+  const parts: string[] = [];
+  const { usdExcludedCount: usd, receiptsWithoutCost: noCost } = result;
+  if (usd > 0) {
+    parts.push(
+      usd === 1
+        ? '1 compra en dólares sin tipo de cambio'
+        : `${usd} compras en dólares sin tipo de cambio`,
+    );
+  }
+  if (noCost > 0) {
+    parts.push(noCost === 1 ? '1 recepción sin monto' : `${noCost} recepciones sin monto`);
+  }
+  if (result.hasPartialLines) parts.push('productos sin monto');
+  return parts.length > 0 ? `No incluye: ${parts.join(', ')}.` : null;
 }

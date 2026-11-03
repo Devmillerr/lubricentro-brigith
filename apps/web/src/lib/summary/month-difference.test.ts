@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { monthDifference, type MonthDifferenceInput } from '@/lib/summary/month-difference';
+import {
+  exclusionsNote,
+  formatDifference,
+  monthDifference,
+  type MonthDifferenceInput,
+} from '@/lib/summary/month-difference';
 
 function input(
   incomeTotal: string,
@@ -110,6 +115,46 @@ describe('monthDifference', () => {
     expect(result.differenceCents).toBe(0);
     expect(monthDifference(input('1234567.89', { totalCost: '0.01' })).differenceCents).toBe(
       123456788,
+    );
+  });
+});
+
+describe('formatDifference', () => {
+  it('usa el signo menos tipográfico solo si es negativa', () => {
+    expect(formatDifference(-4450)).toBe('−S/ 44.50');
+    expect(formatDifference(25600)).toBe('S/ 256.00');
+    expect(formatDifference(0)).toBe('S/ 0.00');
+  });
+});
+
+describe('exclusionsNote', () => {
+  const none = { usdExcludedCount: 0, receiptsWithoutCost: 0, hasPartialLines: false };
+
+  it('sin exclusiones no hay nota', () => {
+    expect(exclusionsNote(none)).toBeNull();
+  });
+
+  it('junta las partes en una línea y omite las que son 0', () => {
+    expect(exclusionsNote({ ...none, usdExcludedCount: 1, receiptsWithoutCost: 1 })).toBe(
+      'No incluye: 1 compra en dólares sin tipo de cambio, 1 recepción sin monto.',
+    );
+    expect(exclusionsNote({ ...none, receiptsWithoutCost: 1 })).toBe(
+      'No incluye: 1 recepción sin monto.',
+    );
+    expect(exclusionsNote({ ...none, usdExcludedCount: 1 })).toBe(
+      'No incluye: 1 compra en dólares sin tipo de cambio.',
+    );
+  });
+
+  it('pluraliza', () => {
+    expect(exclusionsNote({ ...none, usdExcludedCount: 2, receiptsWithoutCost: 3 })).toBe(
+      'No incluye: 2 compras en dólares sin tipo de cambio, 3 recepciones sin monto.',
+    );
+  });
+
+  it('avisa de productos sin monto en recepciones con monto parcial', () => {
+    expect(exclusionsNote({ ...none, receiptsWithoutCost: 1, hasPartialLines: true })).toBe(
+      'No incluye: 1 recepción sin monto, productos sin monto.',
     );
   });
 });
