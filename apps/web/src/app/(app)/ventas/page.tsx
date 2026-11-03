@@ -31,7 +31,7 @@ const PAGE_SIZE = 20;
 const EMPTY: Record<SaleSource | 'ALL', { title: string; description: string }> = {
   ALL: { title: 'Todavía no hay ventas', description: '' },
   COUNTER: {
-    title: 'Todavía no hay ventas de mostrador',
+    title: 'Todavía no hay ventas de productos',
     description: '',
   },
   WASH: { title: 'Todavía no hay lavados', description: '' },

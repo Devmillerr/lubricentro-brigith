@@ -6,7 +6,7 @@ import { SaleSaved } from '@/components/sales/sale-saved';
 import { PageHeader } from '@/components/ui/page-header';
 
 /**
- * Vender (R4, B-134): venta de mostrador (`source = COUNTER`) sin cliente ni
+ * Vender (R4, B-134): venta de productos (`source = COUNTER`) sin cliente ni
  * placa. Tras cobrar, la confirmación; "Nueva venta" arranca un carrito vacío.
  */
 export default function NewSalePage() {

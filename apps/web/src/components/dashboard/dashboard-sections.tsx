@@ -181,14 +181,26 @@ function PaymentChip({ color, label, cents }: { color: string; label: string; ce
   );
 }
 
-/** Ingresos del período: el total grande y, debajo, cuánto fue en efectivo y cuánto por Yape. */
-export function IncomeSummary({ totals }: { totals: Dashboard['totals'] }) {
+/**
+ * Ingresos del período: el total grande y, debajo, cuánto fue en efectivo y
+ * cuánto por Yape. `compact` quita la línea «Ingresos totales · N ventas
+ * cobradas» cuando la pantalla ya tiene su propio título.
+ */
+export function IncomeSummary({
+  totals,
+  compact = false,
+}: {
+  totals: Dashboard['totals'];
+  compact?: boolean;
+}) {
   return (
     <section className={cn(cardVariants(), 'gap-2')} aria-label="Ingresos totales">
-      <div className="flex items-baseline justify-between gap-3 text-sm text-[var(--muted-foreground)]">
-        <span className="font-medium">Ingresos totales</span>
-        <span>{plural(totals.salesCount, 'venta cobrada', 'ventas cobradas')}</span>
-      </div>
+      {!compact && (
+        <div className="flex items-baseline justify-between gap-3 text-sm text-[var(--muted-foreground)]">
+          <span className="font-medium">Ingresos totales</span>
+          <span>{plural(totals.salesCount, 'venta cobrada', 'ventas cobradas')}</span>
+        </div>
+      )}
       <span className="font-display text-5xl leading-none font-bold tracking-tight">
         {formatAmount(totals.total)}
       </span>
@@ -200,7 +212,7 @@ export function IncomeSummary({ totals }: { totals: Dashboard['totals'] }) {
   );
 }
 
-/** Mostrador · Lavados · Mantenimiento, plegado: el detalle se abre a pedido. */
+/** Venta de productos · Lavados · Mantenimiento, plegado: el detalle se abre a pedido. */
 export function SourceDetails({
   totals,
   washes,
@@ -216,7 +228,7 @@ export function SourceDetails({
         <SourceRow
           source="counter"
           icon={ShoppingCart}
-          label="Mostrador"
+          label="Venta de productos"
           amount={totals.bySource.counter}
         />
         <SourceRow
@@ -256,7 +268,7 @@ export function SourceDetails({
   );
 }
 
-function SourceRow({
+export function SourceRow({
   source,
   icon: Icon,
   label,

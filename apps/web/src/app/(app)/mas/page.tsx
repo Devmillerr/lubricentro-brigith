@@ -1,4 +1,5 @@
 import {
+  CalendarRange,
   ChevronRight,
   PackagePlus,
   Receipt,
@@ -17,6 +18,11 @@ const SECTIONS: { label: string; icon: LucideIcon; href: string | null }[] = [
     label: 'Clientes',
     icon: Users,
     href: '/clientes',
+  },
+  {
+    label: 'Resumen del mes',
+    icon: CalendarRange,
+    href: '/resumen',
   },
   {
     label: 'Ventas',

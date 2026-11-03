@@ -71,7 +71,7 @@ const ERROR_MESSAGES = {
 };
 
 /**
- * Vender (R4, B-134; `10-OPERACION-REAL.md` §2.5): venta de mostrador sin
+ * Vender (R4, B-134; `10-OPERACION-REAL.md` §2.5): venta de productos sin
  * cliente ni placa (DEC-44). Productos activos del catálogo (cada toque suma
  * 1), cantidad con −/+ o teclado (decimales en la unidad del producto),
  * precio aplicado editable (DEC-29; si el producto no tiene precio, se
