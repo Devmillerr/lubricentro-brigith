@@ -22,7 +22,7 @@ import {
 
 /**
  * Detalle genérico de una venta (`GET /sales/{id}`, B-135) con **Anular**.
- * Sirve igual para mostrador y lavado (DEC-68): no hay detalle propio de lavado.
+ * Sirve igual para venta de productos y lavado (DEC-68): no hay detalle propio de lavado.
  * El cobro de un mantenimiento (R6) no se anula aquí: se administra desde su
  * mantenimiento (DEC-70; la API responde 409 `SALE_MANAGED_BY_MAINTENANCE`).
  */

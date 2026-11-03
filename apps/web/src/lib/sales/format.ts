@@ -11,7 +11,7 @@ export type PaymentMethod = Schemas['PaymentMethod'];
 
 /** De dónde viene la venta (06-API.md §2, "Ventas"). */
 export const SOURCE_LABELS: Record<SaleSource, string> = {
-  COUNTER: 'Mostrador',
+  COUNTER: 'Venta de productos',
   WASH: 'Lavado',
   MAINTENANCE: 'Mantenimiento',
 };

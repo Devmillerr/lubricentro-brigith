@@ -200,7 +200,7 @@ export function IncomeSummary({ totals }: { totals: Dashboard['totals'] }) {
   );
 }
 
-/** Mostrador · Lavados · Mantenimiento, plegado: el detalle se abre a pedido. */
+/** Venta de productos · Lavados · Mantenimiento, plegado: el detalle se abre a pedido. */
 export function SourceDetails({
   totals,
   washes,
@@ -216,7 +216,7 @@ export function SourceDetails({
         <SourceRow
           source="counter"
           icon={ShoppingCart}
-          label="Mostrador"
+          label="Venta de productos"
           amount={totals.bySource.counter}
         />
         <SourceRow
@@ -256,7 +256,7 @@ export function SourceDetails({
   );
 }
 
-function SourceRow({
+export function SourceRow({
   source,
   icon: Icon,
   label,
@@ -294,7 +294,7 @@ function SourceRow({
 }
 
 /** Mantenimientos del período por fecha del servicio; los sin cobro, como recordatorio (BR-D4). */
-function MaintenancesCard({ maintenances }: { maintenances: Dashboard['maintenances'] }) {
+export function MaintenancesCard({ maintenances }: { maintenances: Dashboard['maintenances'] }) {
   return (
     <div className="flex flex-col gap-1 rounded-lg bg-[var(--muted)] px-3 py-2.5">
       <span className="flex items-center gap-2 text-sm font-medium">

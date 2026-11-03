@@ -14,7 +14,7 @@ export interface NavItem {
  *
  * Cada pestaña marca también las pantallas que se abren desde ella: los
  * cobros y el trabajo del día (Vender, Lavado, Mantenimiento, la ficha del
- * vehículo que se busca por placa) son de Inicio; Clientes, el historial de
+ * vehículo que se busca por placa) y el Resumen del mes son de Inicio; Clientes, el historial de
  * Ventas, Proveedores, Cuentas por pagar, Configuración y la cuenta son de
  * "Más". Recepciones y compras viven en Inventario, dentro de Productos. Si
  * dos rutas coinciden, gana la más específica: `/ventas/nueva` es de Inicio
@@ -27,7 +27,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Inicio',
     href: '/dashboard',
     icon: House,
-    sections: ['/lavado', '/ventas/nueva', '/mantenimientos', '/vehiculos'],
+    sections: ['/lavado', '/ventas/nueva', '/mantenimientos', '/vehiculos', '/resumen'],
   },
   { label: 'Avisar', href: '/avisar', icon: Bell },
   // Recepciones y compras viven en Inventario, dentro de Productos.

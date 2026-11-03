@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  ChevronRight,
   Droplets,
   LoaderCircle,
   PackagePlus,
@@ -101,11 +102,22 @@ export default function DashboardPage() {
             />
           </div>
           <PeriodSelector value={kind} onChange={setKind} />
-          {data && data.period.kind === kind && (
-            <p className="text-sm text-[var(--muted-foreground)] first-letter:uppercase">
-              {describeDashboardPeriod(data.period)}
-            </p>
-          )}
+          <div className="flex flex-wrap items-center justify-between gap-x-3">
+            {data && data.period.kind === kind ? (
+              <p className="text-sm text-[var(--muted-foreground)] first-letter:uppercase">
+                {describeDashboardPeriod(data.period)}
+              </p>
+            ) : (
+              <span />
+            )}
+            <Link
+              href="/resumen"
+              className="inline-flex min-h-11 items-center gap-0.5 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            >
+              Ver resumen del mes
+              <ChevronRight className="size-4" aria-hidden />
+            </Link>
+          </div>
         </div>
 
         {dashboard.status === 'error' && data && (

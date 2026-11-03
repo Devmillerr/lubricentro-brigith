@@ -2,11 +2,12 @@
 
 import { ChevronLeft, ChevronRight, History, PackagePlus } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 import { FormError } from '@/components/customers/form-error';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
-import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/states';
+import { EmptyState, ErrorState, ListSkeleton, PageSkeleton } from '@/components/ui/states';
 import { api } from '@/lib/api/client';
 import { callApi, failureMessage } from '@/lib/api/request';
 import { useApiQuery } from '@/lib/api/use-api-query';
@@ -35,11 +36,27 @@ const PAGE_SIZE = 20;
  * su parte del gasto; y debajo las recepciones de ese mismo mes. "Todo el
  * historial" muestra todas las recepciones, sin mezclarlas con un mes. Solo
  * lectura. Lo que no tiene monto (todo lo anterior a DEC-90) se cuenta, pero
- * no se suma ni se estima.
+ * no se suma ni se estima. `?mes=YYYY-MM` abre ese mes (lo usa el Resumen del
+ * mes); sin él, o si es inválido o futuro, el mes actual.
  */
 export default function ReceiptsPage() {
+  return (
+    <Suspense fallback={<PageSkeleton label="Cargando recepciones…" />}>
+      <Receipts />
+    </Suspense>
+  );
+}
+
+/** `?mes=YYYY-MM` válido y no posterior al mes actual; si no, el mes actual. */
+function initialMonth(raw: string | null): string {
+  const now = currentMonth();
+  return raw && /^\d{4}-(0[1-9]|1[0-2])$/.test(raw) && raw <= now ? raw : now;
+}
+
+function Receipts() {
+  const requested = useSearchParams().get('mes');
   // `null` = todo el historial.
-  const [month, setMonth] = useState<string | null>(currentMonth);
+  const [month, setMonth] = useState<string | null>(() => initialMonth(requested));
 
   const receive = (
     <Link href="/inventario/recepciones/nueva" className={buttonVariants()}>
